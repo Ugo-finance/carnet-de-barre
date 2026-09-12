@@ -68,8 +68,10 @@ function renderSession(
     onSetChange: vi.fn(),
     onSetValidate: vi.fn(),
     onAccessoryChange: vi.fn(),
+    onNotesChange: vi.fn(),
     onTimerAdjust: vi.fn(),
     onTimerStop: vi.fn(),
+    onFinish: vi.fn(),
     ...overrides,
   }
   render(<SessionScreen {...props} />)
@@ -167,5 +169,29 @@ describe('SessionScreen', () => {
       done: false,
       note: '8 kg × 12',
     })
+  })
+
+  it('transmet les notes et permet de terminer la séance', () => {
+    const onNotesChange = vi.fn()
+    const onFinish = vi.fn()
+    renderSession('C', { onNotesChange, onFinish })
+
+    fireEvent.change(screen.getByRole('textbox', { name: /Notes de séance/ }), {
+      target: { value: 'Bonne énergie' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Terminer la séance' }))
+
+    expect(onNotesChange).toHaveBeenCalledWith('Bonne énergie')
+    expect(onFinish).toHaveBeenCalledOnce()
+  })
+
+  it('désactive la finalisation pendant l’écriture et affiche son erreur près du bouton', () => {
+    renderSession('C', {
+      finishing: true,
+      finishErrorMessage: 'Enregistrement impossible : quota dépassé',
+    })
+
+    expect(screen.getByRole('button', { name: 'Enregistrement…' })).toBeDisabled()
+    expect(screen.getByRole('alert')).toHaveTextContent('quota dépassé')
   })
 })
