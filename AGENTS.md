@@ -55,6 +55,21 @@ npm run format         Prettier
 - Veille : chaque agent fait tourner `scripts/veille.sh <claude|codex>` qui signale PR, revues et commentaires portant le marqueur de l'autre.
 - Déploiement : previews Vercel automatiques par PR, production automatique sur `main`. Autorisation donnée par Ugo le 12.09.2026, révocable.
 
+## Leçons du 12.09.2026, payées comptant
+
+Écrites le soir de la première séance réelle, après les avoir toutes coûtées au moins une fois. Elles ne remplacent rien au-dessus : elles disent où l'on s'est trompé malgré les règles.
+
+- **L'urgence n'est pas une dispense de contre-revue — c'est le moment où elle rapporte le plus.** #17 a été fusionnée sans revue « parce qu'Ugo partait s'entraîner ». Elle contenait un P1 qui lui aurait coûté sa séance entière : l'ajustement d'une cible devenu accessible pendant un brouillon, donc une finalisation refusée sans issue. Une PR fusionnée sans verdict se fait relire **après coup**, tout de suite, et le correctif passe avant le reste.
+- **Un invariant qui ne vit que dans l'interface n'existe pas.** Deux fois le même défaut le même jour : `importReplace` puis `adjustTarget` contrôlaient hors transaction. L'écran peut lire un état vieux d'une fraction de seconde, et une seconde fenêtre ne passe pas par l'écran du tout. Le contrôle va au point d'écriture, dans la même transaction ; le garde d'écran **explique**, il ne protège pas.
+- **Une capacité sans point d'entrée n'existe pas non plus.** `ExportPanel` et `TargetsPanel` ont été construits, testés, revus et fusionnés — et inatteignables, faute d'onglet. Un écran se livre avec son accès, dans le même lot.
+- **Nos suites par composant sont aveugles aux défauts d'assemblage, par construction.** Chaque pièce prouvée correcte ne prouve rien sur leur branchement. D'où `src/App.test.tsx`, qui part du point d'entrée réel, et `src/db/seance-reelle.dexie.test.ts`, qui rejoue un parcours entier sur une vraie base. Tout nouvel écran s'ajoute au premier.
+- **Un test ne prouve rien tant qu'on ne l'a pas vu échouer.** Avant d'annoncer un correctif, le retirer et vérifier que le test passe au rouge. Deux fois un test écrit de bonne foi ne couvrait pas le défaut visé.
+- **Une assertion et un garde de type se ressemblent et ne font pas le même travail.** `if (x !== 'attendu') return` fait **réussir** le test en silence sur la régression qu'il devait attraper. Garder l'assertion, ajouter le garde ensuite pour TypeScript seulement.
+- **Ne jamais enchaîner une publication derrière un filtre sur la sortie des tests.** `npm run check | grep … && git push` pousse une branche rouge : c'est le `grep` qui réussit. Mesurer le code de sortie.
+- **Un renommage se relit ligne à ligne, pas au `grep`.** Renommer `UpcomingSession.date` a failli renommer aussi la `date` d'une `Seance`, qui n'a rien d'ambigu.
+- **Une veille qui tourne ne suffit pas : il faut qu'elle réveille quelqu'un.** Le script écrivait fidèlement son journal pendant que plus personne ne le lisait. Vérifier la fraîcheur du journal, pas seulement la présence du processus.
+- **Une défense devenue difficile à atteindre reste une défense.** `stale-targets` n'est plus atteignable par le chemin normal depuis que `adjustTarget` refuse pendant un brouillon. On la garde, et on l'éprouve par un mutateur réservé aux tests, plutôt que de la supprimer en la croyant morte.
+
 ## Ce qui remonte à Ugo
 
 Changement de D1–D10, nouvelle dépendance, tout backend ou service externe (dont CB-51 Supabase), pas de charge des accessoires, choix téléphone/navigateur pour la recette, tout report de périmètre listé dans `PLAN.md` § 7.
