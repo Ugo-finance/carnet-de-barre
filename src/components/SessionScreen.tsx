@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { formatDate, formatLoad, formatNumber } from '../domain/format'
 import { describePlates, platesPerSide } from '../domain/plates'
 import { SEANCES, type ExerciseDef } from '../domain/program'
@@ -153,6 +154,72 @@ function ExerciseCard({
   )
 }
 
+/**
+ * Terminer une séance est **irréversible** : la séance est écrite, la progression
+ * appliquée, le brouillon effacé. Rien dans l'app ne revient en arrière aujourd'hui.
+ *
+ * On ne demande confirmation que s'il reste des séries non saisies. Une séance menée
+ * jusqu'au bout se termine en un tap — ajouter une friction là où il n'y a aucun doute
+ * apprendrait juste à taper « oui » sans lire, et la confirmation ne protégerait plus
+ * rien le jour où elle compte.
+ */
+function FinishButton({
+  draft,
+  onFinish,
+  finishing,
+}: {
+  draft: Draft
+  onFinish: () => void
+  finishing: boolean
+}) {
+  const [confirming, setConfirming] = useState(false)
+  const restantes = draft.sets.filter((set) => set.status === 'planned').length
+
+  if (confirming) {
+    return (
+      <div className="rounded-2xl border border-warn/60 bg-surface p-4" role="alert">
+        <p className="font-semibold text-warn">
+          {restantes === 1
+            ? 'Une série n’est pas encore saisie.'
+            : `${restantes} séries ne sont pas encore saisies.`}
+        </p>
+        <p className="mt-1 text-sm text-muted">
+          Terminer maintenant enregistre la séance telle quelle et recalcule les cibles. On ne peut
+          pas revenir en arrière.
+        </p>
+        <div className="mt-4 grid gap-2">
+          <button
+            type="button"
+            className="min-h-12 rounded-xl bg-accent px-4 font-bold text-bg"
+            onClick={() => setConfirming(false)}
+          >
+            Continuer la séance
+          </button>
+          <button
+            type="button"
+            className="min-h-12 rounded-xl border border-line px-4 font-semibold text-muted disabled:opacity-50"
+            onClick={onFinish}
+            disabled={finishing}
+          >
+            {finishing ? 'Enregistrement…' : 'Terminer quand même'}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      className="min-h-12 rounded-xl bg-accent px-4 font-bold text-bg disabled:opacity-50"
+      onClick={() => (restantes > 0 ? setConfirming(true) : onFinish())}
+      disabled={finishing}
+    >
+      {finishing ? 'Enregistrement…' : 'Terminer la séance'}
+    </button>
+  )
+}
+
 export function SessionScreen({
   draft,
   whenLabel,
@@ -270,14 +337,7 @@ export function SessionScreen({
           </p>
         ) : null}
 
-        <button
-          type="button"
-          className="min-h-12 rounded-xl bg-accent px-4 font-bold text-bg disabled:opacity-50"
-          onClick={onFinish}
-          disabled={finishing}
-        >
-          {finishing ? 'Enregistrement…' : 'Terminer la séance'}
-        </button>
+        <FinishButton draft={draft} onFinish={onFinish} finishing={finishing} />
       </section>
     </main>
   )

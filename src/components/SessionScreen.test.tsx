@@ -180,6 +180,10 @@ describe('SessionScreen', () => {
       target: { value: 'Bonne énergie' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Terminer la séance' }))
+    // Ce brouillon a encore des séries non saisies : depuis CB-23b, la finalisation
+    // passe par une confirmation. Le test disait « terminer appelle onFinish » ; il dit
+    // maintenant « terminer, confirmation comprise, appelle onFinish ».
+    fireEvent.click(screen.getByRole('button', { name: 'Terminer quand même' }))
 
     expect(onNotesChange).toHaveBeenCalledWith('Bonne énergie')
     expect(onFinish).toHaveBeenCalledOnce()
@@ -193,5 +197,55 @@ describe('SessionScreen', () => {
 
     expect(screen.getByRole('button', { name: 'Enregistrement…' })).toBeDisabled()
     expect(screen.getByRole('alert')).toHaveTextContent('quota dépassé')
+  })
+})
+
+describe('protection avant une finalisation irréversible', () => {
+  it('demande confirmation quand des séries ne sont pas saisies, en les comptant', () => {
+    // Terminer écrit la séance, applique la progression et efface le brouillon.
+    // Aucun retour en arrière n'existe dans l'app : un tap involontaire à l'exercice 2
+    // coûterait le reste de la séance.
+    const { onFinish } = renderSession('C')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Terminer la séance' }))
+
+    expect(onFinish).not.toHaveBeenCalled()
+    expect(screen.getByRole('alert')).toHaveTextContent(/séries ne sont pas encore saisies/)
+  })
+
+  it('laisse revenir à la séance sans rien écrire', () => {
+    const { onFinish } = renderSession('C')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Terminer la séance' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Continuer la séance' }))
+
+    expect(onFinish).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Terminer la séance' })).toBeInTheDocument()
+  })
+
+  it('termine après confirmation explicite', () => {
+    const { onFinish } = renderSession('C')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Terminer la séance' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Terminer quand même' }))
+
+    expect(onFinish).toHaveBeenCalledOnce()
+  })
+
+  it('ne demande rien quand toutes les séries sont traitées', () => {
+    // Une séance menée au bout se termine en un tap. Une confirmation systématique
+    // s'apprend par cœur et ne protège plus rien le jour où elle compte.
+    const brouillon = draftFor('C')
+    const { onFinish } = renderSession('C', {
+      draft: {
+        ...brouillon,
+        sets: brouillon.sets.map((set) => ({ ...set, status: 'validated' as const })),
+      },
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Terminer la séance' }))
+
+    expect(onFinish).toHaveBeenCalledOnce()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 })
