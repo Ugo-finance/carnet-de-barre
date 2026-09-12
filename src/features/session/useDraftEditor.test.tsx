@@ -114,6 +114,20 @@ describe('useDraftEditor', () => {
     expect(persisted).toEqual([77.5, 80])
   })
 
+  it('persiste les notes au fil de la saisie', async () => {
+    const saveDraft = vi.fn<(draft: Draft) => Promise<void>>().mockResolvedValue(undefined)
+    const initial = draftFixture()
+    const store: DraftPort = { loadDraft: vi.fn().mockResolvedValue(initial), saveDraft }
+    const { result } = renderHook(() => useDraftEditor(store, initial))
+
+    act(() => result.current.updateNotes('Sommeil court, sensations correctes'))
+    await act(() => result.current.flush())
+
+    expect(saveDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ notes: 'Sommeil court, sensations correctes' }),
+    )
+  })
+
   it('expose une erreur de sauvegarde et empêche une action dépendante de continuer', async () => {
     const store: DraftPort = {
       loadDraft: vi.fn().mockResolvedValue(draftFixture()),

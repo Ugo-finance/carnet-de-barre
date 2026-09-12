@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import type { FinalizeResult } from '../../db/contracts'
 import { SEANCES } from '../../domain/program'
 import type { Draft, Seance, SeanceType, Targets } from '../../domain/types'
 import { SessionHome, type SessionStore } from './SessionHome'
@@ -50,6 +51,20 @@ function fakeStore(options: { initial?: Draft; seances?: Seance[] } = {}) {
     }),
     clearDraft: vi.fn(async () => {
       active = undefined
+    }),
+    finalizeSeance: vi.fn(async (id: string): Promise<FinalizeResult> => {
+      const draft = active
+      if (!draft || draft.id !== id) throw new Error('Brouillon introuvable')
+      const seance: Seance = {
+        id: draft.id,
+        type: draft.type,
+        date: draft.date,
+        lines: [],
+        tops: {},
+        notes: draft.notes,
+      }
+      active = undefined
+      return { seance, targets: TARGETS, events: [], applied: true }
     }),
   }
   return store
@@ -124,5 +139,105 @@ describe('SessionHome', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Carnet indisponible : IndexedDB refusée',
     )
+  })
+
+  it('sauvegarde les notes avant de finaliser et affiche la prochaine séance', async () => {
+    const store = fakeStore({ initial: draftFor('C', '2026-09-20') })
+    vi.mocked(store.finalizeSeance).mockImplementationOnce(async (id) => ({
+      seance: {
+        id,
+        type: 'C',
+        date: '2026-09-20',
+        lines: ['Soulevé de terre : 92,5×3 @8'],
+        tops: { deadlift: { w: 92.5, reps: 3, rpe: 8 } },
+        notes: 'Solide',
+      },
+      targets: { ...TARGETS, deadlift: { ...TARGETS.deadlift, w: 97.5 } },
+      events: [
+        {
+          lift: 'deadlift',
+          previous: 92.5,
+          next: 97.5,
+          outcome: 'progresse',
+          message: 'Soulevé de terre → 97,5 kg',
+        },
+      ],
+      applied: true,
+    }))
+    render(<SessionHome store={store} now={SUNDAY} />)
+    await screen.findByRole('heading', { name: 'Séance C' })
+
+    fireEvent.change(screen.getByRole('textbox', { name: /Notes de séance/ }), {
+      target: { value: 'Solide' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Terminer la séance' }))
+
+    expect(await screen.findByText('Soulevé de terre → 97,5 kg')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Prochaine séance · A' })).toBeInTheDocument()
+    expect(screen.getByText('22.09.2026')).toBeInTheDocument()
+    expect(store.saveDraft).toHaveBeenCalledWith(expect.objectContaining({ notes: 'Solide' }))
+    expect(store.finalizeSeance).toHaveBeenCalledWith('draft-C-2026-09-20')
+  })
+
+  it('ignore un deuxième tap pendant la finalisation', async () => {
+    let resolveFinalize!: (value: FinalizeResult) => void
+    const pending = new Promise<FinalizeResult>((resolve) => {
+      resolveFinalize = resolve
+    })
+    const initial = draftFor('C', '2026-09-20')
+    const store = fakeStore({ initial })
+    vi.mocked(store.finalizeSeance).mockReturnValueOnce(pending)
+    render(<SessionHome store={store} now={SUNDAY} />)
+    await screen.findByRole('heading', { name: 'Séance C' })
+
+    const finish = screen.getByRole('button', { name: 'Terminer la séance' })
+    fireEvent.click(finish)
+    fireEvent.click(finish)
+
+    await waitFor(() => expect(store.finalizeSeance).toHaveBeenCalledOnce())
+    resolveFinalize({
+      seance: saved('C', '2026-09-20'),
+      targets: TARGETS,
+      events: [],
+      applied: true,
+    })
+    expect(await screen.findByText('Séance enregistrée')).toBeInTheDocument()
+  })
+
+  it('attend la dernière sauvegarde avant d’appeler la finalisation', async () => {
+    let releaseSave!: () => void
+    const saving = new Promise<void>((resolve) => {
+      releaseSave = resolve
+    })
+    const store = fakeStore({ initial: draftFor('C', '2026-09-20') })
+    vi.mocked(store.saveDraft).mockReturnValueOnce(saving)
+    render(<SessionHome store={store} now={SUNDAY} />)
+    await screen.findByRole('heading', { name: 'Séance C' })
+
+    fireEvent.change(screen.getByRole('textbox', { name: /Notes de séance/ }), {
+      target: { value: 'Dernière note' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Terminer la séance' }))
+
+    expect(store.finalizeSeance).not.toHaveBeenCalled()
+    releaseSave()
+    await waitFor(() => expect(store.finalizeSeance).toHaveBeenCalledOnce())
+  })
+
+  it('préserve l’éditeur et la saisie quand la finalisation échoue', async () => {
+    const initial = draftFor('C', '2026-09-20')
+    initial.notes = 'À conserver'
+    const store = fakeStore({ initial })
+    vi.mocked(store.finalizeSeance).mockRejectedValueOnce(new Error('quota dépassé'))
+    render(<SessionHome store={store} now={SUNDAY} />)
+    await screen.findByRole('heading', { name: 'Séance C' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Terminer la séance' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Enregistrement impossible : quota dépassé',
+    )
+    expect(screen.getByRole('heading', { name: 'Séance C' })).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: /Notes de séance/ })).toHaveValue('À conserver')
   })
 })

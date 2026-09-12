@@ -25,8 +25,12 @@ type SessionScreenProps = {
     timer: { seconds: number; label: string },
   ) => void
   onAccessoryChange: (exerciseId: string, value: Pick<AccessoryLog, 'done' | 'note'>) => void
+  onNotesChange: (notes: string) => void
   onTimerAdjust: (deltaMs: number) => void
   onTimerStop: () => void
+  onFinish: () => void
+  finishing?: boolean
+  finishErrorMessage?: string
   errorMessage?: string
 }
 
@@ -156,8 +160,12 @@ export function SessionScreen({
   onSetChange,
   onSetValidate,
   onAccessoryChange,
+  onNotesChange,
   onTimerAdjust,
   onTimerStop,
+  onFinish,
+  finishing = false,
+  finishErrorMessage,
   errorMessage,
 }: SessionScreenProps) {
   const definition = SEANCES[draft.type]
@@ -243,6 +251,33 @@ export function SessionScreen({
             />
           )
         })}
+      </section>
+
+      <section className="mt-2 flex flex-col gap-3 border-t border-line pt-5">
+        <label className="text-sm font-medium text-muted">
+          Notes de séance <span className="font-normal">(facultatif)</span>
+          <textarea
+            className="mt-2 min-h-28 w-full resize-y rounded-xl border border-line bg-surface p-3 text-base text-fg outline-none focus:border-accent"
+            value={draft.notes}
+            onChange={(event) => onNotesChange(event.target.value)}
+            placeholder="Sensations, durée, matériel, salle…"
+          />
+        </label>
+
+        {finishErrorMessage ? (
+          <p className="rounded-xl border border-bad/60 bg-bad/10 p-3 text-sm text-fg" role="alert">
+            {finishErrorMessage}
+          </p>
+        ) : null}
+
+        <button
+          type="button"
+          className="min-h-12 rounded-xl bg-accent px-4 font-bold text-bg disabled:opacity-50"
+          onClick={onFinish}
+          disabled={finishing}
+        >
+          {finishing ? 'Enregistrement…' : 'Terminer la séance'}
+        </button>
       </section>
     </main>
   )

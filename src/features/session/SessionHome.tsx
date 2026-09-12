@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { SessionScreen } from '../../components/SessionScreen'
-import type { CarnetStore } from '../../db/contracts'
+import type { CarnetStore, FinalizeResult } from '../../db/contracts'
 import {
   currentSession,
   describeWhen,
@@ -11,10 +11,11 @@ import {
 import type { Draft, SeanceType } from '../../domain/types'
 import { useDraftEditor } from './useDraftEditor'
 import { unlockTimerAudio } from './timer'
+import { SessionSummary } from './SessionSummary'
 
 export type SessionStore = Pick<
   CarnetStore,
-  'listSeances' | 'loadDraft' | 'openDraft' | 'saveDraft' | 'clearDraft'
+  'listSeances' | 'loadDraft' | 'openDraft' | 'saveDraft' | 'clearDraft' | 'finalizeSeance'
 > & { ready(): Promise<void> }
 
 type ReadyState = {
@@ -36,16 +37,22 @@ function whenLabel(draft: Draft, suggestion: UpcomingSession, today: string): st
 function SessionEditor({
   state,
   store,
+  now,
   onReplace,
 }: {
   state: ReadyState
   store: SessionStore
+  now: Date
   onReplace: (type: SeanceType) => Promise<void>
 }) {
   const editor = useDraftEditor(store, state.draft)
   const [pendingType, setPendingType] = useState<SeanceType>()
   const [switching, setSwitching] = useState(false)
   const [switchError, setSwitchError] = useState<string>()
+  const [finalizing, setFinalizing] = useState(false)
+  const [finalizeError, setFinalizeError] = useState<string>()
+  const [result, setResult] = useState<FinalizeResult>()
+  const finalizingRef = useRef(false)
 
   if (editor.loadError) {
     return <StatusScreen message={`Brouillon indisponible : ${editor.loadError.message}`} error />
@@ -53,6 +60,13 @@ function SessionEditor({
   if (editor.loading || !editor.draft) return <StatusScreen message="Chargement de la séance…" />
 
   const draft = editor.draft
+
+  if (result) {
+    const scheduledDone =
+      result.seance.date === state.today &&
+      isScheduledSessionDone(state.today, [result.seance.type])
+    return <SessionSummary result={result} next={currentSession(now, scheduledDone)} />
+  }
 
   const replace = async () => {
     if (!pendingType) return
@@ -64,6 +78,22 @@ function SessionEditor({
     } catch (error) {
       setSwitchError(messageFor(error))
       setSwitching(false)
+    }
+  }
+
+  const finish = async () => {
+    if (finalizingRef.current) return
+    finalizingRef.current = true
+    setFinalizing(true)
+    setFinalizeError(undefined)
+    try {
+      await editor.flush()
+      setResult(await store.finalizeSeance(draft.id))
+    } catch (error) {
+      setFinalizeError(messageFor(error))
+    } finally {
+      finalizingRef.current = false
+      setFinalizing(false)
     }
   }
 
@@ -79,8 +109,14 @@ function SessionEditor({
           editor.validateSet(setId, value, timer)
         }}
         onAccessoryChange={editor.updateAccessory}
+        onNotesChange={editor.updateNotes}
         onTimerAdjust={editor.adjustTimer}
         onTimerStop={editor.stopTimer}
+        onFinish={() => void finish()}
+        finishing={finalizing}
+        finishErrorMessage={
+          finalizeError ? `Enregistrement impossible : ${finalizeError}` : undefined
+        }
         errorMessage={
           editor.saveError ? `Sauvegarde impossible : ${editor.saveError.message}` : undefined
         }
@@ -187,5 +223,7 @@ export function SessionHome({ store, now = new Date() }: { store: SessionStore; 
     setState((current) => (current ? { ...current, draft } : current))
   }
 
-  return <SessionEditor key={state.draft.id} state={state} store={store} onReplace={replace} />
+  return (
+    <SessionEditor key={state.draft.id} state={state} store={store} now={now} onReplace={replace} />
+  )
 }

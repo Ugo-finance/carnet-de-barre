@@ -144,6 +144,13 @@ export function useDraftEditor(store: DraftPort, initialDraft?: Draft) {
     [commit],
   )
 
+  const updateNotes = useCallback(
+    (notes: string) => {
+      commit((current) => ({ ...current, notes }))
+    },
+    [commit],
+  )
+
   const validateSet = useCallback(
     (setId: string, value: SetValue, timer: { seconds: number; label: string }) => {
       commit((current) => ({
@@ -183,6 +190,7 @@ export function useDraftEditor(store: DraftPort, initialDraft?: Draft) {
     changeSet,
     updateSet,
     updateAccessory,
+    updateNotes,
     validateSet,
     skipSet: (setId: string) => setStatus(setId, 'skipped'),
     editSet: (setId: string) => setStatus(setId, 'entered'),
