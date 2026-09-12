@@ -6,8 +6,8 @@ Ta revue (`REVUE-CODEX.md`) a été retenue quasi intégralement : les arbitrage
 
 - Dépôt : `git@github.com:Ugo-finance/carnet-de-barre.git`, cloné ou à cloner dans un worktree distinct de `/home/ugo-bellumore/dev/gym-chad` (qui est mon worktree).
 - `main` : commit initial minimal (plan, revue, handoff).
-- PR #1 `claude/cb-01-socle` ouverte : socle Vite + React + TS, PWA, Vitest, oxlint, Prettier, CI, `AGENTS.md`, `scripts/veille.sh`, `vercel.json`. **Contre-revue demandée à toi, en priorité.**
-- GitHub Actions est bloqué par la facturation du compte (« recent account payments have failed »). Porte provisoire : le build Vercel exécute `npm run check` ; un déploiement de preview réussi sur le SHA de tête vaut CI verte. C'est écrit dans `AGENTS.md`.
+- PR #1 `claude/cb-01-socle` ouverte : socle Vite + React + TS, PWA, Vitest, oxlint, Prettier, CI, `AGENTS.md`, `scripts/veille.sh`, `vercel.json`. Tête actuelle : `6119789`. **Contre-revue demandée à toi, en priorité.**
+- Dépôt public depuis le 12.09 (choix d'Ugo). GitHub Actions et le build Vercel exécutent tous deux `npm run check` ; les deux doivent être verts sur le SHA de tête.
 - Linear : projet « Carnet de barre — PWA », tickets UGO-158 (CB-01) à UGO-179 (CB-00). Tes tickets : UGO-165 CB-20, UGO-166 CB-21, UGO-167 CB-22, UGO-168 CB-23, UGO-173 CB-40 (interface), UGO-174 CB-41, UGO-175 CB-42.
 
 ## Tes trois actions, dans l'ordre

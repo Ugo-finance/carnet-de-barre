@@ -1,0 +1,162 @@
+{
+  "targets": {
+    "updatedAt": "2026-09-12",
+    "squat": { "w": 75, "inc": 2.5, "reps": 4, "fail": null },
+    "bench": { "w": 70, "inc": 2.5, "reps": 4, "fail": null },
+    "deadlift": { "w": 92.5, "inc": 5, "reps": 3, "fail": null },
+    "tractions": { "w": 15, "inc": 2.5, "reps": 4, "fail": null, "note": "prise large" },
+    "benchVol": { "w": 60, "inc": 2.5, "reps": 8, "sets": 3, "fail": null }
+  },
+  "seances": [
+    {
+      "date": "2026-07-22",
+      "type": "B",
+      "lines": [
+        "Bench : 67,5×4 @8 | 60×5 | 60×5",
+        "DM barre 35 kg — 3×8–10",
+        "Rowing incliné poitrine soutenue — 20 kg/haltère"
+      ],
+      "tops": { "bench": { "w": 67.5, "reps": 4, "rpe": 8 } },
+      "notes": ""
+    },
+    {
+      "date": "2026-07-26",
+      "type": "A",
+      "approx": true,
+      "lines": ["Squat : 75×4 @8 | backoffs 67,5", "Bench 3×8", "SS tractions +5 / dips +5 — 3×8"],
+      "tops": { "squat": { "w": 75, "reps": 4, "rpe": 8 } },
+      "notes": "Date approximative (chat archivé le 31.07)."
+    },
+    {
+      "date": "2026-07-29",
+      "type": "B",
+      "approx": true,
+      "lines": [
+        "Bench : 70×4 @8 | 62,5×5 | 62,5×5",
+        "Tractions lestées : +15×4 @8 | +7,5×6 ×2",
+        "DM barre 35 kg"
+      ],
+      "tops": {
+        "bench": { "w": 70, "reps": 4, "rpe": 8 },
+        "tractions": { "w": 15, "reps": 4, "rpe": 8 }
+      },
+      "notes": "Date approximative (chat archivé le 31.07)."
+    },
+    {
+      "date": "2026-08-03",
+      "type": "A",
+      "lines": [
+        "Squat : 77,5×4 @9 → backoffs descendus à 67,5×5",
+        "Bench volume : 55×8 ×3",
+        "SS tractions +10 / dips"
+      ],
+      "tops": {
+        "squat": { "w": 77.5, "reps": 4, "rpe": 9 },
+        "benchVol": { "w": 55, "reps": 8, "rpe": null }
+      },
+      "notes": ""
+    },
+    {
+      "date": "2026-08-06",
+      "type": "B",
+      "lines": [
+        "Bench : 72,5×4 @8 | 65×5 ×2",
+        "Tractions lestées : +17,5×4 @8 | +10×6 ×2",
+        "Rowing + DM 35 kg"
+      ],
+      "tops": {
+        "bench": { "w": 72.5, "reps": 4, "rpe": 8 },
+        "tractions": { "w": 17.5, "reps": 4, "rpe": 8 }
+      },
+      "notes": ""
+    },
+    {
+      "date": "2026-08-27",
+      "type": "B",
+      "lines": [
+        "Tractions lestées : +17,5×4 @9 | +7,5×6 ×2",
+        "Bench : résultat jamais transmis ⚠️"
+      ],
+      "tops": { "tractions": { "w": 17.5, "reps": 4, "rpe": 9 } },
+      "notes": "Reprise après ~3 semaines de coupure (7–26 août)."
+    },
+    {
+      "date": "2026-08-30",
+      "type": "C",
+      "lines": [
+        "Deadlift : 80×3 @? ⚠️ | 72,5×4 ×2",
+        "DI haltères 20 kg ×3 (max salle)",
+        "Presse horizontale : calibration 40 kg, charge finale non notée ⚠️",
+        "Tractions PDC AMRAP−2"
+      ],
+      "tops": { "deadlift": { "w": 80, "reps": 3, "rpe": null } },
+      "notes": "1re séance C depuis longtemps."
+    },
+    {
+      "date": "2026-09-01",
+      "type": "A",
+      "lines": [
+        "Squat : 80×4 @9 | 70×5 ×2",
+        "Bench volume : 55×8 ×3",
+        "SS tractions +10×8 / dips PDC — 3 tours"
+      ],
+      "tops": {
+        "squat": { "w": 80, "reps": 4, "rpe": 9 },
+        "benchVol": { "w": 55, "reps": 8, "rpe": null }
+      },
+      "notes": "Changement de salle (Matrix) — pas de petits disques."
+    },
+    {
+      "date": "2026-09-03",
+      "type": "B",
+      "lines": ["Bench : 75×3 (au lieu de 4) | 67,5×5 ×2", "Tractions : +20 solide"],
+      "tops": {
+        "bench": { "w": 75, "reps": 3, "rpe": null },
+        "tractions": { "w": 20, "reps": null, "rpe": null }
+      },
+      "notes": "Petits disques retrouvés → incréments 2,5 kg de nouveau possibles."
+    },
+    {
+      "date": "2026-09-06",
+      "type": "C",
+      "lines": [
+        "Deadlift : 87,5×3 @8 | 77,5×4 ×2",
+        "DI 20 kg/haltère ×3 — reps non notées ⚠️",
+        "Presse 45° — charge finale non notée ⚠️",
+        "Tractions PDC"
+      ],
+      "tops": { "deadlift": { "w": 87.5, "reps": 3, "rpe": 8 } },
+      "notes": ""
+    },
+    {
+      "date": "2026-09-08",
+      "type": "A",
+      "lines": [
+        "Squat : 80×4 @9 — 2e fois → reset à 75 | 70×5 ×2",
+        "Bench volume : 60×8 ×3",
+        "Dips +10 faciles → nouvelle base",
+        "Tractions +10×6 (rack inhabituel, prise très large)"
+      ],
+      "tops": {
+        "squat": { "w": 80, "reps": 4, "rpe": 9 },
+        "benchVol": { "w": 60, "reps": 8, "rpe": null }
+      },
+      "notes": "Stagnation squat confirmée → reset 75."
+    },
+    {
+      "date": "2026-09-10",
+      "type": "B",
+      "lines": [
+        "Bench : 75×3 — 2e fois → reset à 70 | 67,5×5 ×2",
+        "Tractions prise large : +20×3, forme imparfaite → cible +15 prise large | +7,5×6 ×2",
+        "DM haltères 18 kg 3×8 → passe à 20",
+        "Rowing 20 kg 3×8 → passe à 22,5–24"
+      ],
+      "tops": {
+        "bench": { "w": 75, "reps": 3, "rpe": null },
+        "tractions": { "w": 20, "reps": 3, "rpe": null }
+      },
+      "notes": ""
+    }
+  ]
+}
