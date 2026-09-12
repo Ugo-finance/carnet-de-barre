@@ -4,3 +4,4 @@ node_modules
 handoff
 package-lock.json
 *.md
+vercel.json
