@@ -52,6 +52,7 @@ function SessionEditor({
   const [finalizing, setFinalizing] = useState(false)
   const [finalizeError, setFinalizeError] = useState<string>()
   const [result, setResult] = useState<FinalizeResult>()
+  const [confirmFinish, setConfirmFinish] = useState(false)
   const finalizingRef = useRef(false)
 
   if (editor.loadError) {
@@ -97,6 +98,15 @@ function SessionEditor({
     }
   }
 
+  const unfinishedCount = draft.sets.filter(
+    (set) => set.status !== 'validated' && set.status !== 'skipped',
+  ).length
+
+  const requestFinish = () => {
+    if (unfinishedCount > 0) setConfirmFinish(true)
+    else void finish()
+  }
+
   return (
     <>
       <SessionScreen
@@ -112,7 +122,7 @@ function SessionEditor({
         onNotesChange={editor.updateNotes}
         onTimerAdjust={editor.adjustTimer}
         onTimerStop={editor.stopTimer}
-        onFinish={() => void finish()}
+        onFinish={requestFinish}
         finishing={finalizing}
         finishErrorMessage={
           finalizeError ? `Enregistrement impossible : ${finalizeError}` : undefined
@@ -155,6 +165,43 @@ function SessionEditor({
               disabled={switching}
             >
               {switching ? 'Ouverture…' : `Abandonner et ouvrir ${pendingType}`}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {confirmFinish ? (
+        <div
+          className="fixed inset-x-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-20 mx-auto max-w-sm rounded-2xl border border-warn/60 bg-surface p-4 shadow-2xl"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="finish-title"
+        >
+          <h2 className="font-bold" id="finish-title">
+            Séance incomplète
+          </h2>
+          <p className="mt-1 text-sm text-muted">
+            {unfinishedCount}{' '}
+            {unfinishedCount === 1 ? 'série n’est pas validée' : 'séries ne sont pas validées'}. Les
+            terminer ou les marquer comme sautées évite d’enregistrer une séance par erreur.
+          </p>
+          <div className="mt-4 grid gap-2">
+            <button
+              type="button"
+              className="min-h-11 rounded-xl bg-accent px-4 font-semibold text-bg"
+              onClick={() => setConfirmFinish(false)}
+            >
+              Revenir à la séance
+            </button>
+            <button
+              type="button"
+              className="min-h-11 rounded-xl border border-line px-4 font-semibold text-fg"
+              onClick={() => {
+                setConfirmFinish(false)
+                void finish()
+              }}
+            >
+              Terminer quand même
             </button>
           </div>
         </div>

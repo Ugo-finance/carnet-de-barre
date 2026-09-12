@@ -204,6 +204,45 @@ describe('SessionHome', () => {
     expect(await screen.findByText('Séance enregistrée')).toBeInTheDocument()
   })
 
+  it('demande confirmation quand des séries restent non validées', async () => {
+    const initial = draftFor('C', '2026-09-20')
+    initial.sets = [
+      {
+        id: 'set-planned',
+        exerciseId: 'c-deadlift',
+        role: 'top',
+        index: 0,
+        status: 'planned',
+        loadKind: 'barTotal',
+        weight: 92.5,
+        reps: 3,
+        rpe: null,
+        targetWeight: 92.5,
+        targetReps: 3,
+      },
+    ]
+    const store = fakeStore({ initial })
+    render(<SessionHome store={store} now={SUNDAY} />)
+    await screen.findByRole('heading', { name: 'Séance C' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Terminer la séance' }))
+    const dialog = screen.getByRole('dialog', { name: 'Séance incomplète' })
+    expect(within(dialog).getByText(/1 série n’est pas validée/)).toBeInTheDocument()
+    expect(store.finalizeSeance).not.toHaveBeenCalled()
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Revenir à la séance' }))
+    expect(screen.queryByRole('dialog', { name: 'Séance incomplète' })).not.toBeInTheDocument()
+    expect(store.finalizeSeance).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Terminer la séance' }))
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: 'Séance incomplète' })).getByRole('button', {
+        name: 'Terminer quand même',
+      }),
+    )
+    await waitFor(() => expect(store.finalizeSeance).toHaveBeenCalledOnce())
+  })
+
   it('attend la dernière sauvegarde avant d’appeler la finalisation', async () => {
     let releaseSave!: () => void
     const saving = new Promise<void>((resolve) => {
