@@ -119,8 +119,12 @@ describe('la séance de ce soir, de bout en bout', () => {
 
     expect(relu.ok).toBe(true)
     if (!relu.ok) return
-    // Plus besoin de `as` depuis CB-04 : `ImportResult` est discriminé sur `format`,
-    // donc ce `return` suffit à donner le bon type à `relu.data`.
+    // Deux choses distinctes, et il faut les deux. L'assertion vérifie que l'export
+    // est bien au format courant — c'est le contrat, et une régression qui le
+    // dégraderait en `seed` doit faire échouer ce test. Le `return` juste après ne
+    // sert qu'à TypeScript : seul, il ferait **réussir** le test en silence dans ce
+    // cas-là, puisqu'on sortirait avant toute vérification.
+    expect(relu.format).toBe('current')
     if (relu.format !== 'current') return
     const fichier = relu.data
     const duSoir = fichier.seances.find((seance) => seance.date === '2026-09-12')
