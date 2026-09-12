@@ -17,6 +17,7 @@ import { ExportPanel } from './features/export/ExportPanel'
 import { TargetsPanel } from './features/history/TargetsPanel'
 import { HistoryPanel } from './features/history/HistoryPanel'
 import { isBlankDraft } from './db/draft'
+import { UpdatePrompt } from './pwa/UpdatePrompt'
 import type { Seance, Targets } from './domain/types'
 
 type Onglet = 'seance' | 'historique' | 'cibles' | 'export'
@@ -161,6 +162,10 @@ export default function App() {
           </button>
         ))}
       </nav>
+
+      <div className="px-3">
+        <UpdatePrompt store={store} />
+      </div>
 
       <div className="px-3">
         {/*
