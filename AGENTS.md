@@ -43,8 +43,8 @@ npm run format         Prettier
 - Un ticket Linear = une branche = une PR. Branches `claude/cb-NN-sujet` ou `codex/cb-NN-sujet`, fondées sur `main` à jour, dans un worktree distinct. Passer le ticket `In Progress` en commençant, y déclarer les fichiers réservés.
 - Les deux agents publient sous le compte GitHub `Ugo-finance`. **Chaque commentaire et chaque revue se termine par `<!-- claude -->` ou `<!-- codex -->`.** C'est le seul discriminant.
 - Contre-revue par l'autre agent, publiée dans la PR GitHub, en commentaire signé avec verdict explicite, SHA complet relu et findings classés P1/P2/P3. Annoncer « revue en cours sur #N » avant de relire. Pas d'approbation GitHub native requise (impossible sous un compte unique).
-- Porte de contrôle : le build Vercel exécute `npm run check` (vercel.json). Tant que GitHub Actions est bloqué par la facturation du compte, **le déploiement de preview Vercel réussi sur le SHA de tête vaut CI verte** ; dès que GitHub Actions fonctionne, les deux doivent être verts.
-- Fusion par l'auteur quand : CI verte (au sens ci-dessus) sur le `head_sha` exact, contre-revue sans P1 sur ce même SHA, branche à jour de `main`. Squash, suppression de branche. Ni `--admin`, ni force-push sur la branche de l'autre. Toute nouvelle tête appelle une nouvelle revue.
+- Porte de contrôle : GitHub Actions et le build Vercel exécutent tous deux `npm run check`. Les deux doivent être verts sur le SHA de tête.
+- Fusion par l'auteur quand : CI verte sur le `head_sha` exact, contre-revue sans P1 sur ce même SHA, branche à jour de `main`. Squash, suppression de branche. Ni `--admin`, ni force-push sur la branche de l'autre. Toute nouvelle tête appelle une nouvelle revue.
 - Après fusion : commenter le SHA fusionné dans le ticket Linear, le passer `Done`, vérifier l'URL de production.
 - Veille : chaque agent fait tourner `scripts/veille.sh <claude|codex>` qui signale PR, revues et commentaires portant le marqueur de l'autre.
 - Déploiement : previews Vercel automatiques par PR, production automatique sur `main`. Autorisation donnée par Ugo le 12.09.2026, révocable.
