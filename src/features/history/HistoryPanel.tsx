@@ -15,9 +15,23 @@ import { useState } from 'react'
 import { formatDate } from '../../domain/format.ts'
 import type { Seance } from '../../domain/types.ts'
 
-/** Les séances du plus récent au plus ancien, à date égale la dernière enregistrée d'abord. */
+/**
+ * Les séances du plus récent au plus ancien, à date égale la dernière enregistrée
+ * d'abord.
+ *
+ * Deux séances le même jour sont permises (D5). Rendre `0` à date égale laissait
+ * l'ordre des clés IndexedDB décider, qui n'a aucun rapport avec l'heure : c'est
+ * alors la mauvaise des deux qui pouvait s'afficher dépliée en haut, juste au moment
+ * où Ugo vient vérifier que sa séance du soir est bien là.
+ *
+ * `ts` est l'instant de finalisation. Il manque aux séances du dossier de départ, qui
+ * n'ont qu'une date : elles passent donc après celles qui en ont, ce qui est le bon
+ * ordre puisqu'elles sont toutes anciennes.
+ */
 function parOrdreAntichronologique(seances: Seance[]): Seance[] {
-  return seances.toSorted((a, b) => (a.date === b.date ? 0 : a.date < b.date ? 1 : -1))
+  return seances.toSorted((a, b) =>
+    a.date === b.date ? (b.ts ?? 0) - (a.ts ?? 0) : a.date < b.date ? 1 : -1,
+  )
 }
 
 function LigneSeance({ seance, ouvertParDefaut }: { seance: Seance; ouvertParDefaut: boolean }) {

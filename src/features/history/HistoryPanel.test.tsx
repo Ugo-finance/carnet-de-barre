@@ -79,4 +79,29 @@ describe('historique', () => {
     render(<HistoryPanel seances={liste} />)
     expect(liste[0]).toBe(JUILLET)
   })
+
+  it('à date égale, met la dernière enregistrée en premier', () => {
+    // D5 permet deux séances le même jour. Sans départage sur `ts`, l'ordre venait des
+    // clés IndexedDB : la mauvaise des deux pouvait s'afficher dépliée, précisément
+    // quand Ugo vient vérifier que celle du soir est là.
+    const matin = seance({ id: 'matin', date: '2026-09-12', type: 'A', lines: ['Matin'], ts: 1000 })
+    const soir = seance({ id: 'soir', date: '2026-09-12', type: 'C', lines: ['Soir'], ts: 2000 })
+
+    render(<HistoryPanel seances={[matin, soir]} />)
+
+    const items = screen.getAllByRole('listitem')
+    expect(within(items[0]).getByText('Séance C')).toBeInTheDocument()
+    expect(screen.getByText('Soir')).toBeInTheDocument()
+    expect(screen.queryByText('Matin')).not.toBeInTheDocument()
+  })
+
+  it('place les séances sans horodatage après celles qui en ont', () => {
+    // Les séances du dossier de départ n'ont qu'une date.
+    const ancienne = seance({ id: 'seed', date: '2026-09-12', type: 'A', lines: ['Seed'] })
+    const recente = seance({ id: 'live', date: '2026-09-12', type: 'C', lines: ['Live'], ts: 5 })
+
+    render(<HistoryPanel seances={[ancienne, recente]} />)
+
+    expect(within(screen.getAllByRole('listitem')[0]).getByText('Séance C')).toBeInTheDocument()
+  })
 })
