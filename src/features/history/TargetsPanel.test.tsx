@@ -133,3 +133,33 @@ describe('ajustement', () => {
     expect((await store.getTargets()).bench.fail).toBeNull()
   })
 })
+
+describe('lecture seule pendant une séance', () => {
+  it('cache les actions et explique pourquoi', async () => {
+    const store = await magasinPret()
+    render(<TargetsPanel targets={await store.getTargets()} store={store} verrouille />)
+
+    expect(screen.queryByRole('button', { name: 'Ajuster' })).not.toBeInTheDocument()
+    expect(screen.getByText(/lecture seule/)).toBeInTheDocument()
+    expect(screen.getByText(/empêcherait d’enregistrer ta séance/)).toBeInTheDocument()
+  })
+
+  it('cache aussi « Repartir à zéro », qui modifie tout autant', async () => {
+    // Effacer un échec en attente change la cible : ça diverge comme le reste.
+    const store = await magasinPret()
+    await store.adjustTarget('bench', { fail: 70 })
+    render(<TargetsPanel targets={await store.getTargets()} store={store} verrouille />)
+
+    expect(screen.queryByRole('button', { name: 'Repartir à zéro' })).not.toBeInTheDocument()
+    // L'information, elle, reste visible : c'est ce qu'il est venu chercher.
+    expect(screen.getByText(/Deuxième essai à 70 kg/)).toBeInTheDocument()
+  })
+
+  it('laisse tout faire quand aucune séance n’est en cours', async () => {
+    const store = await magasinPret()
+    render(<TargetsPanel targets={await store.getTargets()} store={store} />)
+
+    expect(screen.getAllByRole('button', { name: 'Ajuster' }).length).toBeGreaterThan(0)
+    expect(screen.queryByText(/lecture seule/)).not.toBeInTheDocument()
+  })
+})

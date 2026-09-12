@@ -21,6 +21,19 @@ export interface TargetsPort {
   adjustTarget(lift: LiftKey, patch: TargetPatch): Promise<Targets>
 }
 
+/**
+ * Pourquoi l'écran peut être en lecture seule.
+ *
+ * Ajuster une cible pendant une séance en cours rendrait le brouillon impossible à
+ * finaliser : `finalizeSeance` refuse d'écrire quand les cibles ont bougé depuis
+ * l'ouverture du brouillon — à raison, sinon l'ajustement manuel serait écrasé en
+ * silence. Mais aucun écran ne sait rebaser un brouillon : Ugo devrait abandonner
+ * toute sa saisie pour sortir de l'impasse.
+ *
+ * On empêche donc d'y entrer. La consultation reste ouverte : savoir ce qui est visé
+ * pendant qu'on s'entraîne est exactement l'usage légitime de cet écran.
+ */
+
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : 'Ajustement refusé.'
 }
@@ -45,11 +58,13 @@ function LigneCible({
   targets,
   onAdjust,
   onRefus,
+  verrouille,
 }: {
   lift: LiftKey
   targets: Targets
   onAdjust: (lift: LiftKey, patch: TargetPatch) => Promise<boolean>
   onRefus: (message: string) => void
+  verrouille: boolean
 }) {
   const definition = LIFTS[lift]
   const cible = targets[lift]
@@ -120,7 +135,7 @@ function LigneCible({
             Annuler
           </button>
         </div>
-      ) : (
+      ) : verrouille ? null : (
         <div className="mt-2 flex gap-2">
           <button
             type="button"
@@ -147,7 +162,16 @@ function LigneCible({
   )
 }
 
-export function TargetsPanel({ targets, store }: { targets: Targets; store: TargetsPort }) {
+export function TargetsPanel({
+  targets,
+  store,
+  verrouille = false,
+}: {
+  targets: Targets
+  store: TargetsPort
+  /** Vrai quand une séance est en cours : voir oui, modifier non. */
+  verrouille?: boolean
+}) {
   const [etat, setEtat] = useState<Targets>(targets)
   const [erreur, setErreur] = useState<string | null>(null)
 
@@ -179,6 +203,7 @@ export function TargetsPanel({ targets, store }: { targets: Targets; store: Targ
             targets={etat}
             onAdjust={ajuster}
             onRefus={setErreur}
+            verrouille={verrouille}
           />
         ))}
       </ul>
@@ -187,10 +212,17 @@ export function TargetsPanel({ targets, store }: { targets: Targets; store: Targ
         {erreur ?? ''}
       </p>
 
-      <p className="mt-2 text-sm text-muted">
-        Un ajustement remplace la valeur calculée : le moteur repart de là. Corriger une séance
-        passée, en revanche, ne touche jamais les cibles.
-      </p>
+      {verrouille ? (
+        <p className="mt-2 rounded-xl border border-warn/60 bg-surface p-3 text-sm text-fg">
+          Séance en cours : les cibles sont en lecture seule. Les changer maintenant empêcherait
+          d’enregistrer ta séance. Termine-la d’abord.
+        </p>
+      ) : (
+        <p className="mt-2 text-sm text-muted">
+          Un ajustement remplace la valeur calculée : le moteur repart de là. Corriger une séance
+          passée, en revanche, ne touche jamais les cibles.
+        </p>
+      )}
     </section>
   )
 }
