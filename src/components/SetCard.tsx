@@ -1,14 +1,9 @@
+import type { SetLog, SetStatus } from '../domain/types'
 import { NumberStepper } from './NumberStepper'
 import { RpeChips } from './RpeChips'
 
-export type SetStatus = 'planned' | 'entered' | 'validated' | 'skipped'
-
-export type EditableSet = {
-  weight: number | null
-  reps: number | null
-  rpe: number | null
-  status: SetStatus
-}
+export type EditableSet = Pick<SetLog, 'weight' | 'reps' | 'rpe' | 'status'>
+export type { SetStatus } from '../domain/types'
 
 type SetCardProps = {
   label: string
