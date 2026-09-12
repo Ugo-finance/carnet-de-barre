@@ -46,4 +46,30 @@ describe('retour au premier plan', () => {
     vi.restoreAllMocks()
     vi.useRealTimers()
   })
+
+  it('arrête la boucle à zéro et ne la relance que pour une nouvelle échéance', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+    const elapsed = vi.fn()
+    const now = vi.fn(() => Date.now())
+    const { result, rerender } = renderHook(
+      ({ endsAt }) => useRecoveryTimer(endsAt, elapsed, now),
+      { initialProps: { endsAt: 500 } },
+    )
+
+    act(() => vi.advanceTimersByTime(500))
+    expect(result.current).toBe(0)
+    expect(elapsed).toHaveBeenCalledOnce()
+
+    const callsAtZero = now.mock.calls.length
+    act(() => vi.advanceTimersByTime(1_000))
+    expect(now).toHaveBeenCalledTimes(callsAtZero)
+
+    rerender({ endsAt: 2_000 })
+    act(() => vi.advanceTimersByTime(500))
+    expect(result.current).toBe(0)
+    expect(elapsed).toHaveBeenCalledTimes(2)
+
+    vi.useRealTimers()
+  })
 })

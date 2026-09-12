@@ -51,9 +51,23 @@ export function useRecoveryTimer(
   const notifiedDeadline = useRef<number | undefined>(undefined)
 
   useEffect(() => {
-    const refresh = () => setTimestamp(now())
-    refresh()
-    const interval = window.setInterval(refresh, 250)
+    let interval: number | undefined
+
+    const stopLoop = () => {
+      if (interval === undefined) return
+      window.clearInterval(interval)
+      interval = undefined
+    }
+    const refresh = () => {
+      const current = now()
+      setTimestamp(current)
+      if (current >= endsAt) stopLoop()
+      return current
+    }
+
+    // Une échéance déjà passée n'arme aucune boucle. Quand une boucle atteint zéro,
+    // elle se détruit elle-même ; seul un nouvel `endsAt` relance cet effet.
+    if (refresh() < endsAt) interval = window.setInterval(refresh, 250)
     const onVisibility = () => {
       const nextVisible = document.visibilityState === 'visible'
       setVisible(nextVisible)
@@ -61,10 +75,10 @@ export function useRecoveryTimer(
     }
     document.addEventListener('visibilitychange', onVisibility)
     return () => {
-      window.clearInterval(interval)
+      stopLoop()
       document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [now])
+  }, [endsAt, now])
 
   const remaining = secondsUntil(endsAt, timestamp)
   useEffect(() => {

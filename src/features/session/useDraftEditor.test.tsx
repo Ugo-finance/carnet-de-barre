@@ -260,4 +260,72 @@ describe('useDraftEditor', () => {
     })
     vi.useRealTimers()
   })
+
+  it('corrige une série validée sans remplacer la récupération en cours', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-09-20T14:00:00Z'))
+    const initial = draftFixture()
+    initial.sets[0].status = 'validated'
+    initial.timerEndsAt = Date.now() + 60_000
+    initial.timerLabel = 'Récup Développé couché'
+    const saveDraft = vi.fn<(draft: Draft) => Promise<void>>().mockResolvedValue(undefined)
+    const store: DraftPort = { loadDraft: vi.fn().mockResolvedValue(initial), saveDraft }
+    const { result } = renderHook(() => useDraftEditor(store, initial))
+
+    // « Modifier » repasse d'abord la série en saisie, puis « Valider » confirme la
+    // correction. Ce second geste ne doit ni remplacer ni prolonger le chrono actif.
+    act(() =>
+      result.current.updateSet('set-1', {
+        weight: 77.5,
+        reps: 4,
+        rpe: 8,
+        status: 'entered',
+      }),
+    )
+    act(() =>
+      result.current.validateSet(
+        'set-1',
+        { weight: 77.5, reps: 4, rpe: 8, status: 'validated' },
+        { seconds: 150, label: 'Récup Squat' },
+      ),
+    )
+    await act(() => result.current.flush())
+
+    expect(saveDraft.mock.calls.at(-1)?.[0]).toMatchObject({
+      sets: [expect.objectContaining({ weight: 77.5, status: 'validated' })],
+      timerEndsAt: initial.timerEndsAt,
+      timerLabel: 'Récup Développé couché',
+    })
+    vi.useRealTimers()
+  })
+
+  it('ne lance pas de chrono en revalidant une série corrigée après la récupération', async () => {
+    const initial = draftFixture()
+    initial.sets[0].status = 'validated'
+    const saveDraft = vi.fn<(draft: Draft) => Promise<void>>().mockResolvedValue(undefined)
+    const store: DraftPort = { loadDraft: vi.fn().mockResolvedValue(initial), saveDraft }
+    const { result } = renderHook(() => useDraftEditor(store, initial))
+
+    act(() =>
+      result.current.updateSet('set-1', {
+        weight: 77.5,
+        reps: 4,
+        rpe: 8,
+        status: 'entered',
+      }),
+    )
+    act(() =>
+      result.current.validateSet(
+        'set-1',
+        { weight: 77.5, reps: 4, rpe: 8, status: 'validated' },
+        { seconds: 150, label: 'Récup Squat' },
+      ),
+    )
+    await act(() => result.current.flush())
+
+    expect(saveDraft.mock.calls.at(-1)?.[0]).toMatchObject({
+      timerEndsAt: null,
+      timerLabel: null,
+    })
+  })
 })
