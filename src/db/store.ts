@@ -32,7 +32,7 @@ import {
   db as defaultDb,
   ensureSeeded,
 } from './database.ts'
-import { buildDraft } from './draft.ts'
+import { buildDraft, isBlankDraft } from './draft.ts'
 import { applyProgression, draftToSeance, targetsDiverged } from './derive.ts'
 import { applyTargetPatch, type TargetPatch } from './targets.ts'
 import { seanceSchema } from '../domain/schema.ts'
@@ -253,7 +253,14 @@ export class DexieStore implements DraftStore {
         // déplacer une cible pendant une séance rendrait le brouillon impossible à
         // finaliser (`stale-targets`), et aucun écran ne sait rebaser un brouillon.
         // Ugo devrait abandonner toute sa saisie. Même règle que `importReplace`.
-        if ((await this.database.drafts.count()) > 0) {
+        //
+        // Mais un brouillon **jamais touché** n'est pas une séance en cours : l'écran
+        // d'accueil en ouvre un dès l'affichage, y compris juste après une
+        // finalisation. Refuser là-dessus interdisait d'ajuster une cible au moment
+        // précis où Ugo sort de la salle. On le reconstruit donc sur les nouvelles
+        // cibles, dans cette même transaction : il ne portait aucune information.
+        const existant = await this.database.drafts.toCollection().first()
+        if (existant && !isBlankDraft(existant)) {
           throw new StoreError(
             'draft-in-progress',
             'Une séance est en cours. Termine-la avant d’ajuster une cible.',
@@ -274,6 +281,16 @@ export class DexieStore implements DraftStore {
         const precedents = (journal?.value ?? []) as TargetAdjustment[]
         const trace: TargetAdjustment = { at, lift, before: courant[lift], after: targets[lift] }
         await this.database.meta.put({ key: ADJUSTMENTS_KEY, value: [...precedents, trace] })
+
+        if (existant) {
+          // Même identifiant : l'écran de séance peut encore le tenir en mémoire, et
+          // un identifiant neuf ferait diverger sa copie sans qu'il s'en aperçoive.
+          // Il reste à l'interface à se remonter pour relire celui-ci — c'est écrit
+          // dans le parcours d'acceptation du ticket.
+          await this.database.drafts.put(
+            buildDraft(existant.type, existant.date, targets, { id: existant.id }),
+          )
+        }
         return targets
       },
     )

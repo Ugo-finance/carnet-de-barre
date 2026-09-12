@@ -16,6 +16,7 @@ import { SessionHome } from './features/session/SessionHome'
 import { ExportPanel } from './features/export/ExportPanel'
 import { TargetsPanel } from './features/history/TargetsPanel'
 import { HistoryPanel } from './features/history/HistoryPanel'
+import { isBlankDraft } from './db/draft'
 import type { Seance, Targets } from './domain/types'
 
 type Onglet = 'seance' | 'historique' | 'cibles' | 'export'
@@ -34,7 +35,7 @@ const ONGLETS: { id: Onglet; label: string }[] = [
  * ajustements. Les recharger à chaque ouverture de l'onglet évite d'afficher une
  * valeur périmée après une finalisation de séance.
  */
-function CiblesTab() {
+function CiblesTab({ onAdjusted }: { onAdjusted: () => void }) {
   const [targets, setTargets] = useState<Targets>()
   const [verrouille, setVerrouille] = useState(true)
   const [erreur, setErreur] = useState<string>()
@@ -45,10 +46,14 @@ function CiblesTab() {
       ([valeur, brouillon]) => {
         if (!actif) return
         setTargets(valeur)
-        // Une séance en cours interdit l'ajustement : `finalizeSeance` refuserait
+        // Une séance **commencée** interdit l'ajustement : `finalizeSeance` refuserait
         // ensuite d'écrire, et aucun écran ne sait rebaser un brouillon. Ugo devrait
         // abandonner toute sa saisie pour sortir de l'impasse.
-        setVerrouille(brouillon !== undefined)
+        //
+        // Un brouillon **vierge** n'est pas une séance : l'écran d'accueil en ouvre un
+        // dès l'affichage, y compris juste après une finalisation. Le magasin sait le
+        // reconstruire sur les nouvelles cibles ; verrouiller ici l'en empêcherait.
+        setVerrouille(brouillon !== undefined && !isBlankDraft(brouillon))
       },
       (cause: unknown) =>
         actif && setErreur(cause instanceof Error ? cause.message : 'Lecture impossible.'),
@@ -72,7 +77,24 @@ function CiblesTab() {
       </p>
     )
   }
-  return <TargetsPanel targets={targets} store={store} verrouille={verrouille} />
+  return (
+    <TargetsPanel
+      targets={targets}
+      store={{
+        adjustTarget: async (lift, patch) => {
+          const suivantes = await store.adjustTarget(lift, patch)
+          // Le magasin a pu reconstruire le brouillon vierge. `SessionHome` reste
+          // monté et tient encore l'ancien en mémoire : sans remontage, sa prochaine
+          // sauvegarde réécrirait les anciennes `baseTargets` par-dessus, et la
+          // finalisation lèverait `stale-targets`. Le remonter ne coûte rien —
+          // l'ajustement n'était possible que parce que le brouillon était vierge.
+          onAdjusted()
+          return suivantes
+        },
+      }}
+      verrouille={verrouille}
+    />
+  )
 }
 
 /**
@@ -115,6 +137,7 @@ function HistoriqueTab() {
 
 export default function App() {
   const [onglet, setOnglet] = useState<Onglet>('seance')
+  const [generationSeance, setGenerationSeance] = useState(0)
 
   return (
     <div className="min-h-dvh">
@@ -148,7 +171,7 @@ export default function App() {
           série perdue au milieu d'une séance.
         */}
         <div hidden={onglet !== 'seance'}>
-          <SessionHome store={store} />
+          <SessionHome key={generationSeance} store={store} />
         </div>
         {/*
           Les deux autres se remontent à chaque ouverture, et c'est voulu : leurs
@@ -156,7 +179,9 @@ export default function App() {
           montrerait des cibles périmées juste après le récapitulatif qui les annonce.
         */}
         {onglet === 'historique' ? <HistoriqueTab /> : null}
-        {onglet === 'cibles' ? <CiblesTab /> : null}
+        {onglet === 'cibles' ? (
+          <CiblesTab onAdjusted={() => setGenerationSeance((n) => n + 1)} />
+        ) : null}
         {onglet === 'export' ? <ExportPanel store={store} /> : null}
       </div>
     </div>
