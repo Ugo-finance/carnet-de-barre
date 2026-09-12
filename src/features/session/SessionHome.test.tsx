@@ -67,13 +67,13 @@ describe('SessionHome', () => {
     expect(store.openDraft).toHaveBeenCalledWith('C', '2026-09-20')
   })
 
-  it('propose la séance suivante quand la séance prévue du jour est terminée', async () => {
+  it('propose la séance suivante mais date le brouillon du jour réel', async () => {
     const store = fakeStore({ seances: [saved('C', '2026-09-20')] })
     render(<SessionHome store={store} now={SUNDAY} />)
 
     expect(await screen.findByRole('heading', { name: 'Séance A' })).toBeInTheDocument()
-    expect(screen.getByText('Mardi')).toBeInTheDocument()
-    expect(store.openDraft).toHaveBeenCalledWith('A', '2026-09-22')
+    expect(screen.getByText("Aujourd'hui · hors rotation")).toBeInTheDocument()
+    expect(store.openDraft).toHaveBeenCalledWith('A', '2026-09-20')
   })
 
   it('reprend un brouillon existant avant la proposition du calendrier', async () => {
