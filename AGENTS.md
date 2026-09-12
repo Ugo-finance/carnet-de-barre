@@ -22,9 +22,9 @@ PWA mobile de carnet de musculation pour un seul utilisateur (Ugo), offline-firs
 - Dépendances directes autorisées, liste close (P2 de la contre-revue de #1 : la règle ne doit pas s'élargir toute seule quand `package.json` change) :
   - exécution : `react`, `react-dom`, `dexie`, `zod` ;
   - build : `vite`, `@vitejs/plugin-react`, `typescript`, `tailwindcss`, `@tailwindcss/vite`, `vite-plugin-pwa` ;
-  - tests et qualité : `vitest`, `jsdom`, `@testing-library/react`, `@testing-library/jest-dom`, `@playwright/test`, `oxlint`, `prettier` ;
+  - tests et qualité : `vitest`, `jsdom`, `@testing-library/react`, `@testing-library/jest-dom`, `fake-indexeddb`, `@playwright/test`, `oxlint`, `prettier` ;
   - types : `@types/node`, `@types/react`, `@types/react-dom`.
-  Toute autre dépendance, y compris de test, remonte à Ugo avant installation (`fake-indexeddb` est en attente dans UGO-179).
+  Toute autre dépendance, y compris de test, remonte à Ugo avant installation.
 
 ## Commandes
 
@@ -47,6 +47,7 @@ npm run format         Prettier
 
 - Un ticket Linear = une branche = une PR. Branches `claude/cb-NN-sujet` ou `codex/cb-NN-sujet`, fondées sur `main` à jour, dans un worktree distinct. Passer le ticket `In Progress` en commençant, y déclarer les fichiers réservés.
 - Les deux agents publient sous le compte GitHub `Ugo-finance`. **Chaque commentaire et chaque revue se termine par `<!-- claude -->` ou `<!-- codex -->`.** C'est le seul discriminant.
+- **Même règle dans Linear**, et pour la même raison : nos commentaires y sortent aussi sous le nom d'Ugo. Un commentaire Linear **non marqué** est le seul qui vienne de lui. Ne jamais citer un commentaire marqué comme un arbitrage d'Ugo : ce serait se citer soi-même, ou citer l'autre agent, en croyant citer l'utilisateur.
 - Contre-revue par l'autre agent, publiée dans la PR GitHub, en commentaire signé avec verdict explicite, SHA complet relu et findings classés P1/P2/P3. Annoncer « revue en cours sur #N » avant de relire. Pas d'approbation GitHub native requise (impossible sous un compte unique).
 - Porte de contrôle : GitHub Actions et le build Vercel exécutent tous deux `npm run check`. Les deux doivent être verts sur le SHA de tête.
 - Fusion par l'auteur quand : CI verte sur le `head_sha` exact, contre-revue sans P1 sur ce même SHA, branche à jour de `main`. Squash, suppression de branche. Ni `--admin`, ni force-push sur la branche de l'autre. Toute nouvelle tête appelle une nouvelle revue.
