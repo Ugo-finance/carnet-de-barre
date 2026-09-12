@@ -18,17 +18,20 @@ MARQUE="<!-- $AUTRE -->"
 vu() { grep -qxF "$1" "$STATE"; }
 marquer() { echo "$1" >> "$STATE"; }
 horodate() { date '+%d.%m.%Y %H:%M:%S'; }
-api() { gh api --paginate "$@" 2>>"$STATE_DIR/veille-$ME.err" || { echo "$(horodate) erreur API sur $1" >&2; return 1; }; }
+api() { gh api --paginate "$@" 2>>"$STATE_DIR/veille-$ME.err" || { echo "$(horodate) erreur API sur $1"; return 1; }; }
+# Les listes de PR passent par le meme journal : une panne ici rendrait la veille
+# faussement calme (P2 de la contre-revue Codex sur #1).
+prs() { gh pr list --repo "$REPO" --state open "$@" 2>>"$STATE_DIR/veille-$ME.err" || { echo "$(horodate) erreur gh pr list"; return 1; }; }
 
 echo "$(horodate) veille $ME armée sur $REPO — signale le marqueur $MARQUE (état : $STATE)"
 
 while true; do
   # 1. PR ouvertes : nouvelle PR ou nouvelle tête (SHA)
-  gh pr list --repo "$REPO" --state open --json number,title,headRefName,headRefOid \
-    --jq '.[] | "pr\(.number)@\(.headRefOid)\t#\(.number) \(.title) [\(.headRefName)] tête \(.headRefOid[0:10])"' 2>/dev/null \
+  prs --json number,title,headRefName,headRefOid \
+    --jq '.[] | "pr\(.number)@\(.headRefOid)\t#\(.number) \(.title) [\(.headRefName)] tête \(.headRefOid[0:10])"' \
   | while IFS=$'\t' read -r k msg; do vu "$k" || { marquer "$k"; echo "$(horodate) PR $msg"; }; done
 
-  for n in $(gh pr list --repo "$REPO" --state open --json number --jq '.[].number' 2>/dev/null); do
+  for n in $(prs --json number --jq '.[].number'); do
     # 2. Revues soumises par l'autre agent
     api "repos/$REPO/pulls/$n/reviews" --jq '.[] | select((.body // "") | contains("'"$MARQUE"'")) | "r\(.id)\t#'"$n"' revue \(.state) sur \(.commit_id[0:10])"' \
     | while IFS=$'\t' read -r k msg; do vu "$k" || { marquer "$k"; echo "$(horodate) REVUE $msg"; }; done

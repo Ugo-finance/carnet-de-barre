@@ -19,7 +19,12 @@ PWA mobile de carnet de musculation pour un seul utilisateur (Ugo), offline-firs
 - Jamais de rechargement automatique du service worker pendant une séance active.
 - Dates de séance en `YYYY-MM-DD`, rotation calculée en Europe/Zurich, affichage `jj.mm.aaaa`. UI en français, nombres avec virgule décimale.
 - Zones tactiles ≥ 44 px, RPE indiqué autrement que par la seule couleur, safe area et clavier gérés.
-- Dépendances directes autorisées : celles de `package.json` à la fusion de CB-01. Toute autre dépendance remonte à Ugo avant installation.
+- Dépendances directes autorisées, liste close (P2 de la contre-revue de #1 : la règle ne doit pas s'élargir toute seule quand `package.json` change) :
+  - exécution : `react`, `react-dom`, `dexie`, `zod` ;
+  - build : `vite`, `@vitejs/plugin-react`, `typescript`, `tailwindcss`, `@tailwindcss/vite`, `vite-plugin-pwa` ;
+  - tests et qualité : `vitest`, `jsdom`, `@testing-library/react`, `@testing-library/jest-dom`, `@playwright/test`, `oxlint`, `prettier` ;
+  - types : `@types/node`, `@types/react`, `@types/react-dom`.
+  Toute autre dépendance, y compris de test, remonte à Ugo avant installation (`fake-indexeddb` est en attente dans UGO-179).
 
 ## Commandes
 
