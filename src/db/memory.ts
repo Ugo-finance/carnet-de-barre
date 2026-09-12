@@ -25,6 +25,7 @@ import type { ExportFile } from '../domain/schema.ts'
 import { todayInZurich } from '../domain/schedule.ts'
 import { applyTargetPatch, type TargetPatch } from './targets.ts'
 import { StoreError, type FinalizeResult, type ImportPreview } from './contracts.ts'
+import { seanceSchema } from '../domain/schema.ts'
 import { loadSeed } from './seed.ts'
 import { buildDraft } from './draft.ts'
 import { applyProgression, draftToSeance, targetsDiverged } from './derive.ts'
@@ -164,6 +165,29 @@ export class MemoryStore implements DraftStore {
   /** Surchargeable dans les tests, pour dater l'ajustement de façon déterministe. */
   protected today(): string {
     return todayInZurich()
+  }
+
+  // ---- correction de l'historique (D6) ----
+
+  /** Corrige une séance enregistrée. Ne touche jamais aux cibles (D6). */
+  async updateSeance(id: string, patch: Partial<Omit<Seance, 'id'>>): Promise<Seance> {
+    const index = this.seances.findIndex((seance) => seance.id === id)
+    if (index === -1) {
+      throw new StoreError('storage-unavailable', 'Cette séance n’existe pas ou plus.')
+    }
+
+    const verdict = seanceSchema.safeParse({ ...this.seances[index], ...patch, id })
+    if (!verdict.success) {
+      throw new StoreError('storage-unavailable', 'Cette correction rendrait la séance invalide.')
+    }
+
+    this.seances[index] = verdict.data
+    return structuredClone(verdict.data)
+  }
+
+  /** Supprime une séance. Sans effet sur les cibles (D6). */
+  async deleteSeance(id: string): Promise<void> {
+    this.seances = this.seances.filter((seance) => seance.id !== id)
   }
 
   // ---- échange ----
