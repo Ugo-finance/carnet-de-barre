@@ -110,7 +110,7 @@ function HistoriqueTab() {
       </p>
     )
   }
-  return <HistoryPanel seances={seances} />
+  return <HistoryPanel seances={seances} store={store} />
 }
 
 export default function App() {
