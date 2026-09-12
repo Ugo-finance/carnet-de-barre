@@ -134,6 +134,13 @@ describe('échec et reset', () => {
     expect(result?.event.outcome).toBe('second-essai')
   })
 
+  it('compte zéro répétition comme un échec connu, pas comme une valeur manquante', () => {
+    // Série tentée et ratée : c'est une information, pas une absence d'information.
+    const result = applyTopSet('squat', target({ w: 80 }), attempt(80, 0, null))
+    expect(result?.target.fail).toBe(80)
+    expect(result?.event.outcome).toBe('second-essai')
+  })
+
   it('compte un RPE 9,5 comme un échec', () => {
     expect(applyTopSet('squat', target({ w: 80 }), attempt(80, 4, 9.5))?.target.fail).toBe(80)
   })
