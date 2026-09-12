@@ -17,6 +17,7 @@ import { LIFTS, findExercise } from '../domain/program.ts'
 import { applyTopSet, applyVolumeSets, type Attempt } from '../domain/progression.ts'
 import { formatNumber, formatRpe } from '../domain/format.ts'
 import type {
+  AccessoryLog,
   Draft,
   LiftKey,
   ProgressionEvent,
@@ -33,8 +34,15 @@ import type {
  * ferait disparaître du résumé alors qu'elle a bien été réalisée. Les tractions
  * poids de corps de la séance C sont exactement dans ce cas.
  */
-export function validatedSets(draft: Draft): SetLog[] {
-  return draft.sets.filter((set) => set.status === 'validated')
+/**
+ * Prend n'importe quoi qui porte des séries — un brouillon ou une séance enregistrée.
+ *
+ * Le résumé d'une séance corrigée doit être produit par **la même fonction** que celui
+ * de la séance d'origine. Une seconde implémentation divergerait au premier changement
+ * de notation, et l'historique mélangerait alors deux formats sans que rien ne le dise.
+ */
+export function validatedSets(porteur: { sets: readonly SetLog[] }): SetLog[] {
+  return porteur.sets.filter((set) => set.status === 'validated')
 }
 
 /**
@@ -107,14 +115,25 @@ function topRecordFor(lift: LiftKey, sets: SetLog[]): TopRecord | null {
   return { w: chosen.weight, reps: chosen.reps, rpe: chosen.rpe }
 }
 
+/**
+ * Ce dont la dérivation a besoin : des séries, et éventuellement des accessoires.
+ *
+ * Un brouillon en cours et une séance enregistrée le portent tous deux. C'est ce qui
+ * permet de reproduire un résumé après correction avec **la fonction qui l'a produit**.
+ */
+export interface PorteurDeSeries {
+  sets: readonly SetLog[]
+  accessories?: readonly AccessoryLog[]
+}
+
 export interface DerivedSeance {
   lines: string[]
   tops: Partial<Record<LiftKey, TopRecord>>
 }
 
 /** Fabrique le résumé lisible et les tops, à partir des seules séries validées. */
-export function deriveSeance(draft: Draft): DerivedSeance {
-  const groups = groupByExercise(validatedSets(draft))
+export function deriveSeance(porteur: PorteurDeSeries): DerivedSeance {
+  const groups = groupByExercise(validatedSets(porteur))
   const lines: string[] = []
   const tops: Partial<Record<LiftKey, TopRecord>> = {}
 
@@ -129,7 +148,9 @@ export function deriveSeance(draft: Draft): DerivedSeance {
     if (record) tops[exercise.lift] = record
   }
 
-  for (const accessory of draft.accessories) {
+  // Les séances du dossier de départ n'ont pas d'accessoires structurés : absence et
+  // liste vide y veulent dire la même chose, et il n'y a rien à en tirer.
+  for (const accessory of porteur.accessories ?? []) {
     if (!accessory.done && accessory.note.trim() === '') continue
     const exercise = findExercise(accessory.exerciseId)
     const label = exercise?.label ?? accessory.exerciseId
