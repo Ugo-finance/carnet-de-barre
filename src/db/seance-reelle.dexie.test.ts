@@ -55,9 +55,9 @@ describe('la séance de ce soir, de bout en bout', () => {
 
     const suggestion = currentSession(SAMEDI_SOIR, isScheduledSessionDone(aujourdhui, []))
     expect(suggestion.type).toBe('C')
-    // NB : #12 renomme ce champ en `scheduledDate`. Le nom changera, pas le sens —
-    // c'est justement parce que `date` se confond avec « aujourd'hui » qu'il change.
-    expect(suggestion.date).toBe('2026-09-13')
+    // Le champ s'appelle `scheduledDate` depuis CB-14, précisément parce que `date`
+    // se confondait avec « aujourd'hui ». C'est la date du calendrier, pas celle du jour.
+    expect(suggestion.scheduledDate).toBe('2026-09-13')
     expect(suggestion.isToday).toBe(false)
 
     const draft = await store.openDraft(suggestion.type, aujourdhui)
