@@ -3,14 +3,14 @@ import type { CarnetStore } from '../db/contracts'
 import { isBlankDraft } from '../db/draft'
 import { pwaUpdates, type PwaUpdateController } from './register'
 
-export type UpdateStore = Pick<CarnetStore, 'loadDraft' | 'saveDraft'>
+export type UpdateStore = Pick<CarnetStore, 'loadDraft'>
 
 /**
  * Propose la nouvelle version sans interrompre une séance.
  *
  * Le contrôle est refait au clic, dans le store : le bandeau peut être resté affiché
- * pendant qu'une série commençait. Un brouillon vierge peut être sauvegardé puis
- * remplacé sans perte ; un brouillon commencé bloque l'activation.
+ * pendant qu'une série commençait. La lecture IndexedDB prouve que le brouillon est
+ * déjà persisté ; un brouillon commencé bloque l'activation.
  */
 export function UpdatePrompt({
   store,
@@ -38,7 +38,6 @@ export function UpdatePrompt({
         setMessage("Termine ta séance avant d'appliquer la mise à jour.")
         return
       }
-      if (draft) await store.saveDraft(draft)
       await controller.apply()
     } catch (error: unknown) {
       setMessage(error instanceof Error ? error.message : 'Mise à jour impossible.')
@@ -49,7 +48,7 @@ export function UpdatePrompt({
 
   return (
     <aside
-      className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-50 mx-auto max-w-md rounded-2xl border border-accent/60 bg-surface p-4 shadow-2xl"
+      className="mx-auto mt-2 max-w-md rounded-2xl border border-accent/60 bg-surface p-4 shadow-lg"
       aria-labelledby="pwa-update-title"
     >
       <p className="font-bold" id="pwa-update-title">

@@ -23,7 +23,7 @@ function blankDraft() {
 }
 
 describe('bandeau de mise à jour', () => {
-  it('sauvegarde le brouillon vierge avant d’activer la nouvelle version', async () => {
+  it('relit le brouillon persisté avant d’activer la nouvelle version', async () => {
     const order: string[] = []
     let options: RegisterSWOptions | undefined
     const apply = vi.fn(async () => {
@@ -37,9 +37,9 @@ describe('bandeau de mise à jour', () => {
     options?.onNeedRefresh?.()
     const draft = blankDraft()
     const store: UpdateStore = {
-      loadDraft: vi.fn(async () => draft),
-      saveDraft: vi.fn(async () => {
-        order.push('save')
+      loadDraft: vi.fn(async () => {
+        order.push('read')
+        return draft
       }),
     }
     render(<UpdatePrompt store={store} controller={controller} />)
@@ -47,8 +47,8 @@ describe('bandeau de mise à jour', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Mettre à jour' }))
 
     await waitFor(() => expect(apply).toHaveBeenCalledWith(true))
-    expect(store.saveDraft).toHaveBeenCalledWith(draft)
-    expect(order).toEqual(['save', 'activate'])
+    expect(store.loadDraft).toHaveBeenCalledOnce()
+    expect(order).toEqual(['read', 'activate'])
   })
 
   it('refuse l’activation quand une séance est commencée', async () => {
@@ -57,14 +57,12 @@ describe('bandeau de mise à jour', () => {
     draft.sets[0].status = 'validated'
     const store: UpdateStore = {
       loadDraft: vi.fn(async () => draft),
-      saveDraft: vi.fn(async () => undefined),
     }
     render(<UpdatePrompt store={store} controller={controller} />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Mettre à jour' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/termine ta séance/i)
-    expect(store.saveDraft).not.toHaveBeenCalled()
     expect(apply).not.toHaveBeenCalled()
   })
 
@@ -72,7 +70,6 @@ describe('bandeau de mise à jour', () => {
     const { controller, apply } = updateReady()
     const store: UpdateStore = {
       loadDraft: vi.fn(async () => undefined),
-      saveDraft: vi.fn(async () => undefined),
     }
     render(<UpdatePrompt store={store} controller={controller} />)
 

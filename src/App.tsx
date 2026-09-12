@@ -142,7 +142,6 @@ export default function App() {
 
   return (
     <div className="min-h-dvh">
-      <UpdatePrompt store={store} />
       <nav
         className="mx-auto flex w-full max-w-md gap-1 px-3 pt-[max(0.5rem,env(safe-area-inset-top))]"
         aria-label="Sections"
@@ -163,6 +162,8 @@ export default function App() {
           </button>
         ))}
       </nav>
+
+      <UpdatePrompt store={store} />
 
       <div className="px-3">
         {/*
