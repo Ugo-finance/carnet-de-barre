@@ -75,9 +75,19 @@ export class DexieStore implements DraftStore {
   /**
    * Écrit le brouillon. Appelé à chaque frappe, à chaque validation, à chaque
    * démarrage de chrono : c'est ce qui fait qu'un rechargement ne perd rien.
+   *
+   * **Remplacement, pas ajout.** Il n'existe jamais qu'un brouillon à la fois. Un
+   * simple `put` laisserait deux lignes si deux onglets ouvraient chacun le leur avant
+   * la première écriture : `loadDraft` masquerait la plus ancienne, et finaliser la
+   * plus récente la ferait ressurgir. Le vidage et l'écriture tiennent donc dans une
+   * transaction, ce qui aligne cet adaptateur sur l'implémentation en mémoire.
    */
   async saveDraft(draft: Draft): Promise<void> {
-    await this.database.drafts.put({ ...draft, updatedAt: Date.now() })
+    const row = { ...draft, updatedAt: Date.now() }
+    await this.database.transaction('rw', this.database.drafts, async () => {
+      await this.database.drafts.clear()
+      await this.database.drafts.put(row)
+    })
   }
 
   async clearDraft(): Promise<void> {

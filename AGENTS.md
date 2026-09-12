@@ -47,6 +47,7 @@ npm run format         Prettier
 
 - Un ticket Linear = une branche = une PR. Branches `claude/cb-NN-sujet` ou `codex/cb-NN-sujet`, fondées sur `main` à jour, dans un worktree distinct. Passer le ticket `In Progress` en commençant, y déclarer les fichiers réservés.
 - Les deux agents publient sous le compte GitHub `Ugo-finance`. **Chaque commentaire et chaque revue se termine par `<!-- claude -->` ou `<!-- codex -->`.** C'est le seul discriminant.
+- **Même règle dans Linear**, et pour la même raison : nos commentaires y sortent aussi sous le nom d'Ugo. Un commentaire Linear **non marqué** est le seul qui vienne de lui. Ne jamais citer un commentaire marqué comme un arbitrage d'Ugo : ce serait se citer soi-même, ou citer l'autre agent, en croyant citer l'utilisateur.
 - Contre-revue par l'autre agent, publiée dans la PR GitHub, en commentaire signé avec verdict explicite, SHA complet relu et findings classés P1/P2/P3. Annoncer « revue en cours sur #N » avant de relire. Pas d'approbation GitHub native requise (impossible sous un compte unique).
 - Porte de contrôle : GitHub Actions et le build Vercel exécutent tous deux `npm run check`. Les deux doivent être verts sur le SHA de tête.
 - Fusion par l'auteur quand : CI verte sur le `head_sha` exact, contre-revue sans P1 sur ce même SHA, branche à jour de `main`. Squash, suppression de branche. Ni `--admin`, ni force-push sur la branche de l'autre. Toute nouvelle tête appelle une nouvelle revue.

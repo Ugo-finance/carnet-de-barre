@@ -105,6 +105,18 @@ describe('DraftStore (implémentation en mémoire)', () => {
       expect((await store.loadDraft())?.notes).toBe('second')
     })
 
+    it('n’en garde qu’un seul, même si deux brouillons d’identifiants différents sont écrits', async () => {
+      // Deux onglets ouvrant chacun leur brouillon avant la première écriture.
+      // Si les deux survivaient, finaliser le plus récent ferait ressurgir l'autre.
+      const targets = await store.getTargets()
+      await store.saveDraft(draftFor(targets, { id: 'onglet-1', notes: 'premier' }))
+      await store.saveDraft(draftFor(targets, { id: 'onglet-2', notes: 'second' }))
+      const relu = await store.loadDraft()
+      expect(relu?.id).toBe('onglet-2')
+      await store.clearDraft()
+      expect(await store.loadDraft()).toBeUndefined()
+    })
+
     it('l’efface sur demande', async () => {
       const targets = await store.getTargets()
       await store.saveDraft(draftFor(targets))

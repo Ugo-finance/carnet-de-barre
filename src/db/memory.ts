@@ -52,6 +52,7 @@ export class MemoryStore implements DraftStore {
     return this.draft ? structuredClone(this.draft) : undefined
   }
 
+  /** Remplacement, jamais ajout : il n'existe qu'un brouillon à la fois. */
   async saveDraft(draft: Draft): Promise<void> {
     this.draft = { ...structuredClone(draft), updatedAt: Date.now() }
   }
