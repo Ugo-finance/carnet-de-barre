@@ -18,6 +18,7 @@ import type {
   ProgressionEvent,
   Seance,
   SeanceType,
+  TargetAdjustment,
   Targets,
 } from '../domain/types.ts'
 import { todayInZurich } from '../domain/schedule.ts'
@@ -35,6 +36,7 @@ export class MemoryStore implements DraftStore {
   private seeded = false
   /** Journal des événements de progression, par séance. Local, jamais exporté. */
   private readonly events = new Map<string, ProgressionEvent[]>()
+  private readonly adjustments: TargetAdjustment[] = []
 
   /** Amorçage à l'identique de `ensureSeeded` : une seule fois, marqueur compris. */
   async ready(): Promise<void> {
@@ -132,9 +134,19 @@ export class MemoryStore implements DraftStore {
   }
 
   async adjustTarget(lift: LiftKey, patch: TargetPatch): Promise<Targets> {
-    const targets = applyTargetPatch(await this.getTargets(), lift, patch, this.today())
-    this.targets = targets
+    const courant = await this.getTargets()
+    const at = this.today()
+    const targets = applyTargetPatch(courant, lift, patch, at)
+    if (targets !== courant) {
+      this.targets = targets
+      this.adjustments.push({ at, lift, before: courant[lift], after: targets[lift] })
+    }
     return structuredClone(targets)
+  }
+
+  /** Le journal des ajustements manuels, du plus ancien au plus récent. */
+  async listTargetAdjustments(): Promise<TargetAdjustment[]> {
+    return structuredClone(this.adjustments)
   }
 
   /** Surchargeable dans les tests, pour dater l'ajustement de façon déterministe. */

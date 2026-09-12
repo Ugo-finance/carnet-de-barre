@@ -10,6 +10,7 @@
  * cibles (D6) ; seule cette fonction les change à la main.
  */
 
+import { LIFTS } from '../domain/program.ts'
 import { roundToStep } from '../domain/progression.ts'
 import type { LiftKey, Targets } from '../domain/types.ts'
 
@@ -44,8 +45,15 @@ export function applyTargetPatch(
   const suivant = { ...courant }
 
   if (patch.w !== undefined) {
-    if (!Number.isFinite(patch.w) || patch.w <= 0) {
+    if (!Number.isFinite(patch.w) || patch.w < 0) {
       throw new TargetAdjustmentError('La charge doit être un nombre positif.')
+    }
+    // Zéro n'a pas le même sens selon l'exercice. Sur un lest (`added`), c'est une
+    // cible réelle et courante : revenir aux tractions au poids du corps. Sur une
+    // barre, c'est la barre à vide comme objectif — ce n'est pas une progression,
+    // c'est une faute de frappe, et `schema.ts` l'accepterait sans rien dire.
+    if (patch.w === 0 && LIFTS[lift].loadKind !== 'added') {
+      throw new TargetAdjustmentError('Une cible de 0 kg ne veut rien dire pour cet exercice.')
     }
     if (patch.w > 500) {
       throw new TargetAdjustmentError('Cette charge dépasse ce que l’app accepte (500 kg).')
@@ -56,8 +64,13 @@ export function applyTargetPatch(
   }
 
   if (patch.fail !== undefined) {
-    if (patch.fail !== null && (!Number.isFinite(patch.fail) || patch.fail <= 0)) {
-      throw new TargetAdjustmentError('La charge en échec doit être un nombre positif.')
+    // Même raisonnement que pour `w` : un échec à 0 kg de lest est un vrai échec
+    // aux tractions au poids du corps, alors qu'il n'a aucun sens sur une barre.
+    if (patch.fail !== null) {
+      const zeroAdmis = LIFTS[lift].loadKind === 'added'
+      if (!Number.isFinite(patch.fail) || patch.fail < 0 || (patch.fail === 0 && !zeroAdmis)) {
+        throw new TargetAdjustmentError('La charge en échec doit être un nombre positif.')
+      }
     }
     suivant.fail = patch.fail === null ? null : roundToStep(patch.fail)
   }

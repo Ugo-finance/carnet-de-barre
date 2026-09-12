@@ -25,14 +25,31 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : 'Ajustement refusé.'
 }
 
+/**
+ * Analyse la saisie **en entier**, au lieu de s'arrêter au premier caractère invalide.
+ *
+ * `Number.parseFloat('77,5abc')` rend `77.5` sans rien signaler : l'écran annonce
+ * refuser les fautes de frappe et enregistrerait une valeur différente de celle lue.
+ * Rendre `null` plutôt que `NaN` distingue « pas un nombre » de « nombre refusé »,
+ * qui ne méritent pas le même message.
+ */
+function lireCharge(saisie: string): number | null {
+  const normalisee = saisie.trim().replace(',', '.')
+  if (!/^\d+(?:\.\d+)?$/.test(normalisee)) return null
+  const valeur = Number(normalisee)
+  return Number.isFinite(valeur) ? valeur : null
+}
+
 function LigneCible({
   lift,
   targets,
   onAdjust,
+  onRefus,
 }: {
   lift: LiftKey
   targets: Targets
-  onAdjust: (lift: LiftKey, patch: TargetPatch) => Promise<void>
+  onAdjust: (lift: LiftKey, patch: TargetPatch) => Promise<boolean>
+  onRefus: (message: string) => void
 }) {
   const definition = LIFTS[lift]
   const cible = targets[lift]
@@ -40,10 +57,17 @@ function LigneCible({
   const [saisie, setSaisie] = useState('')
 
   const valider = async () => {
-    const valeur = Number.parseFloat(saisie.replace(',', '.'))
-    await onAdjust(lift, { w: valeur })
-    setOuvert(false)
-    setSaisie('')
+    const valeur = lireCharge(saisie)
+    if (valeur === null) {
+      onRefus('Entre une charge en chiffres, par exemple 77,5.')
+      return
+    }
+    // Ne refermer le champ qu'en cas de succès : sur un refus, Ugo doit pouvoir
+    // corriger ce qu'il vient de taper plutôt que de le ressaisir en entier.
+    if (await onAdjust(lift, { w: valeur })) {
+      setOuvert(false)
+      setSaisie('')
+    }
   }
 
   return (
@@ -127,12 +151,14 @@ export function TargetsPanel({ targets, store }: { targets: Targets; store: Targ
   const [etat, setEtat] = useState<Targets>(targets)
   const [erreur, setErreur] = useState<string | null>(null)
 
-  const ajuster = async (lift: LiftKey, patch: TargetPatch) => {
+  const ajuster = async (lift: LiftKey, patch: TargetPatch): Promise<boolean> => {
     setErreur(null)
     try {
       setEtat(await store.adjustTarget(lift, patch))
+      return true
     } catch (error) {
       setErreur(messageOf(error))
+      return false
     }
   }
 
@@ -147,7 +173,13 @@ export function TargetsPanel({ targets, store }: { targets: Targets; store: Targ
 
       <ul className="mt-4">
         {LIFT_ORDER.map((lift) => (
-          <LigneCible key={lift} lift={lift} targets={etat} onAdjust={ajuster} />
+          <LigneCible
+            key={lift}
+            lift={lift}
+            targets={etat}
+            onAdjust={ajuster}
+            onRefus={setErreur}
+          />
         ))}
       </ul>
 

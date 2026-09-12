@@ -92,6 +92,36 @@ describe('ajustement', () => {
     expect((await store.getTargets()).squat.w).toBe(75)
   })
 
+  it('refuse un nombre suivi de n’importe quoi, au lieu de garder le début', async () => {
+    // Number.parseFloat('77,5abc') rend 77.5 sans rien signaler : l'écran annonce
+    // refuser les fautes de frappe et enregistrerait une valeur jamais relue.
+    const store = await magasinPret()
+    render(<TargetsPanel targets={await store.getTargets()} store={store} />)
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Ajuster' })[0])
+    fireEvent.change(screen.getByLabelText('Nouvelle cible Squat'), {
+      target: { value: '77,5abc' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Poser' }))
+
+    expect(await screen.findByRole('status')).toHaveTextContent(/en chiffres/)
+    expect((await store.getTargets()).squat.w).toBe(75)
+    expect(screen.getByText('75 kg')).toBeInTheDocument()
+  })
+
+  it('garde la saisie affichée quand la valeur est refusée', async () => {
+    // Refermer le champ obligerait à tout retaper pour corriger un chiffre.
+    const store = await magasinPret()
+    render(<TargetsPanel targets={await store.getTargets()} store={store} />)
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Ajuster' })[0])
+    fireEvent.change(screen.getByLabelText('Nouvelle cible Squat'), { target: { value: '750' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Poser' }))
+
+    await screen.findByRole('status')
+    expect(screen.getByLabelText('Nouvelle cible Squat')).toHaveValue('750')
+  })
+
   it('efface un échec en attente à la demande', async () => {
     const store = await magasinPret()
     await store.adjustTarget('bench', { fail: 70 })

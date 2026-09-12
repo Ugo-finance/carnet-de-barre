@@ -55,6 +55,25 @@ describe('ajustement manuel', () => {
     expect(applyTargetPatch(origine, 'squat', {}, '2026-09-20')).toBe(origine)
   })
 
+  it('accepte une cible de 0 kg sur un lest, et la refuse sur une barre', () => {
+    // 0 kg de lest est une cible réelle et courante : revenir aux tractions au poids
+    // du corps après une coupure. Sur une barre, c'est la barre à vide comme objectif,
+    // donc une faute de frappe. `targetSchema` accepte les deux sans rien dire, c'est
+    // à cette garde de faire la différence.
+    expect(applyTargetPatch(cibles(), 'tractions', { w: 0 }, '2026-09-20').tractions.w).toBe(0)
+    expect(() => applyTargetPatch(cibles(), 'squat', { w: 0 }, '2026-09-20')).toThrow(
+      /ne veut rien dire/,
+    )
+  })
+
+  it('accepte un échec à 0 kg de lest', () => {
+    // Échouer aux tractions au poids du corps est un échec comme un autre : l'oublier
+    // ferait sauter le deuxième essai et ferait redescendre la cible trop tôt.
+    const apres = applyTargetPatch(cibles(), 'tractions', { fail: 0 }, '2026-09-20')
+    expect(apres.tractions.fail).toBe(0)
+    expect(() => applyTargetPatch(cibles(), 'squat', { fail: 0 }, '2026-09-20')).toThrow()
+  })
+
   it('refuse une charge absurde plutôt que de l’écrire', () => {
     // Une faute de frappe se corrige mal une fois en base.
     expect(() => applyTargetPatch(cibles(), 'squat', { w: 0 }, '2026-09-20')).toThrow(
