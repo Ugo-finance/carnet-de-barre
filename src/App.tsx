@@ -163,7 +163,9 @@ export default function App() {
         ))}
       </nav>
 
-      <UpdatePrompt store={store} />
+      <div className="px-3">
+        <UpdatePrompt store={store} />
+      </div>
 
       <div className="px-3">
         {/*
