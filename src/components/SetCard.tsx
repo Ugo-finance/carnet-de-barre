@@ -12,6 +12,7 @@ type SetCardProps = {
   onValidate: (value: EditableSet) => void
   onSkip: (value: EditableSet) => void
   weightStep?: number
+  showWeight?: boolean
   showRpe?: boolean
 }
 
@@ -29,6 +30,7 @@ export function SetCard({
   onValidate,
   onSkip,
   weightStep = 2.5,
+  showWeight = true,
   showRpe = true,
 }: SetCardProps) {
   const update = (change: Partial<EditableSet>) => {
@@ -48,15 +50,17 @@ export function SetCard({
         </span>
       </header>
 
-      <div className="grid grid-cols-2 gap-2">
-        <NumberStepper
-          label="Poids"
-          value={value.weight}
-          onChange={(weight) => update({ weight })}
-          step={weightStep}
-          unit="kg"
-          disabled={done}
-        />
+      <div className={`grid gap-2 ${showWeight ? 'grid-cols-2' : 'grid-cols-1'}`}>
+        {showWeight ? (
+          <NumberStepper
+            label="Poids"
+            value={value.weight}
+            onChange={(weight) => update({ weight })}
+            step={weightStep}
+            unit="kg"
+            disabled={done}
+          />
+        ) : null}
         <NumberStepper
           label="Répétitions"
           value={value.reps}
