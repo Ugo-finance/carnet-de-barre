@@ -108,4 +108,16 @@ describe('navigation depuis le point d’entrée réel', () => {
     await waitFor(() => expect(screen.getByText('Squat')).toBeInTheDocument())
     expect(screen.getByText('75 kg')).toBeInTheDocument()
   })
+
+  it('atteint l’historique et y montre les séances de départ', async () => {
+    // Sans cet écran, après une séance, Ugo n'a aucun moyen de vérifier qu'elle a été
+    // enregistrée : le récapitulatif ne s'affiche qu'une fois et disparaît en quittant.
+    render(<App />)
+    await screen.findByRole('heading', { name: /Séance [ABC]/ })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Historique' }))
+
+    expect(await screen.findByRole('heading', { name: 'Historique' })).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText('12 séances enregistrées.')).toBeInTheDocument())
+  })
 })
