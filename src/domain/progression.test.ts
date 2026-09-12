@@ -71,11 +71,18 @@ describe('succès', () => {
     expect(result?.target.w).toBe(82.5)
   })
 
-  it('ne fait jamais redescendre une cible sur une séance volontairement légère', () => {
-    // Cible 75, top set à 70 mené facilement : 72,5 serait une régression.
+  it('suit la lettre de la spec même quand la cible redescend', () => {
+    // Cible 75, top set volontairement léger à 70 mené à RPE 8 : la spec dit
+    // « réalisé + incrément », donc 72,5. Ugo corrige à la main si ça le gêne (CB-33).
+    // Une règle de non-régression est proposée dans UGO-179, pas encore tranchée.
     const result = applyTopSet('squat', SQUAT(), attempt(70, 4, 8))
-    expect(result?.target.w).toBe(75)
-    expect(result?.event.outcome).toBe('inchange')
+    expect(result?.target.w).toBe(72.5)
+  })
+
+  it("utilise l'incrément porté par la cible, pas celui du programme", () => {
+    // La cible voyage dans l'export et un ajustement manuel peut changer son pas.
+    const surMesure = target({ w: 100, inc: 1, reps: 4 })
+    expect(applyTopSet('squat', surMesure, attempt(100, 4, 8))?.target.w).toBe(101)
   })
 
   it('applique le signe du lest aux tractions dans le message', () => {
@@ -218,6 +225,20 @@ describe('double progression du développé couché volume', () => {
 
   it('ne décide rien sans aucune série renseignée', () => {
     expect(applyVolumeSets('benchVol', BENCH_VOL(), [])).toBeNull()
+  })
+
+  it('ne progresse pas si le nombre de séries attendu n’est pas configuré', () => {
+    // Sans `sets`, rien ne dit ce qui constitue une réussite : une seule série validée
+    // ne doit pas suffire à faire monter la charge.
+    const sansConfig = target({ w: 60, reps: 8 })
+    const result = applyVolumeSets('benchVol', sansConfig, [attempt(60, 8, null)])
+    expect(result?.target.w).toBe(60)
+    expect(result?.event.outcome).toBe('maintien')
+  })
+
+  it("utilise l'incrément de la cible sur le schéma à volume aussi", () => {
+    const surMesure = target({ w: 60, inc: 1.25, reps: 8, sets: 3 })
+    expect(applyVolumeSets('benchVol', surMesure, trois(60, 8))?.target.w).toBe(61.25)
   })
 })
 

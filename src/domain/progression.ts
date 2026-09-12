@@ -15,7 +15,10 @@
  *
  * - tout se juge sur le **poids effectivement réalisé**, pas sur la cible affichée ;
  * - une valeur inconnue (RPE ou répétitions non notés) n'est **jamais** un échec ;
- * - succès = répétitions cibles atteintes **et** RPE ≤ 8 → cible = réalisé + incrément ;
+ * - succès = répétitions cibles atteintes **et** RPE ≤ 8 → cible = réalisé + incrément,
+ *   à la lettre, y compris si cela fait redescendre une cible après un top set volontairement
+ *   léger. Ugo peut alors corriger la cible à la main (CB-33). La question d'une règle de
+ *   non-régression est posée dans UGO-179 : tant qu'elle n'est pas tranchée, la spec fait foi ;
  * - RPE 8,5 avec répétitions faites, ou RPE non noté avec répétitions faites → maintien ;
  * - répétitions manquées, ou RPE ≥ 9 → échec, avec mémoire de la charge en cause ;
  * - deuxième échec à la **même** charge → reset à −7,5 %, arrondi à 2,5 kg.
@@ -37,9 +40,21 @@ export const RPE_FAILURE_THRESHOLD = 9
 /** RPE en deçà ou égal duquel la série compte comme réussie. */
 export const RPE_SUCCESS_THRESHOLD = 8
 
-/** Arrondi au pas de charge disponible en salle. */
+/**
+ * Arrondi au pas de charge disponible en salle.
+ *
+ * Réservé aux valeurs **calculées** : le reset de −7,5 % et les backoffs à −10 %
+ * produisent des fractions arbitraires qu'il faut ramener sur du matériel réel.
+ * Une progression d'un incrément n'y passe pas : l'incrément est déjà un pas
+ * délibéré, et l'arrondir écraserait un pas plus fin choisi exprès.
+ */
 export function roundToStep(value: number, step: number = WEIGHT_STEP): number {
-  return Math.round((Math.round(value / step) * step + Number.EPSILON) * 1000) / 1000
+  return tidy(Math.round(value / step) * step)
+}
+
+/** Enlève le bruit des flottants sans rien arrondir de significatif. */
+function tidy(value: number): number {
+  return Math.round((value + Number.EPSILON) * 1000) / 1000
 }
 
 /** Ce qu'Ugo a réellement fait sur une série. `null` signifie « non noté », pas « zéro ». */
@@ -75,6 +90,9 @@ function describe(
 
 /**
  * Applique la règle du top set.
+ *
+ * L'incrément vient de `target.inc`, pas des constantes du programme : c'est la cible
+ * qui fait autorité, elle voyage dans l'export et un ajustement manuel peut la changer.
  *
  * Retourne `null` si rien n'a été soulevé : un exercice non fait ne fait pas avancer
  * la cible et ne compte pas non plus comme un échec.
@@ -112,12 +130,10 @@ export function applyTopSet(
 
   // Succès : répétitions cibles atteintes et RPE confortable.
   if (repsMet && rpeEasy) {
-    // Le poids réalisé fait foi, mais une séance volontairement légère ne doit pas
-    // faire redescendre une cible déjà acquise : on ne régresse jamais sur un succès.
-    const next = Math.max(roundToStep(done + LIFTS[lift].inc), previous)
+    const next = tidy(done + target.inc)
     return {
       target: { ...target, w: next, fail: null },
-      event: describe(lift, previous, next, next > previous ? 'progresse' : 'inchange'),
+      event: describe(lift, previous, next, next === previous ? 'inchange' : 'progresse'),
     }
   }
 
@@ -145,12 +161,18 @@ export function applyVolumeSets(
   if (done.length === 0) return null
 
   const previous = target.w
-  const expectedSets = target.sets ?? done.length
+
+  // Sans nombre de séries configuré, on ne sait pas ce qui constitue une réussite.
+  // Ne rien décider vaut mieux que faire progresser sur une seule série.
+  if (target.sets == null) {
+    return { target: { ...target }, event: describe(lift, previous, previous, 'maintien') }
+  }
+
   const lightest = Math.min(...done.map((set) => set.weight))
   const allRepsMet = done.every((set) => set.reps != null && set.reps >= target.reps)
 
-  if (done.length >= expectedSets && allRepsMet && lightest >= previous) {
-    const next = roundToStep(lightest + LIFTS[lift].inc)
+  if (done.length >= target.sets && allRepsMet && lightest >= previous) {
+    const next = tidy(lightest + target.inc)
     return {
       target: { ...target, w: next, fail: null },
       event: describe(lift, previous, next, 'progresse'),
