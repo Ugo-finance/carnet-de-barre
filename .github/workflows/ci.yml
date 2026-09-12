@@ -23,3 +23,23 @@ jobs:
       - run: npm run typecheck
       - run: npm run test
       - run: npm run build
+
+  e2e:
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Cache Chromium Playwright
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
+      - run: npx playwright install --with-deps chromium
+      - run: npx tsc -p tests/e2e/tsconfig.json --noEmit
+      - run: npx playwright test
