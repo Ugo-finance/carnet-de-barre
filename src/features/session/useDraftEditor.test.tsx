@@ -104,7 +104,7 @@ describe('useDraftEditor', () => {
     expect(persisted).toEqual([77.5, 80])
   })
 
-  it('expose une erreur de sauvegarde sans faire rejeter flush', async () => {
+  it('expose une erreur de sauvegarde et empêche une action dépendante de continuer', async () => {
     const store: DraftPort = {
       loadDraft: vi.fn().mockResolvedValue(draftFixture()),
       saveDraft: vi.fn().mockRejectedValue(new Error('quota')),
@@ -113,7 +113,7 @@ describe('useDraftEditor', () => {
     await waitFor(() => expect(result.current.loading).toBe(false))
 
     act(() => result.current.validateSet('set-1'))
-    await expect(result.current.flush()).resolves.toBeUndefined()
+    await expect(result.current.flush()).rejects.toThrow('quota')
 
     await waitFor(() => expect(result.current.saveError?.message).toBe('quota'))
   })

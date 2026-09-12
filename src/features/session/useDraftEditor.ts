@@ -154,6 +154,6 @@ export function useDraftEditor(store: DraftPort, initialDraft?: Draft) {
     validateSet: (setId: string) => setStatus(setId, 'validated'),
     skipSet: (setId: string) => setStatus(setId, 'skipped'),
     editSet: (setId: string) => setStatus(setId, 'entered'),
-    flush: () => saveQueue.current.catch(() => undefined),
+    flush: () => saveQueue.current,
   }
 }
