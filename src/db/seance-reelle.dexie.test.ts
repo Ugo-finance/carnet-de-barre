@@ -17,7 +17,7 @@ import { describe, expect, it } from 'vitest'
 import { CarnetDatabase } from './database.ts'
 import { DexieStore } from './store.ts'
 import { currentSession, isScheduledSessionDone, todayInZurich } from '../domain/schedule.ts'
-import { parseImport, type ExportFile } from '../domain/schema.ts'
+import { parseImport } from '../domain/schema.ts'
 import { serializeExport } from './exchange.ts'
 import type { Draft } from '../domain/types.ts'
 
@@ -119,8 +119,14 @@ describe('la séance de ce soir, de bout en bout', () => {
 
     expect(relu.ok).toBe(true)
     if (!relu.ok) return
+    // Deux choses distinctes, et il faut les deux. L'assertion vérifie que l'export
+    // est bien au format courant — c'est le contrat, et une régression qui le
+    // dégraderait en `seed` doit faire échouer ce test. Le `return` juste après ne
+    // sert qu'à TypeScript : seul, il ferait **réussir** le test en silence dans ce
+    // cas-là, puisqu'on sortirait avant toute vérification.
     expect(relu.format).toBe('current')
-    const fichier = relu.data as ExportFile
+    if (relu.format !== 'current') return
+    const fichier = relu.data
     const duSoir = fichier.seances.find((seance) => seance.date === '2026-09-12')
     expect(duSoir).toBeDefined()
     expect(duSoir?.type).toBe('C')

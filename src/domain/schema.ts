@@ -211,8 +211,20 @@ export type ImportFailureReason =
   /** JSON valide mais structure incorrecte. */
   | 'invalid-shape'
 
+/**
+ * Union **discriminée** sur `format` : vérifier le format donne le bon type de `data`.
+ *
+ * La version précédente déclarait `format: 'seed' | 'current'` et `data: SeedFile |
+ * ExportFile` sans les lier. Un appelant pouvait donc tester le format et recevoir
+ * quand même le type de l'autre — il lui fallait un `as` pour avancer, c'est-à-dire
+ * exactement l'endroit où le compilateur cesse de vérifier quoi que ce soit.
+ *
+ * Le défaut est resté invisible tant que les fichiers de test échappaient au typage
+ * (CB-04) : ce sont eux qui l'exerçaient.
+ */
 export type ImportResult =
-  | { ok: true; format: 'seed' | 'current'; data: SeedFile | ExportFile }
+  | { ok: true; format: 'seed'; data: SeedFile }
+  | { ok: true; format: 'current'; data: ExportFile }
   | { ok: false; reason: ImportFailureReason; message: string; issues: string[] }
 
 function formatIssues(error: z.ZodError): string[] {
