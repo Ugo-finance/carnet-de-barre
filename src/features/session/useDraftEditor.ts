@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { CarnetStore } from '../../db/contracts'
 import type { Draft, SetLog } from '../../domain/types'
-import type { DraftStore } from './memoryDraftStore'
+
+export type DraftPort = Pick<CarnetStore, 'loadDraft' | 'saveDraft'>
 
 type SetPatch = Partial<Pick<SetLog, 'weight' | 'reps' | 'rpe'>>
 
@@ -8,7 +10,8 @@ function asError(error: unknown): Error {
   return error instanceof Error ? error : new Error('Échec de sauvegarde du brouillon')
 }
 
-export function useDraftEditor(store: DraftStore) {
+/** `store` doit garder une identité stable pendant la durée de montage du composant. */
+export function useDraftEditor(store: DraftPort) {
   const [draft, setDraft] = useState<Draft>()
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<Error>()
@@ -98,6 +101,6 @@ export function useDraftEditor(store: DraftStore) {
     validateSet: (setId: string) => setStatus(setId, 'validated'),
     skipSet: (setId: string) => setStatus(setId, 'skipped'),
     editSet: (setId: string) => setStatus(setId, 'entered'),
-    flush: () => saveQueue.current,
+    flush: () => saveQueue.current.catch(() => undefined),
   }
 }

@@ -1,7 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import type { Draft } from '../../domain/types'
-import { createMemoryDraftStore, type DraftStore } from './memoryDraftStore'
-import { useDraftEditor } from './useDraftEditor'
+import { type DraftPort, useDraftEditor } from './useDraftEditor'
 
 function draftFixture(): Draft {
   return {
@@ -41,11 +40,23 @@ function draftFixture(): Draft {
   }
 }
 
+function createMemoryDraftPort(initial: Draft): DraftPort {
+  let stored = structuredClone(initial)
+  return {
+    async loadDraft() {
+      return structuredClone(stored)
+    },
+    async saveDraft(draft) {
+      stored = structuredClone(draft)
+    },
+  }
+}
+
 describe('useDraftEditor', () => {
   it('valide une série préremplie en un tap et appelle saveDraft une fois', async () => {
     const initial = draftFixture()
     const saveDraft = vi.fn<(draft: Draft) => Promise<void>>().mockResolvedValue(undefined)
-    const store: DraftStore = { loadDraft: vi.fn().mockResolvedValue(initial), saveDraft }
+    const store: DraftPort = { loadDraft: vi.fn().mockResolvedValue(initial), saveDraft }
     const { result } = renderHook(() => useDraftEditor(store))
     await waitFor(() => expect(result.current.loading).toBe(false))
 
@@ -59,7 +70,7 @@ describe('useDraftEditor', () => {
   })
 
   it('restaure après remontage chaque modification déjà sauvegardée', async () => {
-    const store = createMemoryDraftStore(draftFixture())
+    const store = createMemoryDraftPort(draftFixture())
     const first = renderHook(() => useDraftEditor(store))
     await waitFor(() => expect(first.result.current.loading).toBe(false))
 
@@ -74,7 +85,7 @@ describe('useDraftEditor', () => {
 
   it('sérialise les sauvegardes pour que la dernière saisie gagne', async () => {
     const persisted: number[] = []
-    const store: DraftStore = {
+    const store: DraftPort = {
       loadDraft: vi.fn().mockResolvedValue(draftFixture()),
       saveDraft: async (draft) => {
         await Promise.resolve()
@@ -91,5 +102,19 @@ describe('useDraftEditor', () => {
     await act(() => result.current.flush())
 
     expect(persisted).toEqual([77.5, 80])
+  })
+
+  it('expose une erreur de sauvegarde sans faire rejeter flush', async () => {
+    const store: DraftPort = {
+      loadDraft: vi.fn().mockResolvedValue(draftFixture()),
+      saveDraft: vi.fn().mockRejectedValue(new Error('quota')),
+    }
+    const { result } = renderHook(() => useDraftEditor(store))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    act(() => result.current.validateSet('set-1'))
+    await expect(result.current.flush()).resolves.toBeUndefined()
+
+    await waitFor(() => expect(result.current.saveError?.message).toBe('quota'))
   })
 })
