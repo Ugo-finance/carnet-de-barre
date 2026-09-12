@@ -109,3 +109,105 @@ describe('refus avant écriture', () => {
     expect(parseImport(bricole).ok).toBe(false)
   })
 })
+
+describe('rien ne se perd en silence (P1 de la contre-revue de #2)', () => {
+  it('refuse un champ inconnu imbriqué dans une cible', () => {
+    const bricole = {
+      ...exportExemple,
+      targets: {
+        ...exportExemple.targets,
+        squat: { ...exportExemple.targets.squat, inattendu: 1 },
+      },
+    }
+    expect(parseImport(bricole).ok).toBe(false)
+  })
+
+  it('refuse un champ inconnu imbriqué dans un top set', () => {
+    const seances = structuredClone(exportExemple.seances)
+    Object.assign(seances[0].tops, { squat: { w: 75, reps: 4, rpe: 8, inattendu: true } })
+    expect(parseImport({ ...exportExemple, seances }).ok).toBe(false)
+  })
+
+  it('refuse un champ inconnu imbriqué dans une série', () => {
+    const seances = structuredClone(exportExemple.seances)
+    const derniere = seances[seances.length - 1] as { sets?: Record<string, unknown>[] }
+    Object.assign(derniere.sets![0], { inattendu: 'x' })
+    expect(parseImport({ ...exportExemple, seances }).ok).toBe(false)
+  })
+
+  it('refuse un lift inconnu dans les tops', () => {
+    const seances = structuredClone(exportExemple.seances)
+    Object.assign(seances[0].tops, { souleveDeTerreBulgare: { w: 10, reps: 1, rpe: 8 } })
+    expect(parseImport({ ...exportExemple, seances }).ok).toBe(false)
+  })
+})
+
+describe('unicité des identifiants (P1 de la contre-revue de #2)', () => {
+  it('refuse deux séances portant le même identifiant', () => {
+    const seances = structuredClone(exportExemple.seances)
+    seances[1].id = seances[0].id
+    const result = parseImport({ ...exportExemple, seances })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.issues.join(' ')).toContain('double')
+  })
+
+  it('refuse deux séries homonymes dans une même séance', () => {
+    const seances = structuredClone(exportExemple.seances)
+    const derniere = seances[seances.length - 1] as { sets?: { id: string }[] }
+    derniere.sets![1].id = derniere.sets![0].id
+    expect(parseImport({ ...exportExemple, seances }).ok).toBe(false)
+  })
+
+  it('accepte deux séries homonymes dans des séances différentes', () => {
+    // L'unicité est locale à la séance : rien n'impose un identifiant global de série.
+    const result = parseImport(exportExemple)
+    expect(result.ok).toBe(true)
+  })
+})
+
+describe('zéro répétition est une valeur connue (P1 de la contre-revue de #2)', () => {
+  it('accepte une série réalisée à zéro répétition', () => {
+    const seances = structuredClone(exportExemple.seances)
+    const derniere = seances[seances.length - 1] as { sets?: { reps: number | null }[] }
+    derniere.sets![0].reps = 0
+    expect(parseImport({ ...exportExemple, seances }).ok).toBe(true)
+  })
+
+  it('accepte un top set à zéro répétition', () => {
+    const seances = structuredClone(exportExemple.seances)
+    Object.assign(seances[0].tops, { squat: { w: 100, reps: 0, rpe: 9.5 } })
+    expect(parseImport({ ...exportExemple, seances }).ok).toBe(true)
+  })
+
+  it('refuse en revanche une cible à zéro répétition', () => {
+    const targets = structuredClone(exportExemple.targets)
+    targets.squat.reps = 0
+    expect(parseImport({ ...exportExemple, targets }).ok).toBe(false)
+  })
+
+  it('refuse des répétitions négatives', () => {
+    const targets = structuredClone(exportExemple.targets)
+    targets.squat.reps = -4
+    expect(parseImport({ ...exportExemple, targets }).ok).toBe(false)
+  })
+})
+
+describe('dates réelles (P2 de la contre-revue de #2)', () => {
+  it('refuse une date bien formée mais inexistante', () => {
+    const seances = structuredClone(exportExemple.seances)
+    seances[0].date = '2026-99-99'
+    expect(parseImport({ ...exportExemple, seances }).ok).toBe(false)
+  })
+
+  it('refuse un 30 février', () => {
+    const seances = structuredClone(exportExemple.seances)
+    seances[0].date = '2026-02-30'
+    expect(parseImport({ ...exportExemple, seances }).ok).toBe(false)
+  })
+
+  it('accepte un 29 février d’année bissextile', () => {
+    const seances = structuredClone(exportExemple.seances)
+    seances[0].date = '2028-02-29'
+    expect(parseImport({ ...exportExemple, seances }).ok).toBe(true)
+  })
+})

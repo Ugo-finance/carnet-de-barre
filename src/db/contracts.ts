@@ -18,10 +18,11 @@ import type { ExportFile } from '../domain/schema.ts'
 
 /** Échec attendu et nommé, par opposition à une exception de stockage. */
 export type StoreErrorCode =
-  /** Le brouillon visé n'existe plus (déjà finalisé, ou effacé). */
+  /**
+   * Ni brouillon ni séance sous cet identifiant : il n'y a rien à finaliser.
+   * Une séance **déjà** finalisée n'est pas une erreur, c'est un `applied: false`.
+   */
   | 'draft-not-found'
-  /** Le brouillon a déjà été finalisé : le second appel ne refait rien. */
-  | 'already-finalized'
   /** Un brouillon est ouvert, l'import de remplacement est bloqué. */
   | 'draft-in-progress'
   /** Les cibles ont changé depuis l'ouverture du brouillon (ajustement manuel entre-temps). */
@@ -89,8 +90,14 @@ export interface CarnetStore {
    * aux cibles, écrit la séance, écrit les cibles, ferme le brouillon — le tout dans
    * une seule transaction.
    *
-   * Idempotent : l'identifiant de la séance est celui du brouillon. Un second appel
-   * rend `applied: false` et ne progresse pas une deuxième fois.
+   * **Idempotent, et c'est le seul chemin.** L'identifiant de la séance est celui du
+   * brouillon. Un second appel — double tap, reprise après erreur réseau, second
+   * onglet — retrouve la séance déjà écrite et rend le même `FinalizeResult` avec
+   * `applied: false`, sans progresser une deuxième fois. Il ne lève pas d'erreur :
+   * l'appelant n'a donc qu'un seul cas à coder.
+   *
+   * `StoreError('draft-not-found')` n'est levé que si ni brouillon ni séance
+   * n'existent sous cet identifiant.
    */
   finalizeSeance(draftId: string): Promise<FinalizeResult>
 

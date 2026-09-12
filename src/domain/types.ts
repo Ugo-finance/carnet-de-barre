@@ -55,13 +55,32 @@ export interface SetLog {
   index: number
   status: SetStatus
   loadKind: LoadKind
-  /** Charge réalisée. `null` tant que rien n'est saisi, ou si `loadKind` vaut `bodyweight`. */
+  /**
+   * Valeur éditable de la charge, **pré-remplie depuis la cible dès la création de la
+   * série**. C'est ce que montrent et modifient les steppers, et c'est ce qui rend
+   * possible « valider une série pré-remplie en un tap » : rien à recopier au moment
+   * de valider.
+   *
+   * Elle ne prouve donc rien à elle seule : **`status` est la seule preuve de
+   * réalisation**. Le moteur de progression ne lit que les séries `validated`.
+   *
+   * `null` quand il n'y a pas de charge à porter : `loadKind` vaut `bodyweight`, ou
+   * l'utilisateur a effacé le champ.
+   */
   weight: number | null
-  /** Répétitions réalisées. `null` = inconnu, ce qui n'est jamais un échec. */
+  /**
+   * Répétitions, pré-remplies puis éditables, mêmes règles que `weight`.
+   *
+   * `0` est une valeur **connue** : la série a été tentée et manquée. `null` veut dire
+   * « non noté », ce qui n'est jamais un échec.
+   */
   reps: number | null
   /** RPE noté. `null` = non noté, ce qui n'est jamais un échec. */
   rpe: number | null
-  /** Ce que l'app proposait, conservé pour comprendre un écart a posteriori. */
+  /**
+   * Ce que l'app avait proposé à l'ouverture du brouillon. Jamais modifié par la
+   * saisie : c'est ce qui permet de relire un écart entre prévu et réalisé.
+   */
   targetWeight: number | null
   targetReps: number | null
 }

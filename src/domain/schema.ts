@@ -18,69 +18,103 @@ import type { LiftKey } from './types.ts'
 /** Version du format produit par cette build. À incrémenter uniquement sur évolution additive. */
 export const SCHEMA_VERSION = 1
 
-const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date attendue au format AAAA-MM-JJ')
+/** Vraie date du calendrier, pas seulement la bonne forme : `2026-99-99` est refusé. */
+function isRealDate(value: string): boolean {
+  const [year, month, day] = value.split('-').map(Number)
+  const date = new Date(Date.UTC(year, month - 1, day))
+  return (
+    date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+  )
+}
+
+const isoDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'date attendue au format AAAA-MM-JJ')
+  .refine(isRealDate, "cette date n'existe pas au calendrier")
 
 const weight = z.number().finite().nonnegative()
 const nullableWeight = weight.nullable()
-const nullableReps = z.number().int().positive().nullable()
+
+/**
+ * Répétitions **réalisées**. Zéro est une valeur connue et légitime : la série a été
+ * tentée et manquée. C'est `null` qui veut dire « non noté », et qui ne compte jamais
+ * comme un échec.
+ */
+const nullableReps = z.number().int().nonnegative().nullable()
+
+/** Répétitions **visées**. Une cible à zéro répétition n'a pas de sens. */
+const nullableTargetReps = z.number().int().positive().nullable()
+
 const nullableRpe = z.number().min(5).max(10).nullable()
 
 const seanceType = z.enum(['A', 'B', 'C'])
 
-export const targetSchema = z.object({
-  w: weight,
-  inc: z.number().positive(),
-  reps: z.number().int().positive(),
-  sets: z.number().int().positive().optional(),
-  /** Échec en attente à cette charge exacte, `null` si aucun. */
-  fail: nullableWeight,
-  note: z.string().optional(),
-})
+export const targetSchema = z
+  .object({
+    w: weight,
+    inc: z.number().positive(),
+    reps: z.number().int().positive(),
+    sets: z.number().int().positive().optional(),
+    /** Échec en attente à cette charge exacte, `null` si aucun. */
+    fail: nullableWeight,
+    note: z.string().optional(),
+  })
+  .strict()
 
-export const targetsSchema = z.object({
-  updatedAt: isoDate,
-  squat: targetSchema,
-  bench: targetSchema,
-  deadlift: targetSchema,
-  tractions: targetSchema,
-  benchVol: targetSchema,
-})
+export const targetsSchema = z
+  .object({
+    updatedAt: isoDate,
+    squat: targetSchema,
+    bench: targetSchema,
+    deadlift: targetSchema,
+    tractions: targetSchema,
+    benchVol: targetSchema,
+  })
+  .strict()
 
-const topRecordSchema = z.object({
-  w: nullableWeight,
-  reps: nullableReps,
-  rpe: nullableRpe,
-})
+const topRecordSchema = z
+  .object({
+    w: nullableWeight,
+    reps: nullableReps,
+    rpe: nullableRpe,
+  })
+  .strict()
 
-const topsSchema = z.object({
-  squat: topRecordSchema.optional(),
-  bench: topRecordSchema.optional(),
-  deadlift: topRecordSchema.optional(),
-  tractions: topRecordSchema.optional(),
-  benchVol: topRecordSchema.optional(),
-})
+const topsSchema = z
+  .object({
+    squat: topRecordSchema.optional(),
+    bench: topRecordSchema.optional(),
+    deadlift: topRecordSchema.optional(),
+    tractions: topRecordSchema.optional(),
+    benchVol: topRecordSchema.optional(),
+  })
+  .strict()
 
 const loadKind = z.enum(['barTotal', 'perDumbbell', 'added', 'bodyweight', 'machine'])
 
-export const setLogSchema = z.object({
-  id: z.string().min(1),
-  exerciseId: z.string().min(1),
-  role: z.enum(['top', 'backoff', 'volume', 'accessory']),
-  index: z.number().int().nonnegative(),
-  status: z.enum(['planned', 'entered', 'validated', 'skipped']),
-  loadKind,
-  weight: nullableWeight,
-  reps: nullableReps,
-  rpe: nullableRpe,
-  targetWeight: nullableWeight,
-  targetReps: nullableReps,
-})
+export const setLogSchema = z
+  .object({
+    id: z.string().min(1),
+    exerciseId: z.string().min(1),
+    role: z.enum(['top', 'backoff', 'volume', 'accessory']),
+    index: z.number().int().nonnegative(),
+    status: z.enum(['planned', 'entered', 'validated', 'skipped']),
+    loadKind,
+    weight: nullableWeight,
+    reps: nullableReps,
+    rpe: nullableRpe,
+    targetWeight: nullableWeight,
+    targetReps: nullableTargetReps,
+  })
+  .strict()
 
-export const accessoryLogSchema = z.object({
-  exerciseId: z.string().min(1),
-  done: z.boolean(),
-  note: z.string(),
-})
+export const accessoryLogSchema = z
+  .object({
+    exerciseId: z.string().min(1),
+    done: z.boolean(),
+    note: z.string(),
+  })
+  .strict()
 
 /** Champs communs aux deux formats : ce que le seed contient déjà. */
 const seanceCommon = {
@@ -124,6 +158,35 @@ export const exportFileSchema = z
     seances: z.array(seanceSchema),
   })
   .strict()
+  .superRefine((file, ctx) => {
+    // Les identifiants indexent les séances en base : deux séances homonymes se
+    // masqueraient l'une l'autre à l'écriture, alors que l'aperçu en annoncerait deux.
+    const vues = new Set<string>()
+    file.seances.forEach((seance, index) => {
+      if (vues.has(seance.id)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['seances', index, 'id'],
+          message: `identifiant de séance en double : ${seance.id}`,
+        })
+      }
+      vues.add(seance.id)
+
+      const sets = seance.sets
+      if (!sets) return
+      const vuesSet = new Set<string>()
+      sets.forEach((set, rang) => {
+        if (vuesSet.has(set.id)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['seances', index, 'sets', rang, 'id'],
+            message: `identifiant de série en double dans la séance : ${set.id}`,
+          })
+        }
+        vuesSet.add(set.id)
+      })
+    })
+  })
 
 export type TargetsInput = z.infer<typeof targetsSchema>
 export type LegacySeanceInput = z.infer<typeof legacySeanceSchema>
