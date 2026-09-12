@@ -1,7 +1,22 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
-import { HistoryPanel } from './HistoryPanel'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
+import { HistoryPanel, type HistoryPort } from './HistoryPanel'
 import type { Seance } from '../../domain/types'
+
+/** Un magasin en mémoire minimal, qui applique vraiment les corrections. */
+function faux(seances: Seance[]): HistoryPort {
+  let liste = [...seances]
+  return {
+    updateSeance: vi.fn(async (id, patch) => {
+      const suivante = { ...liste.find((s) => s.id === id)!, ...patch, id }
+      liste = liste.map((s) => (s.id === id ? suivante : s))
+      return suivante
+    }),
+    deleteSeance: vi.fn(async (id) => {
+      liste = liste.filter((s) => s.id !== id)
+    }),
+  }
+}
 
 function seance(over: Partial<Seance> & Pick<Seance, 'id' | 'date' | 'type'>): Seance {
   return { lines: [], tops: {}, notes: '', ...over }
@@ -27,7 +42,7 @@ describe('historique', () => {
   it('met la séance la plus récente en haut et la déplie', () => {
     // C'est la question du premier soir : « est-ce que ma séance est bien là ? ».
     // Elle doit trouver sa réponse sans un seul tap.
-    render(<HistoryPanel seances={[JUILLET, CE_SOIR]} />)
+    render(<HistoryPanel seances={[JUILLET, CE_SOIR]} store={faux([JUILLET, CE_SOIR])} />)
 
     const items = screen.getAllByRole('listitem')
     expect(within(items[0]).getByText('Séance C')).toBeInTheDocument()
@@ -35,7 +50,7 @@ describe('historique', () => {
   })
 
   it('replie les séances plus anciennes', () => {
-    render(<HistoryPanel seances={[JUILLET, CE_SOIR]} />)
+    render(<HistoryPanel seances={[JUILLET, CE_SOIR]} store={faux([JUILLET, CE_SOIR])} />)
 
     expect(screen.queryByText('Développé couché : 70×4 @8')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { expanded: false }))
@@ -43,40 +58,41 @@ describe('historique', () => {
   })
 
   it('compte les séances enregistrées', () => {
-    render(<HistoryPanel seances={[JUILLET, CE_SOIR]} />)
+    render(<HistoryPanel seances={[JUILLET, CE_SOIR]} store={faux([JUILLET, CE_SOIR])} />)
     expect(screen.getByText('2 séances enregistrées.')).toBeInTheDocument()
   })
 
   it('signale une date reconstituée de mémoire', () => {
     // Les deux séances de juillet du dossier de départ sont datées de mémoire.
     // Les présenter comme exactes serait leur donner une précision qu'elles n'ont pas.
-    render(<HistoryPanel seances={[JUILLET]} />)
+    render(<HistoryPanel seances={[JUILLET]} store={faux([JUILLET])} />)
     expect(screen.getByText(/22\.07\.2026 \(environ\)/)).toBeInTheDocument()
   })
 
   it('alerte franchement sur une séance sans aucune série', () => {
     // Le pire résultat possible : finaliser sans avoir validé. Un bloc vide passerait
     // pour un défaut d'affichage ; il faut dire ce qui s'est réellement passé.
-    render(<HistoryPanel seances={[seance({ id: 'vide', date: '2026-09-12', type: 'A' })]} />)
+    const vide = seance({ id: 'vide', date: '2026-09-12', type: 'A' })
+    render(<HistoryPanel seances={[vide]} store={faux([vide])} />)
 
     expect(screen.getByText(/Aucune série enregistrée/)).toBeInTheDocument()
     expect(screen.getByText(/non validées ne sont pas conservées/)).toBeInTheDocument()
   })
 
   it('affiche les notes quand il y en a, et rien quand il n’y en a pas', () => {
-    render(<HistoryPanel seances={[CE_SOIR]} />)
+    render(<HistoryPanel seances={[CE_SOIR]} store={faux([CE_SOIR])} />)
     expect(screen.getByText('Bonne énergie')).toBeInTheDocument()
   })
 
   it('le dit quand l’historique est vide', () => {
-    render(<HistoryPanel seances={[]} />)
+    render(<HistoryPanel seances={[]} store={faux([])} />)
     expect(screen.getByText('Aucune séance enregistrée pour le moment.')).toBeInTheDocument()
   })
 
   it('ne modifie pas le tableau reçu', () => {
     // L'écran trie pour afficher ; la liste appartient à l'appelant.
     const liste = [JUILLET, CE_SOIR]
-    render(<HistoryPanel seances={liste} />)
+    render(<HistoryPanel seances={liste} store={faux(liste)} />)
     expect(liste[0]).toBe(JUILLET)
   })
 
@@ -87,7 +103,7 @@ describe('historique', () => {
     const matin = seance({ id: 'matin', date: '2026-09-12', type: 'A', lines: ['Matin'], ts: 1000 })
     const soir = seance({ id: 'soir', date: '2026-09-12', type: 'C', lines: ['Soir'], ts: 2000 })
 
-    render(<HistoryPanel seances={[matin, soir]} />)
+    render(<HistoryPanel seances={[matin, soir]} store={faux([matin, soir])} />)
 
     const items = screen.getAllByRole('listitem')
     expect(within(items[0]).getByText('Séance C')).toBeInTheDocument()
@@ -100,8 +116,82 @@ describe('historique', () => {
     const ancienne = seance({ id: 'seed', date: '2026-09-12', type: 'A', lines: ['Seed'] })
     const recente = seance({ id: 'live', date: '2026-09-12', type: 'C', lines: ['Live'], ts: 5 })
 
-    render(<HistoryPanel seances={[ancienne, recente]} />)
+    render(<HistoryPanel seances={[ancienne, recente]} store={faux([ancienne, recente])} />)
 
     expect(within(screen.getAllByRole('listitem')[0]).getByText('Séance C')).toBeInTheDocument()
+  })
+
+  it('corrige la note d’une séance et la réaffiche', async () => {
+    const store = faux([CE_SOIR])
+    render(<HistoryPanel seances={[CE_SOIR]} store={store} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Modifier la note' }))
+    fireEvent.change(screen.getByLabelText(/Note de la séance C/), {
+      target: { value: 'Dos tendu' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+
+    await waitFor(() => expect(screen.getByText('Dos tendu')).toBeInTheDocument())
+    expect(store.updateSeance).toHaveBeenCalledWith('s-ce-soir', { notes: 'Dos tendu' })
+  })
+
+  it('renonce à une correction sans rien écrire', async () => {
+    const store = faux([CE_SOIR])
+    render(<HistoryPanel seances={[CE_SOIR]} store={store} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Modifier la note' }))
+    fireEvent.change(screen.getByLabelText(/Note de la séance C/), { target: { value: 'nope' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Annuler' }))
+
+    expect(store.updateSeance).not.toHaveBeenCalled()
+    expect(screen.getByText('Bonne énergie')).toBeInTheDocument()
+  })
+
+  it('ne supprime jamais sans confirmation, et dit que les cibles ne bougent pas', () => {
+    // C'est le point qui surprend : supprimer une séance ne fait pas redescendre les
+    // cibles (D6). Sans cette phrase avant le geste, Ugo supprimerait en croyant
+    // annuler une progression et ne comprendrait pas le résultat.
+    const store = faux([CE_SOIR])
+    render(<HistoryPanel seances={[CE_SOIR]} store={store} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }))
+
+    expect(store.deleteSeance).not.toHaveBeenCalled()
+    expect(screen.getByText(/cibles ne changeront pas/)).toBeInTheDocument()
+  })
+
+  it('laisse garder la séance', () => {
+    const store = faux([CE_SOIR])
+    render(<HistoryPanel seances={[CE_SOIR]} store={store} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Garder la séance' }))
+
+    expect(store.deleteSeance).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Supprimer' })).toBeInTheDocument()
+  })
+
+  it('supprime après confirmation et retire la séance de la liste', async () => {
+    const store = faux([JUILLET, CE_SOIR])
+    render(<HistoryPanel seances={[JUILLET, CE_SOIR]} store={store} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Supprimer définitivement' }))
+
+    await waitFor(() => expect(screen.queryByText('Séance C')).not.toBeInTheDocument())
+    expect(store.deleteSeance).toHaveBeenCalledWith('s-ce-soir')
+    expect(screen.getByText('1 séance enregistrée.')).toBeInTheDocument()
+  })
+
+  it('dit pourquoi quand le magasin refuse, sans faire disparaître la séance', async () => {
+    const store = faux([CE_SOIR])
+    vi.mocked(store.deleteSeance).mockRejectedValueOnce(new Error('Stockage indisponible'))
+    render(<HistoryPanel seances={[CE_SOIR]} store={store} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Supprimer définitivement' }))
+
+    expect(await screen.findByText('Stockage indisponible')).toBeInTheDocument()
+    expect(screen.getByText('Séance C')).toBeInTheDocument()
   })
 })
