@@ -12,8 +12,10 @@
  */
 
 import { useState } from 'react'
-import { formatDate } from '../../domain/format.ts'
-import type { Seance } from '../../domain/types.ts'
+import { formatDate, formatNumber } from '../../domain/format.ts'
+import { findExercise } from '../../domain/program.ts'
+import { removeSet, reviseSet, type SetPatch } from '../../db/edit.ts'
+import type { Seance, SetLog } from '../../domain/types.ts'
 
 export interface HistoryPort {
   updateSeance(id: string, patch: Partial<Omit<Seance, 'id'>>): Promise<Seance>
@@ -39,6 +41,164 @@ function parOrdreAntichronologique(seances: Seance[]): Seance[] {
   )
 }
 
+/** Le libellé qu'Ugo reconnaît : l'exercice, puis le rôle de la série. */
+function libelleSerie(set: SetLog): string {
+  const exercice = findExercise(set.exerciseId)?.label ?? set.exerciseId
+  const role =
+    set.role === 'top'
+      ? 'top set'
+      : set.role === 'backoff'
+        ? `backoff ${set.index + 1}`
+        : `série ${set.index + 1}`
+  return `${exercice} — ${role}`
+}
+
+function nombreOuVide(valeur: number | null): string {
+  return valeur === null ? '' : formatNumber(valeur)
+}
+
+/**
+ * `null` pour un champ vide — « non noté », qui n'est pas zéro : un RPE absent n'est
+ * pas un RPE de 0. `undefined` pour une saisie illisible, qu'on refuse d'interpréter.
+ */
+function lireChamp(saisie: string): number | null | undefined {
+  const normalisee = saisie.trim().replace(',', '.')
+  if (normalisee === '') return null
+  if (!/^\d+(?:\.\d+)?$/.test(normalisee)) return undefined
+  return Number(normalisee)
+}
+
+/**
+ * Corrige une série déjà enregistrée.
+ *
+ * Les champs partent de la valeur en base : la correction la plus fréquente est d'un
+ * chiffre, pas d'une ligne entière. Une valeur laissée vide vaut « non noté », ce qui
+ * est différent de zéro — un RPE absent n'est pas un RPE de 0.
+ */
+function EditeurSerie({
+  set,
+  onSave,
+  onRemove,
+  onCancel,
+  occupe,
+}: {
+  set: SetLog
+  onSave: (patch: SetPatch) => void
+  onRemove: () => void
+  onCancel: () => void
+  occupe: boolean
+}) {
+  const [poids, setPoids] = useState(nombreOuVide(set.weight))
+  const [reps, setReps] = useState(nombreOuVide(set.reps))
+  const [rpe, setRpe] = useState(nombreOuVide(set.rpe))
+  const [confirmeRetrait, setConfirmeRetrait] = useState(false)
+  const [saisieInvalide, setSaisieInvalide] = useState(false)
+
+  const enregistrer = () => {
+    const valeurs = { weight: lireChamp(poids), reps: lireChamp(reps), rpe: lireChamp(rpe) }
+    // Sortir en silence serait le pire retour possible : Ugo taperait « Enregistrer »
+    // et rien ne se passerait, sans qu'aucun écran ne dise pourquoi.
+    if (Object.values(valeurs).includes(undefined)) {
+      setSaisieInvalide(true)
+      return
+    }
+    setSaisieInvalide(false)
+    onSave(valeurs as SetPatch)
+  }
+
+  const champ = (
+    label: string,
+    valeur: string,
+    set2: (v: string) => void,
+    mode: 'decimal' | 'numeric',
+  ) => (
+    <label className="flex-1 text-xs font-medium text-muted">
+      {label}
+      <input
+        className="num mt-1 min-h-11 w-full rounded-xl border border-line bg-bg px-2 text-base text-fg outline-none focus:border-accent"
+        type="text"
+        inputMode={mode}
+        value={valeur}
+        aria-label={`${label} — ${libelleSerie(set)}`}
+        onChange={(event) => set2(event.target.value)}
+      />
+    </label>
+  )
+
+  return (
+    <div className="mt-2 rounded-xl border border-line p-3">
+      <p className="text-sm font-semibold">{libelleSerie(set)}</p>
+      <div className="mt-2 flex gap-2">
+        {set.loadKind === 'bodyweight' ? null : champ('Charge', poids, setPoids, 'decimal')}
+        {champ('Reps', reps, setReps, 'numeric')}
+        {champ('RPE', rpe, setRpe, 'decimal')}
+      </div>
+      {saisieInvalide ? (
+        <p className="mt-2 text-sm text-bad" role="alert">
+          Entre des nombres, par exemple 92,5 — ou laisse vide si tu n’as pas noté.
+        </p>
+      ) : null}
+
+      {confirmeRetrait ? (
+        /*
+         * Retirer une série est irréversible et ces données n'existent nulle part
+         * ailleurs. Supprimer une séance entière demande déjà un second geste ; il
+         * n'y a aucune raison qu'en retirer une part en demande moins.
+         */
+        <div className="mt-3 rounded-xl border border-bad/60 p-3" role="alert">
+          <p className="text-sm font-semibold text-bad">Retirer cette série ?</p>
+          <p className="mt-1 text-sm text-muted">
+            Elle disparaîtra de la séance et du résumé. Tes cibles ne changeront pas — pour les
+            corriger, passe par l’onglet Cibles.
+          </p>
+          <div className="mt-3 grid gap-2">
+            <button
+              type="button"
+              className="min-h-11 rounded-xl bg-accent px-3 text-sm font-semibold text-bg"
+              onClick={() => setConfirmeRetrait(false)}
+            >
+              Garder la série
+            </button>
+            <button
+              type="button"
+              className="min-h-11 rounded-xl border border-line px-3 text-sm font-medium text-bad disabled:opacity-50"
+              disabled={occupe}
+              onClick={onRemove}
+            >
+              {occupe ? 'Retrait…' : 'Retirer définitivement'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          <button
+            type="button"
+            className="min-h-11 rounded-xl bg-accent px-3 text-sm font-semibold text-bg disabled:opacity-50"
+            disabled={occupe}
+            onClick={enregistrer}
+          >
+            Enregistrer
+          </button>
+          <button
+            type="button"
+            className="min-h-11 rounded-xl border border-line px-3 text-sm font-medium text-muted"
+            onClick={onCancel}
+          >
+            Annuler
+          </button>
+          <button
+            type="button"
+            className="min-h-11 rounded-xl border border-line px-3 text-sm font-medium text-bad"
+            onClick={() => setConfirmeRetrait(true)}
+          >
+            Retirer
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function LigneSeance({
   seance,
   ouvertParDefaut,
@@ -54,6 +214,7 @@ function LigneSeance({
 }) {
   const [ouvert, setOuvert] = useState(ouvertParDefaut)
   const [noteEnCours, setNoteEnCours] = useState<string>()
+  const [serieEnCours, setSerieEnCours] = useState<string>()
   const [confirmeSuppression, setConfirmeSuppression] = useState(false)
   const [occupe, setOccupe] = useState(false)
   const [erreur, setErreur] = useState<string>()
@@ -68,6 +229,19 @@ function LigneSeance({
     try {
       onChange(await store.updateSeance(seance.id, { notes: noteEnCours }))
       setNoteEnCours(undefined)
+    } catch (cause) {
+      echec(cause)
+    } finally {
+      setOccupe(false)
+    }
+  }
+
+  const corrigerSerie = async (calcul: () => Pick<Seance, 'sets' | 'lines' | 'tops'>) => {
+    setOccupe(true)
+    setErreur(undefined)
+    try {
+      onChange(await store.updateSeance(seance.id, calcul()))
+      setSerieEnCours(undefined)
     } catch (cause) {
       echec(cause)
     } finally {
@@ -127,6 +301,38 @@ function LigneSeance({
               Aucune série enregistrée. Les séries saisies mais non validées ne sont pas conservées.
             </p>
           )}
+
+          {seance.sets && seance.sets.length > 0 ? (
+            <div className="mt-3 border-t border-line pt-3">
+              {serieEnCours === undefined ? (
+                <>
+                  <p className="text-xs font-medium text-muted">Corriger une série</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {seance.sets.map((set) => (
+                      <button
+                        key={set.id}
+                        type="button"
+                        className="min-h-11 rounded-xl border border-line px-3 text-sm font-medium text-fg"
+                        onClick={() => setSerieEnCours(set.id)}
+                      >
+                        {libelleSerie(set)}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <EditeurSerie
+                  set={seance.sets.find((set) => set.id === serieEnCours)!}
+                  occupe={occupe}
+                  onCancel={() => setSerieEnCours(undefined)}
+                  onSave={(patch) =>
+                    void corrigerSerie(() => reviseSet(seance, serieEnCours, patch))
+                  }
+                  onRemove={() => void corrigerSerie(() => removeSet(seance, serieEnCours))}
+                />
+              )}
+            </div>
+          ) : null}
 
           {noteEnCours === undefined ? (
             seance.notes ? (

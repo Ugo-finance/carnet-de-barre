@@ -2,6 +2,35 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { describe, expect, it, vi } from 'vitest'
 import { HistoryPanel, type HistoryPort } from './HistoryPanel'
 import type { Seance } from '../../domain/types'
+import { buildDraft, setId } from '../../db/draft'
+import { draftToSeance } from '../../db/derive'
+
+const CIBLES = {
+  updatedAt: '2026-09-12',
+  squat: { w: 75, inc: 2.5, reps: 4, fail: null },
+  bench: { w: 70, inc: 2.5, reps: 4, fail: null },
+  deadlift: { w: 92.5, inc: 5, reps: 3, fail: null },
+  tractions: { w: 15, inc: 2.5, reps: 4, fail: null },
+  benchVol: { w: 60, inc: 2.5, reps: 8, sets: 3, fail: null },
+}
+
+const TOP_SQUAT = setId('a-squat', 'top', 0)
+
+/** Une séance A avec son top set validé à 95 — la faute de frappe à corriger. */
+function seanceAvecSeries(): Seance {
+  const draft = buildDraft('A', '2026-09-15', CIBLES, { id: 'avec-series', now: 1 })
+  return draftToSeance(
+    {
+      ...draft,
+      sets: draft.sets.map((set) =>
+        set.id === TOP_SQUAT
+          ? { ...set, status: 'validated' as const, weight: 95, reps: 4, rpe: 8 }
+          : set,
+      ),
+    },
+    1000,
+  )
+}
 
 /** Un magasin en mémoire minimal, qui applique vraiment les corrections. */
 function faux(seances: Seance[]): HistoryPort {
@@ -193,5 +222,112 @@ describe('historique', () => {
 
     expect(await screen.findByText('Stockage indisponible')).toBeInTheDocument()
     expect(screen.getByText('Séance C')).toBeInTheDocument()
+  })
+
+  it('corrige une charge mal saisie et met le résumé à jour', async () => {
+    // Le cas réel : 95 tapé au lieu de 92,5. Sans ça, Ugo ne peut que supprimer toute
+    // la séance pour corriger un chiffre.
+    const enregistree = seanceAvecSeries()
+    const store = faux([enregistree])
+    render(<HistoryPanel seances={[enregistree]} store={store} />)
+
+    expect(screen.getByText('Squat : 95×4 @8')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Squat — top set/ }))
+    fireEvent.change(screen.getByLabelText(/Charge — Squat — top set/), {
+      target: { value: '92,5' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+
+    await waitFor(() => expect(screen.getByText('Squat : 92,5×4 @8')).toBeInTheDocument())
+    expect(screen.queryByText('Squat : 95×4 @8')).not.toBeInTheDocument()
+  })
+
+  it('retire une série validée par erreur', async () => {
+    const enregistree = seanceAvecSeries()
+    render(<HistoryPanel seances={[enregistree]} store={faux([enregistree])} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /Squat — top set/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Retirer' }))
+    // Depuis la contre-revue de #27, retirer demande un second geste : ces données
+    // n'existent nulle part ailleurs, et supprimer une séance entière en demandait
+    // déjà un.
+    fireEvent.click(screen.getByRole('button', { name: 'Retirer définitivement' }))
+
+    await waitFor(() => expect(screen.queryByText(/Squat :/)).not.toBeInTheDocument())
+  })
+
+  it('renonce à une correction sans rien écrire', async () => {
+    const enregistree = seanceAvecSeries()
+    const store = faux([enregistree])
+    render(<HistoryPanel seances={[enregistree]} store={store} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /Squat — top set/ }))
+    fireEvent.change(screen.getByLabelText(/Charge — Squat — top set/), { target: { value: '80' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Annuler' }))
+
+    expect(store.updateSeance).not.toHaveBeenCalled()
+    expect(screen.getByText('Squat : 95×4 @8')).toBeInTheDocument()
+  })
+
+  it('ne propose pas de corriger une série sur une séance du carnet papier', () => {
+    // Les douze séances de départ n'ont pas de séries : inventer des champs à partir
+    // du texte fabriquerait des données jamais saisies.
+    render(<HistoryPanel seances={[JUILLET]} store={faux([JUILLET])} />)
+    expect(screen.queryByText('Corriger une série')).not.toBeInTheDocument()
+  })
+
+  it('ne retire pas une série au premier tap, et dit que les cibles ne bougent pas', () => {
+    const enregistree = seanceAvecSeries()
+    const store = faux([enregistree])
+    render(<HistoryPanel seances={[enregistree]} store={store} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /Squat — top set/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Retirer' }))
+
+    expect(store.updateSeance).not.toHaveBeenCalled()
+    expect(screen.getByText(/cibles ne changeront pas/)).toBeInTheDocument()
+  })
+
+  it('laisse garder la série', () => {
+    const enregistree = seanceAvecSeries()
+    const store = faux([enregistree])
+    render(<HistoryPanel seances={[enregistree]} store={store} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /Squat — top set/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Retirer' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Garder la série' }))
+
+    expect(store.updateSeance).not.toHaveBeenCalled()
+    expect(screen.getByText('Squat : 95×4 @8')).toBeInTheDocument()
+  })
+
+  it('dit pourquoi quand la saisie n’est pas un nombre, au lieu de ne rien faire', () => {
+    // Le pire retour possible : taper « Enregistrer » et que rien ne se passe.
+    const enregistree = seanceAvecSeries()
+    const store = faux([enregistree])
+    render(<HistoryPanel seances={[enregistree]} store={store} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /Squat — top set/ }))
+    fireEvent.change(screen.getByLabelText(/Charge — Squat — top set/), {
+      target: { value: '92,5abc' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+
+    expect(store.updateSeance).not.toHaveBeenCalled()
+    expect(screen.getByText(/Entre des nombres/)).toBeInTheDocument()
+  })
+
+  it('accepte un champ laissé vide, qui veut dire « non noté »', async () => {
+    const enregistree = seanceAvecSeries()
+    const store = faux([enregistree])
+    render(<HistoryPanel seances={[enregistree]} store={store} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /Squat — top set/ }))
+    fireEvent.change(screen.getByLabelText(/RPE — Squat — top set/), { target: { value: '' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+
+    await waitFor(() => expect(store.updateSeance).toHaveBeenCalled())
+    expect(screen.queryByText(/Entre des nombres/)).not.toBeInTheDocument()
   })
 })
