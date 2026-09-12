@@ -14,12 +14,20 @@
  */
 
 import type { Draft, Seance, Targets } from '../domain/types.ts'
-import type { SeanceType } from '../domain/types.ts'
+import type { ProgressionEvent, SeanceType } from '../domain/types.ts'
 import type { CarnetStore, FinalizeResult } from './contracts.ts'
 import { StoreError } from './contracts.ts'
 import { TARGETS_KEY, type CarnetDatabase, db as defaultDb, ensureSeeded } from './database.ts'
 import { buildDraft } from './draft.ts'
-import { applyProgression, draftToSeance } from './derive.ts'
+import { applyProgression, draftToSeance, targetsDiverged } from './derive.ts'
+
+/**
+ * Clé du journal des événements de progression d'une séance.
+ *
+ * Il vit dans `meta`, donc en local : il n'entre pas dans l'export, et n'oblige donc
+ * pas à faire évoluer le format d'échange pour un besoin purement d'affichage.
+ */
+const eventsKey = (seanceId: string): string => `events:${seanceId}`
 
 /**
  * La part du contrat implémentée à ce stade : lecture de l'historique et cycle de vie
@@ -105,14 +113,16 @@ export class DexieStore implements DraftStore {
   }
 
   /**
-   * Rend le brouillon déjà ouvert s'il correspond, sinon en construit un neuf.
+   * Rend le brouillon déjà ouvert, **quel que soit le type demandé**.
    *
-   * Changer de type de séance en cours de saisie remplace le brouillon : c'est une
-   * autre séance. Le rouvrir sur le même type ne perd rien.
+   * Changer de sélecteur A/B/C ne doit jamais détruire une saisie en cours : D9 dit
+   * que rien ne se perd, et une séance à moitié saisie effacée par un tap sur le
+   * sélecteur serait la pire perte possible, en pleine salle. C'est à l'interface de
+   * proposer explicitement d'abandonner via `clearDraft` avant d'en ouvrir une autre.
    */
   async openDraft(type: SeanceType, date: string): Promise<Draft> {
     const existing = await this.loadDraft()
-    if (existing && existing.type === type && existing.date === date) return existing
+    if (existing) return existing
 
     const targets = await this.getTargets()
     const draft = buildDraft(type, date, targets, { id: crypto.randomUUID() })
@@ -138,12 +148,19 @@ export class DexieStore implements DraftStore {
         const existing = await this.database.seances.get(draftId)
         if (existing) {
           // Double tap, reprise après erreur, second onglet : on rend ce qui existe
-          // déjà, sans progresser une deuxième fois.
+          // déjà, sans progresser une deuxième fois. Les événements sont rejoués
+          // depuis le journal, pour qu'une reprise réaffiche le récapitulatif.
           const row = await this.database.targets.get(TARGETS_KEY)
           if (!row) throw new StoreError('storage-unavailable', 'Cibles introuvables.')
           const { key: _key, ...targets } = row
+          const journal = await this.database.meta.get(eventsKey(draftId))
           await this.database.drafts.delete(draftId)
-          return { seance: existing, targets, events: [], applied: false }
+          return {
+            seance: existing,
+            targets,
+            events: (journal?.value as ProgressionEvent[] | undefined) ?? [],
+            applied: false,
+          }
         }
 
         const draft = await this.database.drafts.get(draftId)
@@ -155,11 +172,21 @@ export class DexieStore implements DraftStore {
         if (!row) throw new StoreError('storage-unavailable', 'Cibles introuvables.')
         const { key: _key, ...current } = row
 
+        // Un ajustement manuel fait pendant la séance ne doit pas être écrasé sans
+        // qu'Ugo le sache : on refuse d'enregistrer et on garde le brouillon intact.
+        if (targetsDiverged(draft.baseTargets, current)) {
+          throw new StoreError(
+            'stale-targets',
+            'Les cibles ont été ajustées depuis le début de cette séance. Rouvre la séance avant d’enregistrer.',
+          )
+        }
+
         const seance = draftToSeance(draft)
         const { targets, events } = applyProgression(draft, current)
 
         await this.database.seances.put(seance)
         await this.database.targets.put({ key: TARGETS_KEY, ...targets })
+        await this.database.meta.put({ key: eventsKey(seance.id), value: events })
         await this.database.drafts.delete(draftId)
 
         return { seance, targets, events, applied: true }

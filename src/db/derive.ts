@@ -26,9 +26,23 @@ import type {
   TopRecord,
 } from '../domain/types.ts'
 
-/** Les séries réellement faites, dans l'ordre de la séance. */
+/**
+ * Toutes les séries réellement faites, dans l'ordre de la séance.
+ *
+ * Une série au poids de corps n'a pas de charge : exiger `weight != null` ici la
+ * ferait disparaître du résumé alors qu'elle a bien été réalisée. Les tractions
+ * poids de corps de la séance C sont exactement dans ce cas.
+ */
 export function validatedSets(draft: Draft): SetLog[] {
-  return draft.sets.filter((set) => set.status === 'validated' && set.weight != null)
+  return draft.sets.filter((set) => set.status === 'validated')
+}
+
+/**
+ * Les séries portant une charge exploitable. C'est ce sous-ensemble qui alimente les
+ * tops et la progression : on ne peut pas comparer des charges là où il n'y en a pas.
+ */
+function loadedSets(sets: readonly SetLog[]): SetLog[] {
+  return sets.filter((set) => set.weight != null)
 }
 
 function asAttempt(set: SetLog): Attempt {
@@ -111,7 +125,7 @@ export function deriveSeance(draft: Draft): DerivedSeance {
 
     const exercise = findExercise(exerciseId)
     if (!exercise?.lift) continue
-    const record = topRecordFor(exercise.lift, sets)
+    const record = topRecordFor(exercise.lift, loadedSets(sets))
     if (record) tops[exercise.lift] = record
   }
 
@@ -131,6 +145,24 @@ export interface ProgressionResult {
 }
 
 /**
+ * Les cibles ont-elles bougé depuis l'ouverture du brouillon ?
+ *
+ * `updatedAt` est ignoré : ce qui compte est la charge visée et l'échec en attente,
+ * pas la date de dernière écriture. Si ça a bougé, c'est qu'Ugo a ajusté une cible à
+ * la main pendant la séance, et finaliser écraserait son ajustement.
+ */
+export function targetsDiverged(base: Targets, current: Targets): boolean {
+  const lifts: LiftKey[] = ['squat', 'bench', 'deadlift', 'tractions', 'benchVol']
+  return lifts.some((lift) => {
+    const a = base[lift]
+    const b = current[lift]
+    return (
+      a.w !== b.w || a.fail !== b.fail || a.inc !== b.inc || a.reps !== b.reps || a.sets !== b.sets
+    )
+  })
+}
+
+/**
  * Passe les réalisations dans le moteur.
  *
  * Part des cibles **courantes**, pas de `baseTargets` : si Ugo a ajusté une cible à la
@@ -138,7 +170,7 @@ export interface ProgressionResult {
  * l'ouverture du brouillon.
  */
 export function applyProgression(draft: Draft, current: Targets): ProgressionResult {
-  const groups = groupByExercise(validatedSets(draft))
+  const groups = groupByExercise(loadedSets(validatedSets(draft)))
   let targets = structuredClone(current)
   const events: ProgressionEvent[] = []
 

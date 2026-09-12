@@ -92,8 +92,24 @@ describe('brouillon pré-rempli', () => {
     expect(second.id).toBe(premier.id)
   })
 
-  it('remplace le brouillon si on change de type de séance', async () => {
+  it('ne détruit jamais un brouillon en cours quand on change de sélecteur', async () => {
+    // P1 de la contre-revue de #8 : un tap sur A alors qu'un C est à moitié saisi
+    // effaçait la saisie. C'est la pire perte possible, et en pleine salle.
+    let premier = await store.openDraft('C', '2026-09-20')
+    premier = validate(premier, setId('c-deadlift', 'top', 0), { weight: 92.5, reps: 3, rpe: 8 })
+    await store.saveDraft(premier)
+
+    const second = await store.openDraft('A', '2026-09-20')
+    expect(second.id).toBe(premier.id)
+    expect(second.type).toBe('C')
+    expect(second.sets.find((set) => set.id === setId('c-deadlift', 'top', 0))?.status).toBe(
+      'validated',
+    )
+  })
+
+  it('ouvre bien une nouvelle séance après un abandon explicite', async () => {
     const premier = await store.openDraft('C', '2026-09-20')
+    await store.clearDraft()
     const second = await store.openDraft('A', '2026-09-20')
     expect(second.id).not.toBe(premier.id)
     expect(second.type).toBe('A')
@@ -274,14 +290,54 @@ describe('finalisation', () => {
     expect(seance.lines[0]).not.toContain('67,5')
   })
 
-  it('part des cibles courantes, pas de celles figées à l’ouverture', async () => {
-    const draft = await store.openDraft('A', '2026-09-15')
-    const modifie = validate(draft, setId('a-squat', 'top', 0), { weight: 75, reps: 4, rpe: 8 })
-    const { targets } = applyProgression(modifie, {
-      ...modifie.baseTargets,
-      squat: { ...modifie.baseTargets.squat, w: 80 },
-    })
-    // La cible courante est 80, le réalisé 75 : la règle littérale ramène à 77,5.
-    expect(targets.squat.w).toBe(77.5)
+  it('part des cibles courantes quand elles n’ont pas bougé', () => {
+    const targets = {
+      updatedAt: '2026-09-12',
+      squat: { w: 75, inc: 2.5, reps: 4, fail: null },
+      bench: { w: 70, inc: 2.5, reps: 4, fail: null },
+      deadlift: { w: 92.5, inc: 5, reps: 3, fail: null },
+      tractions: { w: 15, inc: 2.5, reps: 4, fail: null },
+      benchVol: { w: 60, inc: 2.5, reps: 8, sets: 3, fail: null },
+    }
+    let draft = buildDraft('A', '2026-09-15', targets, { id: 'd9', now: 0 })
+    draft = validate(draft, setId('a-squat', 'top', 0), { weight: 75, reps: 4, rpe: 8 })
+    expect(applyProgression(draft, targets).targets.squat.w).toBe(77.5)
+  })
+
+  it('refuse d’enregistrer si une cible a été ajustée pendant la séance', async () => {
+    // P1 de la contre-revue de #8 : sans cette garde, la finalisation écrasait
+    // silencieusement l'ajustement manuel d'Ugo.
+    let draft = await store.openDraft('A', '2026-09-15')
+    draft = validate(draft, setId('a-squat', 'top', 0), { weight: 75, reps: 4, rpe: 8 })
+    await store.saveDraft(draft)
+
+    await store.adjustTargetForTest('squat', 80)
+
+    await expect(store.finalizeSeance(draft.id)).rejects.toThrow(/ajustées/)
+    // Et surtout : le brouillon est intact, la saisie n'est pas perdue.
+    expect((await store.loadDraft())?.id).toBe(draft.id)
+    expect(await store.listSeances()).toHaveLength(12)
+  })
+
+  it('conserve les tractions au poids de corps dans l’historique', async () => {
+    // P1 de la contre-revue de #8 : une série sans charge disparaissait du résumé,
+    // alors qu'elle avait bien été réalisée.
+    let draft = await store.openDraft('C', '2026-09-20')
+    draft = validate(draft, setId('c-tractions-pdc', 'accessory', 0), { reps: 10 })
+    await store.saveDraft(draft)
+
+    const { seance } = await store.finalizeSeance(draft.id)
+    expect(seance.lines.join(' ')).toContain('Tractions poids de corps : 10 reps')
+  })
+
+  it('rejoue les événements sur un second appel, pour réafficher le récapitulatif', async () => {
+    let draft = await store.openDraft('A', '2026-09-15')
+    draft = validate(draft, setId('a-squat', 'top', 0), { weight: 75, reps: 4, rpe: 8 })
+    await store.saveDraft(draft)
+
+    const premier = await store.finalizeSeance(draft.id)
+    const second = await store.finalizeSeance(draft.id)
+    expect(second.applied).toBe(false)
+    expect(second.events).toEqual(premier.events)
   })
 })
