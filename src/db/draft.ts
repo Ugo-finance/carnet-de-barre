@@ -123,3 +123,24 @@ export function buildDraft(
     updatedAt: now,
   }
 }
+
+/**
+ * Un brouillon **jamais touché** : aucune série saisie, validée ou sautée, aucun
+ * accessoire coché ou annoté, aucune note, aucun chrono lancé.
+ *
+ * Il ne porte donc aucune information. C'est ce qui autorise à le reconstruire sur
+ * de nouvelles cibles sans rien perdre — la distinction entre « une séance est en
+ * cours » et « l'app a ouvert un brouillon toute seule à l'affichage ».
+ *
+ * Le chrono compte : il n'est lancé que par la validation d'une série, donc un chrono
+ * en cours prouve qu'une séance a commencé même si tout a été remis à `planned`
+ * depuis. Mieux vaut refuser à tort que reconstruire une séance réelle.
+ */
+export function isBlankDraft(draft: Draft): boolean {
+  return (
+    draft.sets.every((set) => set.status === 'planned') &&
+    draft.accessories.every((accessory) => !accessory.done && accessory.note.trim() === '') &&
+    draft.notes.trim() === '' &&
+    draft.timerEndsAt === null
+  )
+}

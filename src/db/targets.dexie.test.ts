@@ -26,6 +26,17 @@ async function magasinPret(): Promise<{ base: CarnetDatabase; store: DexieStore 
   return { base, store }
 }
 
+/** Commence réellement la séance : une série validée, donc plus rien de vierge. */
+async function commencer(store: DexieStore, date = '2026-09-12'): Promise<void> {
+  const draft = await store.openDraft('C', date)
+  await store.saveDraft({
+    ...draft,
+    sets: draft.sets.map((set, index) =>
+      index === 0 ? { ...set, status: 'validated' as const, weight: 92.5, reps: 3 } : set,
+    ),
+  })
+}
+
 describe('ajustement manuel sur une vraie base', () => {
   it('écrit la cible et sa trace sans sortir de la portée transactionnelle', async () => {
     // Sans `meta` dans la portée, Dexie lèverait ici — et il l'aurait fait au premier
@@ -125,7 +136,7 @@ describe('ajustement manuel sur une vraie base', () => {
     // séance n'en ouvre un ; une seconde fenêtre contourne l'interface entièrement.
     // Dans les deux cas, la cible déplacée rendrait la séance impossible à enregistrer.
     const { store } = await magasinPret()
-    await store.openDraft('C', '2026-09-12')
+    await commencer(store)
     const avant = await store.getTargets()
 
     await expect(store.adjustTarget('squat', { w: 80 })).rejects.toThrow(/séance est en cours/)
@@ -138,7 +149,7 @@ describe('ajustement manuel sur une vraie base', () => {
     // « Repartir à zéro » change la cible autant qu'un déplacement de charge.
     const { store } = await magasinPret()
     await store.adjustTarget('bench', { fail: 70 })
-    await store.openDraft('C', '2026-09-12')
+    await commencer(store)
 
     await expect(store.adjustTarget('bench', { fail: null })).rejects.toThrow(/séance est en cours/)
 
@@ -156,5 +167,66 @@ describe('ajustement manuel sur une vraie base', () => {
 
     const apres = await store.adjustTarget('squat', { w: 80 })
     expect(apres.squat.w).toBe(80)
+  })
+
+  it('ajuste malgré un brouillon vierge, et le reconstruit sur la nouvelle cible', async () => {
+    // Le cas réel : Ugo finalise sa séance, l'écran d'accueil rouvre aussitôt un
+    // brouillon vide, et il veut corriger une charge en sortant de la salle.
+    const { store } = await magasinPret()
+    const vierge = await store.openDraft('A', '2026-09-15')
+    expect(vierge.baseTargets.squat.w).toBe(75)
+
+    const apres = await store.adjustTarget('squat', { w: 80 })
+
+    expect(apres.squat.w).toBe(80)
+    const reconstruit = await store.loadDraft()
+    // Les cibles de référence suivent : sans ça, la finalisation lèverait
+    // `stale-targets` et la séance suivante serait inenregistrable.
+    expect(reconstruit?.baseTargets.squat.w).toBe(80)
+    // Et les séries pré-remplies aussi, sinon l'écran afficherait l'ancienne charge.
+    const top = reconstruit?.sets.find((set) => set.exerciseId === 'a-squat' && set.role === 'top')
+    expect(top?.weight).toBe(80)
+  })
+
+  it('garde le même identifiant de brouillon en le reconstruisant', async () => {
+    // Un identifiant neuf ferait diverger la copie que l'écran de séance tient en
+    // mémoire, sans qu'il s'en aperçoive.
+    const { store } = await magasinPret()
+    const vierge = await store.openDraft('A', '2026-09-15')
+
+    await store.adjustTarget('squat', { w: 80 })
+
+    expect((await store.loadDraft())?.id).toBe(vierge.id)
+  })
+
+  it('permet d’enchaîner finalisation, ajustement, puis nouvelle séance', async () => {
+    // Le parcours d'acceptation complet du ticket, bout en bout.
+    const { store } = await magasinPret()
+    const premier = await store.openDraft('C', '2026-09-12')
+    await store.saveDraft({
+      ...premier,
+      sets: premier.sets.map((set) => ({ ...set, status: 'validated' as const })),
+    })
+    await store.finalizeSeance(premier.id)
+
+    // L'écran rouvre un brouillon dès l'affichage.
+    await store.openDraft('C', '2026-09-12')
+    await store.adjustTarget('squat', { w: 80 })
+
+    // Puis la séance suivante se saisit et s'enregistre sans `stale-targets`.
+    const suivant = await store.loadDraft()
+    await store.saveDraft({
+      ...suivant!,
+      sets: suivant!.sets.map((set) => ({ ...set, status: 'validated' as const })),
+    })
+    const resultat = await store.finalizeSeance(suivant!.id)
+    expect(resultat.seance.date).toBe('2026-09-12')
+    expect(await store.listSeances()).toHaveLength(14)
+  })
+
+  it('ne reconstruit rien quand il n’y a pas de brouillon du tout', async () => {
+    const { store } = await magasinPret()
+    await store.adjustTarget('squat', { w: 80 })
+    expect(await store.loadDraft()).toBeUndefined()
   })
 })

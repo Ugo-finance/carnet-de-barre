@@ -27,7 +27,7 @@ import { applyTargetPatch, type TargetPatch } from './targets.ts'
 import { StoreError, type FinalizeResult, type ImportPreview } from './contracts.ts'
 import { seanceSchema } from '../domain/schema.ts'
 import { loadSeed } from './seed.ts'
-import { buildDraft } from './draft.ts'
+import { buildDraft, isBlankDraft } from './draft.ts'
 import { applyProgression, draftToSeance, targetsDiverged } from './derive.ts'
 import { buildExport, describeImport, validateImport } from './exchange.ts'
 import type { DraftStore } from './store.ts'
@@ -137,10 +137,10 @@ export class MemoryStore implements DraftStore {
   }
 
   async adjustTarget(lift: LiftKey, patch: TargetPatch): Promise<Targets> {
-    // Même invariant que l'adaptateur Dexie. Il n'y a pas de course en mémoire, mais
-    // deux implémentations du même contrat qui répondent différemment sont un piège
-    // pour le prochain test écrit contre la mauvaise.
-    if (this.draft) {
+    // Même invariant que l'adaptateur Dexie, reconstruction comprise. Deux
+    // implémentations du même contrat qui répondent différemment sont un piège pour
+    // le prochain test écrit contre la mauvaise.
+    if (this.draft && !isBlankDraft(this.draft)) {
       throw new StoreError(
         'draft-in-progress',
         'Une séance est en cours. Termine-la avant d’ajuster une cible.',
@@ -153,6 +153,9 @@ export class MemoryStore implements DraftStore {
     if (targets !== courant) {
       this.targets = targets
       this.adjustments.push({ at, lift, before: courant[lift], after: targets[lift] })
+      if (this.draft) {
+        this.draft = buildDraft(this.draft.type, this.draft.date, targets, { id: this.draft.id })
+      }
     }
     return structuredClone(targets)
   }
