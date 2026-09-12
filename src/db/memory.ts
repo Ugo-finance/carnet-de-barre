@@ -136,6 +136,16 @@ export class MemoryStore implements DraftStore {
   }
 
   async adjustTarget(lift: LiftKey, patch: TargetPatch): Promise<Targets> {
+    // Même invariant que l'adaptateur Dexie. Il n'y a pas de course en mémoire, mais
+    // deux implémentations du même contrat qui répondent différemment sont un piège
+    // pour le prochain test écrit contre la mauvaise.
+    if (this.draft) {
+      throw new StoreError(
+        'draft-in-progress',
+        'Une séance est en cours. Termine-la avant d’ajuster une cible.',
+      )
+    }
+
     const courant = await this.getTargets()
     const at = this.today()
     const targets = applyTargetPatch(courant, lift, patch, at)

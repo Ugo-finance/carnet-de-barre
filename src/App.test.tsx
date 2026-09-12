@@ -79,4 +79,33 @@ describe('navigation depuis le point d’entrée réel', () => {
     expect(screen.getByRole('button', { name: 'Cibles' })).toHaveAttribute('aria-current', 'page')
     expect(screen.getByRole('button', { name: 'Séance' })).not.toHaveAttribute('aria-current')
   })
+
+  it('interdit d’ajuster une cible pendant une séance en cours', async () => {
+    // P1 trouvé par Codex après la fusion de la navigation. `SessionHome` ouvre un
+    // brouillon dès le démarrage ; rendre l'onglet Cibles atteignable a du même coup
+    // rendu l'ajustement atteignable pendant une séance. Or `finalizeSeance` refuse
+    // d'écrire quand les cibles ont bougé depuis l'ouverture du brouillon, et aucun
+    // écran ne sait rebaser un brouillon : Ugo aurait dû abandonner toute sa saisie.
+    render(<App />)
+    await screen.findByRole('heading', { name: /Séance [ABC]/ })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cibles' }))
+    await screen.findByRole('heading', { name: 'Cibles' })
+
+    await waitFor(() => expect(screen.getByText(/lecture seule/)).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: 'Ajuster' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Repartir à zéro' })).not.toBeInTheDocument()
+  })
+
+  it('laisse quand même consulter les cibles pendant la séance', async () => {
+    // Savoir ce qui est visé pendant qu'on s'entraîne est l'usage légitime de l'écran.
+    // Le verrou porte sur la modification, pas sur la lecture.
+    render(<App />)
+    await screen.findByRole('heading', { name: /Séance [ABC]/ })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cibles' }))
+
+    await waitFor(() => expect(screen.getByText('Squat')).toBeInTheDocument())
+    expect(screen.getByText('75 kg')).toBeInTheDocument()
+  })
 })

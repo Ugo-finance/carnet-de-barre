@@ -34,12 +34,20 @@ const ONGLETS: { id: Onglet; label: string }[] = [
  */
 function CiblesTab() {
   const [targets, setTargets] = useState<Targets>()
+  const [verrouille, setVerrouille] = useState(true)
   const [erreur, setErreur] = useState<string>()
 
   useEffect(() => {
     let actif = true
-    store.getTargets().then(
-      (valeur) => actif && setTargets(valeur),
+    Promise.all([store.getTargets(), store.loadDraft()]).then(
+      ([valeur, brouillon]) => {
+        if (!actif) return
+        setTargets(valeur)
+        // Une séance en cours interdit l'ajustement : `finalizeSeance` refuserait
+        // ensuite d'écrire, et aucun écran ne sait rebaser un brouillon. Ugo devrait
+        // abandonner toute sa saisie pour sortir de l'impasse.
+        setVerrouille(brouillon !== undefined)
+      },
       (cause: unknown) =>
         actif && setErreur(cause instanceof Error ? cause.message : 'Lecture impossible.'),
     )
@@ -62,7 +70,7 @@ function CiblesTab() {
       </p>
     )
   }
-  return <TargetsPanel targets={targets} store={store} />
+  return <TargetsPanel targets={targets} store={store} verrouille={verrouille} />
 }
 
 export default function App() {

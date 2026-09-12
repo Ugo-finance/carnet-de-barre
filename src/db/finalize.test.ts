@@ -307,11 +307,17 @@ describe('finalisation', () => {
   it('refuse d’enregistrer si une cible a été ajustée pendant la séance', async () => {
     // P1 de la contre-revue de #8 : sans cette garde, la finalisation écrasait
     // silencieusement l'ajustement manuel d'Ugo.
+    //
+    // Depuis CB-26, `adjustTarget` refuse lui-même pendant une séance : le chemin
+    // normal ne peut plus produire cette divergence. On l'écrit donc directement,
+    // parce que cette garde reste la **dernière** ligne de défense — deux fenêtres,
+    // une version future, un import concurrent. Une défense qu'on cesse d'éprouver
+    // sous prétexte qu'elle est devenue difficile à atteindre est une défense morte.
     let draft = await store.openDraft('A', '2026-09-15')
     draft = validate(draft, setId('a-squat', 'top', 0), { weight: 75, reps: 4, rpe: 8 })
     await store.saveDraft(draft)
 
-    await store.adjustTarget('squat', { w: 80 })
+    await store.adjustTargetForTest('squat', 80)
 
     await expect(store.finalizeSeance(draft.id)).rejects.toThrow(/ajustées/)
     // Et surtout : le brouillon est intact, la saisie n'est pas perdue.
