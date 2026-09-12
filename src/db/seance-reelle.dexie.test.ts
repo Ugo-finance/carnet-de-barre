@@ -17,7 +17,7 @@ import { describe, expect, it } from 'vitest'
 import { CarnetDatabase } from './database.ts'
 import { DexieStore } from './store.ts'
 import { currentSession, isScheduledSessionDone, todayInZurich } from '../domain/schedule.ts'
-import { parseImport, type ExportFile } from '../domain/schema.ts'
+import { parseImport } from '../domain/schema.ts'
 import { serializeExport } from './exchange.ts'
 import type { Draft } from '../domain/types.ts'
 
@@ -119,8 +119,10 @@ describe('la séance de ce soir, de bout en bout', () => {
 
     expect(relu.ok).toBe(true)
     if (!relu.ok) return
-    expect(relu.format).toBe('current')
-    const fichier = relu.data as ExportFile
+    // Plus besoin de `as` depuis CB-04 : `ImportResult` est discriminé sur `format`,
+    // donc ce `return` suffit à donner le bon type à `relu.data`.
+    if (relu.format !== 'current') return
+    const fichier = relu.data
     const duSoir = fichier.seances.find((seance) => seance.date === '2026-09-12')
     expect(duSoir).toBeDefined()
     expect(duSoir?.type).toBe('C')

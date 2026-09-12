@@ -103,9 +103,13 @@ describe('import sur une vraie base', () => {
     const ciblesAvant = await store.getTargets()
 
     const putOrigine = base.targets.put.bind(base.targets)
-    base.targets.put = async () => {
+    // Dexie attend une `PromiseExtended`, pas une promesse ordinaire. On remplace la
+    // méthode pour la faire échouer : la forme du retour n'a aucune importance ici
+    // puisqu'elle lève toujours. Le cast est explicite pour que personne ne prenne
+    // cette signature pour un modèle à copier.
+    base.targets.put = (() => {
       throw new Error('écriture refusée en plein milieu')
-    }
+    }) as unknown as typeof base.targets.put
 
     await expect(store.importReplace(fichier)).rejects.toThrow(/refusée/)
     base.targets.put = putOrigine
