@@ -29,7 +29,7 @@ function messageFor(error: unknown): string {
 }
 
 function whenLabel(draft: Draft, suggestion: UpcomingSession, today: string): string {
-  if (draft.type === suggestion.type && draft.date === suggestion.date)
+  if (draft.type === suggestion.type && draft.date === suggestion.scheduledDate)
     return describeWhen(suggestion)
   return draft.date === today ? "Aujourd'hui · hors rotation" : 'Séance à reprendre'
 }

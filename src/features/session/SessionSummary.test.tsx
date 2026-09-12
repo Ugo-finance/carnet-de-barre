@@ -32,7 +32,7 @@ describe('SessionSummary', () => {
         result={resultWith([
           { lift: 'deadlift', previous: 92.5, next: 90, outcome: 'ajuste', message },
         ])}
-        next={{ type: 'A', date: '2026-09-22', inDays: 2, isToday: false }}
+        next={{ type: 'A', scheduledDate: '2026-09-22', inDays: 2, isToday: false }}
       />,
     )
 
@@ -44,7 +44,7 @@ describe('SessionSummary', () => {
     render(
       <SessionSummary
         result={resultWith([])}
-        next={{ type: 'A', date: '2026-09-22', inDays: 2, isToday: false }}
+        next={{ type: 'A', scheduledDate: '2026-09-22', inDays: 2, isToday: false }}
       />,
     )
 
