@@ -17,6 +17,7 @@ import { ExportPanel } from './features/export/ExportPanel'
 import { TargetsPanel } from './features/history/TargetsPanel'
 import { HistoryPanel } from './features/history/HistoryPanel'
 import { isBlankDraft } from './db/draft'
+import { UpdatePrompt } from './pwa/UpdatePrompt'
 import type { Seance, Targets } from './domain/types'
 
 type Onglet = 'seance' | 'historique' | 'cibles' | 'export'
@@ -141,6 +142,7 @@ export default function App() {
 
   return (
     <div className="min-h-dvh">
+      <UpdatePrompt store={store} />
       <nav
         className="mx-auto flex w-full max-w-md gap-1 px-3 pt-[max(0.5rem,env(safe-area-inset-top))]"
         aria-label="Sections"
