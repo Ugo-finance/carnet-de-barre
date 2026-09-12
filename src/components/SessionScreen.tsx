@@ -1,4 +1,5 @@
 import { formatDate, formatLoad, formatNumber } from '../domain/format'
+import { describePlates, platesPerSide } from '../domain/plates'
 import { SEANCES, type ExerciseDef } from '../domain/program'
 import type { AccessoryLog, Draft, SeanceType, SetLog } from '../domain/types'
 import { SetCard, type EditableSet } from './SetCard'
@@ -18,7 +19,7 @@ type SessionScreenProps = {
   onSelectType: (type: SeanceType) => void
   onSetChange: (setId: string, value: EditableSet) => void
   onAccessoryChange: (exerciseId: string, value: Pick<AccessoryLog, 'done' | 'note'>) => void
-  plateDescription?: (total: number) => string | null
+  errorMessage?: string
 }
 
 function setLabel(set: SetLog): string {
@@ -85,17 +86,15 @@ function ExerciseCard({
   exercise,
   sets,
   onSetChange,
-  plateDescription,
 }: {
   exercise: ExerciseDef
   sets: SetLog[]
   onSetChange: (setId: string, value: EditableSet) => void
-  plateDescription?: (total: number) => string | null
 }) {
   const target = targetFor(exercise, sets)
   const barTarget =
     exercise.loadKind === 'barTotal' && sets[0]?.targetWeight != null
-      ? plateDescription?.(sets[0].targetWeight)
+      ? describePlates(platesPerSide(sets[0].targetWeight))
       : null
 
   return (
@@ -141,7 +140,7 @@ export function SessionScreen({
   onSelectType,
   onSetChange,
   onAccessoryChange,
-  plateDescription,
+  errorMessage,
 }: SessionScreenProps) {
   const definition = SEANCES[draft.type]
 
@@ -180,6 +179,14 @@ export function SessionScreen({
             )
           })}
         </nav>
+        {errorMessage ? (
+          <p
+            className="mt-3 rounded-xl border border-bad/60 bg-bad/10 p-3 text-sm text-fg"
+            role="alert"
+          >
+            {errorMessage}
+          </p>
+        ) : null}
       </header>
 
       <section className="grid gap-3" aria-label={`Exercices de la séance ${draft.type}`}>
@@ -205,7 +212,6 @@ export function SessionScreen({
               exercise={exercise}
               sets={sets}
               onSetChange={onSetChange}
-              plateDescription={plateDescription}
             />
           )
         })}

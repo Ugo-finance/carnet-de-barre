@@ -14,15 +14,19 @@ function asError(error: unknown): Error {
 }
 
 /** `store` doit garder une identité stable pendant la durée de montage du composant. */
-export function useDraftEditor(store: DraftPort) {
-  const [draft, setDraft] = useState<Draft>()
-  const [loading, setLoading] = useState(true)
+export function useDraftEditor(store: DraftPort, initialDraft?: Draft) {
+  const [draft, setDraft] = useState<Draft | undefined>(initialDraft)
+  const [loading, setLoading] = useState(initialDraft === undefined)
   const [loadError, setLoadError] = useState<Error>()
   const [saveError, setSaveError] = useState<Error>()
-  const draftRef = useRef<Draft | undefined>(undefined)
+  const draftRef = useRef<Draft | undefined>(initialDraft)
   const saveQueue = useRef<Promise<void>>(Promise.resolve())
 
   useEffect(() => {
+    if (initialDraft) {
+      return
+    }
+
     let active = true
 
     store.loadDraft().then(
@@ -42,7 +46,7 @@ export function useDraftEditor(store: DraftPort) {
     return () => {
       active = false
     }
-  }, [store])
+  }, [initialDraft, store])
 
   const persist = useCallback(
     (next: Draft) => {

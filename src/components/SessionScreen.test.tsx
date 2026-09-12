@@ -67,7 +67,6 @@ function renderSession(
     onSelectType: vi.fn(),
     onSetChange: vi.fn(),
     onAccessoryChange: vi.fn(),
-    plateDescription: (total: number) => `Plaques pour ${String(total).replace('.', ',')} kg`,
     ...overrides,
   }
   render(<SessionScreen {...props} />)
@@ -105,7 +104,7 @@ describe('SessionScreen', () => {
       'Série 2',
       'Élévations latérales',
     ])
-    expect(screen.getByText('Plaques pour 92,5 kg')).toBeInTheDocument()
+    expect(screen.getByText('Par côté : 25 + 10 + 1,25')).toBeInTheDocument()
   })
 
   it('laisse les trois séances accessibles avec des cibles tactiles de 44 px', () => {
