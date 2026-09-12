@@ -66,7 +66,10 @@ function renderSession(
     whenLabel: "Aujourd'hui",
     onSelectType: vi.fn(),
     onSetChange: vi.fn(),
+    onSetValidate: vi.fn(),
     onAccessoryChange: vi.fn(),
+    onTimerAdjust: vi.fn(),
+    onTimerStop: vi.fn(),
     ...overrides,
   }
   render(<SessionScreen {...props} />)
@@ -118,15 +121,30 @@ describe('SessionScreen', () => {
   })
 
   it('valide une série préremplie en un tap avec son identifiant', () => {
-    const onSetChange = vi.fn()
-    renderSession('A', { onSetChange })
+    const onSetValidate = vi.fn()
+    renderSession('A', { onSetValidate })
     const squat = screen.getByRole('article', { name: 'Squat' })
 
     fireEvent.click(within(squat).getByRole('button', { name: 'Valider' }))
 
-    expect(onSetChange).toHaveBeenCalledWith(
+    expect(onSetValidate).toHaveBeenCalledWith(
       'a-squat:0',
       expect.objectContaining({ weight: 75, reps: 4, status: 'validated' }),
+      { seconds: 150, label: 'Récup Squat' },
+    )
+  })
+
+  it('demande 75 secondes de récupération pour un exercice en superset', () => {
+    const onSetValidate = vi.fn()
+    renderSession('A', { onSetValidate })
+    const tractions = screen.getByRole('article', { name: 'Tractions lestées' })
+
+    fireEvent.click(within(tractions).getAllByRole('button', { name: 'Valider' })[0])
+
+    expect(onSetValidate).toHaveBeenCalledWith(
+      'a-tractions-lestees:0',
+      expect.objectContaining({ status: 'validated' }),
+      { seconds: 75, label: 'Récup Tractions lestées' },
     )
   })
 

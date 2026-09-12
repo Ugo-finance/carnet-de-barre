@@ -85,6 +85,17 @@ describe('SessionHome', () => {
     expect(store.openDraft).not.toHaveBeenCalled()
   })
 
+  it('restaure le chrono porté par un brouillon existant', async () => {
+    const initial = draftFor('C', '2026-09-20')
+    initial.timerEndsAt = Date.now() + 150_000
+    initial.timerLabel = 'Récup Soulevé de terre'
+    const store = fakeStore({ initial })
+    render(<SessionHome store={store} now={SUNDAY} />)
+
+    expect(await screen.findByText('Récup Soulevé de terre')).toBeInTheDocument()
+    expect(screen.getByRole('timer')).toBeInTheDocument()
+  })
+
   it('ne remplace une séance en cours qu’après un abandon explicite', async () => {
     const store = fakeStore({ initial: draftFor('C', '2026-09-20') })
     render(<SessionHome store={store} now={SUNDAY} />)

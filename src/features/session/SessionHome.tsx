@@ -10,6 +10,7 @@ import {
 } from '../../domain/schedule'
 import type { Draft, SeanceType } from '../../domain/types'
 import { useDraftEditor } from './useDraftEditor'
+import { unlockTimerAudio } from './timer'
 
 export type SessionStore = Pick<
   CarnetStore,
@@ -73,7 +74,13 @@ function SessionEditor({
         whenLabel={whenLabel(draft, state.suggestion, state.today)}
         onSelectType={(type) => setPendingType(type === draft.type ? undefined : type)}
         onSetChange={editor.updateSet}
+        onSetValidate={(setId, value, timer) => {
+          unlockTimerAudio()
+          editor.validateSet(setId, value, timer)
+        }}
         onAccessoryChange={editor.updateAccessory}
+        onTimerAdjust={editor.adjustTimer}
+        onTimerStop={editor.stopTimer}
         errorMessage={
           editor.saveError ? `Sauvegarde impossible : ${editor.saveError.message}` : undefined
         }

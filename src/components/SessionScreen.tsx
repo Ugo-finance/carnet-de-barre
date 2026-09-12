@@ -3,6 +3,7 @@ import { describePlates, platesPerSide } from '../domain/plates'
 import { SEANCES, type ExerciseDef } from '../domain/program'
 import type { AccessoryLog, Draft, SeanceType, SetLog } from '../domain/types'
 import { SetCard, type EditableSet } from './SetCard'
+import { TimerCard } from './TimerCard'
 
 const TYPES: readonly SeanceType[] = ['A', 'B', 'C']
 
@@ -18,7 +19,14 @@ type SessionScreenProps = {
   whenLabel: string
   onSelectType: (type: SeanceType) => void
   onSetChange: (setId: string, value: EditableSet) => void
+  onSetValidate: (
+    setId: string,
+    value: EditableSet,
+    timer: { seconds: number; label: string },
+  ) => void
   onAccessoryChange: (exerciseId: string, value: Pick<AccessoryLog, 'done' | 'note'>) => void
+  onTimerAdjust: (deltaMs: number) => void
+  onTimerStop: () => void
   errorMessage?: string
 }
 
@@ -86,10 +94,12 @@ function ExerciseCard({
   exercise,
   sets,
   onSetChange,
+  onSetValidate,
 }: {
   exercise: ExerciseDef
   sets: SetLog[]
   onSetChange: (setId: string, value: EditableSet) => void
+  onSetValidate: SessionScreenProps['onSetValidate']
 }) {
   const target = targetFor(exercise, sets)
   const barTarget =
@@ -123,7 +133,12 @@ function ExerciseCard({
             label={setLabel(set)}
             value={set}
             onChange={(value) => onSetChange(set.id, value)}
-            onValidate={(value) => onSetChange(set.id, value)}
+            onValidate={(value) =>
+              onSetValidate(set.id, value, {
+                seconds: exercise.restSeconds,
+                label: `Récup ${exercise.label}`,
+              })
+            }
             onSkip={(value) => onSetChange(set.id, value)}
             showWeight={set.loadKind !== 'bodyweight'}
             showRpe={set.role === 'top' || (set.role === 'volume' && set.index === sets.length - 1)}
@@ -139,7 +154,10 @@ export function SessionScreen({
   whenLabel,
   onSelectType,
   onSetChange,
+  onSetValidate,
   onAccessoryChange,
+  onTimerAdjust,
+  onTimerStop,
   errorMessage,
 }: SessionScreenProps) {
   const definition = SEANCES[draft.type]
@@ -189,6 +207,15 @@ export function SessionScreen({
         ) : null}
       </header>
 
+      {draft.timerEndsAt !== null && draft.timerLabel ? (
+        <TimerCard
+          endsAt={draft.timerEndsAt}
+          label={draft.timerLabel}
+          onAdjust={onTimerAdjust}
+          onStop={onTimerStop}
+        />
+      ) : null}
+
       <section className="grid gap-3" aria-label={`Exercices de la séance ${draft.type}`}>
         {definition.exercises.map((exercise) => {
           const sets = draft.sets.filter((set) => set.exerciseId === exercise.id)
@@ -212,6 +239,7 @@ export function SessionScreen({
               exercise={exercise}
               sets={sets}
               onSetChange={onSetChange}
+              onSetValidate={onSetValidate}
             />
           )
         })}

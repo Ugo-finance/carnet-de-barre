@@ -60,12 +60,22 @@ describe('useDraftEditor', () => {
     const { result } = renderHook(() => useDraftEditor(store))
     await waitFor(() => expect(result.current.loading).toBe(false))
 
-    act(() => result.current.validateSet('set-1'))
+    act(() =>
+      result.current.validateSet(
+        'set-1',
+        { weight: 75, reps: 4, rpe: null, status: 'validated' },
+        { seconds: 150, label: 'Récup Squat' },
+      ),
+    )
     await act(() => result.current.flush())
 
     expect(saveDraft).toHaveBeenCalledOnce()
     expect(saveDraft).toHaveBeenCalledWith(
-      expect.objectContaining({ sets: [expect.objectContaining({ status: 'validated' })] }),
+      expect.objectContaining({
+        sets: [expect.objectContaining({ status: 'validated' })],
+        timerEndsAt: expect.any(Number),
+        timerLabel: 'Récup Squat',
+      }),
     )
   })
 
@@ -112,7 +122,13 @@ describe('useDraftEditor', () => {
     const { result } = renderHook(() => useDraftEditor(store))
     await waitFor(() => expect(result.current.loading).toBe(false))
 
-    act(() => result.current.validateSet('set-1'))
+    act(() =>
+      result.current.validateSet(
+        'set-1',
+        { weight: 75, reps: 4, rpe: null, status: 'validated' },
+        { seconds: 150, label: 'Récup Squat' },
+      ),
+    )
     await expect(result.current.flush()).rejects.toThrow('quota')
 
     await waitFor(() => expect(result.current.saveError?.message).toBe('quota'))
@@ -194,5 +210,39 @@ describe('useDraftEditor', () => {
       weight: 65,
       status: 'entered',
     })
+  })
+
+  it('persiste l’échéance, permet ±30 s et arrête le chrono', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-09-20T14:00:00Z'))
+    const saveDraft = vi.fn<(draft: Draft) => Promise<void>>().mockResolvedValue(undefined)
+    const initial = draftFixture()
+    const store: DraftPort = { loadDraft: vi.fn().mockResolvedValue(initial), saveDraft }
+    const { result } = renderHook(() => useDraftEditor(store, initial))
+
+    act(() =>
+      result.current.validateSet(
+        'set-1',
+        { weight: 75, reps: 4, rpe: 8, status: 'validated' },
+        { seconds: 150, label: 'Récup Squat' },
+      ),
+    )
+    await act(() => result.current.flush())
+    expect(saveDraft.mock.calls.at(-1)?.[0]).toMatchObject({
+      timerEndsAt: Date.now() + 150_000,
+      timerLabel: 'Récup Squat',
+    })
+
+    act(() => result.current.adjustTimer(30_000))
+    await act(() => result.current.flush())
+    expect(saveDraft.mock.calls.at(-1)?.[0].timerEndsAt).toBe(Date.now() + 180_000)
+
+    act(() => result.current.stopTimer())
+    await act(() => result.current.flush())
+    expect(saveDraft.mock.calls.at(-1)?.[0]).toMatchObject({
+      timerEndsAt: null,
+      timerLabel: null,
+    })
+    vi.useRealTimers()
   })
 })
