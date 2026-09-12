@@ -12,9 +12,11 @@
  * amorçage compris. Si les deux divergent, c'est un défaut, pas une facilité.
  */
 
-import type { Draft, Seance, Targets } from '../domain/types.ts'
-import { StoreError } from './contracts.ts'
+import type { Draft, Seance, SeanceType, Targets } from '../domain/types.ts'
+import { StoreError, type FinalizeResult } from './contracts.ts'
 import { loadSeed } from './seed.ts'
+import { buildDraft } from './draft.ts'
+import { applyProgression, draftToSeance } from './derive.ts'
 import type { DraftStore } from './store.ts'
 
 export class MemoryStore implements DraftStore {
@@ -59,6 +61,47 @@ export class MemoryStore implements DraftStore {
 
   async clearDraft(): Promise<void> {
     this.draft = undefined
+  }
+
+  async openDraft(type: SeanceType, date: string): Promise<Draft> {
+    if (this.draft && this.draft.type === type && this.draft.date === date) {
+      return structuredClone(this.draft)
+    }
+    const draft = buildDraft(type, date, await this.getTargets(), { id: crypto.randomUUID() })
+    this.draft = draft
+    return structuredClone(draft)
+  }
+
+  async finalizeSeance(draftId: string): Promise<FinalizeResult> {
+    const already = this.seances.find((seance) => seance.id === draftId)
+    if (already) {
+      if (this.draft?.id === draftId) this.draft = undefined
+      return {
+        seance: structuredClone(already),
+        targets: await this.getTargets(),
+        events: [],
+        applied: false,
+      }
+    }
+
+    const draft = this.draft?.id === draftId ? this.draft : undefined
+    if (!draft) {
+      throw new StoreError('draft-not-found', 'Aucune séance en cours sous cet identifiant.')
+    }
+
+    const seance = draftToSeance(draft)
+    const { targets, events } = applyProgression(draft, await this.getTargets())
+
+    this.seances = [...this.seances, seance]
+    this.targets = targets
+    this.draft = undefined
+
+    return {
+      seance: structuredClone(seance),
+      targets: structuredClone(targets),
+      events,
+      applied: true,
+    }
   }
 
   /** Efface l'historique sans réarmer l'amorçage, comme `clearHistory`. */

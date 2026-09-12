@@ -189,7 +189,12 @@ export interface ProgressionEvent {
   next: number
   /** Charge visée avant cette séance. */
   previous: number
-  outcome: 'progresse' | 'maintien' | 'second-essai' | 'reset' | 'inchange'
+  /**
+   * `ajuste` couvre le cas où un succès **fait baisser** la cible, parce qu'il a été
+   * obtenu sous la charge visée. L'interface ne doit donc jamais traduire `progresse`
+   * en hausse sans comparer `next` et `previous`.
+   */
+  outcome: 'progresse' | 'ajuste' | 'maintien' | 'second-essai' | 'reset' | 'inchange'
   /** Phrase prête à afficher, en français. */
   message: string
 }

@@ -14,18 +14,28 @@
  */
 
 import type { Draft, Seance, Targets } from '../domain/types.ts'
-import type { CarnetStore } from './contracts.ts'
+import type { SeanceType } from '../domain/types.ts'
+import type { CarnetStore, FinalizeResult } from './contracts.ts'
 import { StoreError } from './contracts.ts'
 import { TARGETS_KEY, type CarnetDatabase, db as defaultDb, ensureSeeded } from './database.ts'
+import { buildDraft } from './draft.ts'
+import { applyProgression, draftToSeance } from './derive.ts'
 
 /**
- * La part du contrat que CB-30 implémente : lecture de l'historique et cycle de vie
- * du brouillon. La création d'un brouillon pré-rempli et la finalisation arrivent
- * avec CB-31, parce qu'elles dépendent du moteur de progression.
+ * La part du contrat implémentée à ce stade : lecture de l'historique et cycle de vie
+ * complet d'une séance, de l'ouverture du brouillon à sa finalisation. L'édition de
+ * l'historique et l'échange JSON arrivent avec CB-33 et CB-40.
  */
 export type DraftStore = Pick<
   CarnetStore,
-  'getTargets' | 'listSeances' | 'getSeance' | 'loadDraft' | 'saveDraft' | 'clearDraft'
+  | 'getTargets'
+  | 'listSeances'
+  | 'getSeance'
+  | 'loadDraft'
+  | 'openDraft'
+  | 'saveDraft'
+  | 'clearDraft'
+  | 'finalizeSeance'
 >
 
 export class DexieStore implements DraftStore {
@@ -92,6 +102,69 @@ export class DexieStore implements DraftStore {
 
   async clearDraft(): Promise<void> {
     await this.database.drafts.clear()
+  }
+
+  /**
+   * Rend le brouillon déjà ouvert s'il correspond, sinon en construit un neuf.
+   *
+   * Changer de type de séance en cours de saisie remplace le brouillon : c'est une
+   * autre séance. Le rouvrir sur le même type ne perd rien.
+   */
+  async openDraft(type: SeanceType, date: string): Promise<Draft> {
+    const existing = await this.loadDraft()
+    if (existing && existing.type === type && existing.date === date) return existing
+
+    const targets = await this.getTargets()
+    const draft = buildDraft(type, date, targets, { id: crypto.randomUUID() })
+    await this.database.transaction('rw', this.database.drafts, async () => {
+      await this.database.drafts.clear()
+      await this.database.drafts.put(draft)
+    })
+    return draft
+  }
+
+  /**
+   * Une transaction unique : la séance, les cibles et la fermeture du brouillon
+   * partent ensemble ou pas du tout. Idempotente par construction, puisque la séance
+   * porte l'identifiant du brouillon.
+   */
+  async finalizeSeance(draftId: string): Promise<FinalizeResult> {
+    return this.database.transaction(
+      'rw',
+      this.database.seances,
+      this.database.targets,
+      this.database.drafts,
+      async () => {
+        const existing = await this.database.seances.get(draftId)
+        if (existing) {
+          // Double tap, reprise après erreur, second onglet : on rend ce qui existe
+          // déjà, sans progresser une deuxième fois.
+          const row = await this.database.targets.get(TARGETS_KEY)
+          if (!row) throw new StoreError('storage-unavailable', 'Cibles introuvables.')
+          const { key: _key, ...targets } = row
+          await this.database.drafts.delete(draftId)
+          return { seance: existing, targets, events: [], applied: false }
+        }
+
+        const draft = await this.database.drafts.get(draftId)
+        if (!draft) {
+          throw new StoreError('draft-not-found', 'Aucune séance en cours sous cet identifiant.')
+        }
+
+        const row = await this.database.targets.get(TARGETS_KEY)
+        if (!row) throw new StoreError('storage-unavailable', 'Cibles introuvables.')
+        const { key: _key, ...current } = row
+
+        const seance = draftToSeance(draft)
+        const { targets, events } = applyProgression(draft, current)
+
+        await this.database.seances.put(seance)
+        await this.database.targets.put({ key: TARGETS_KEY, ...targets })
+        await this.database.drafts.delete(draftId)
+
+        return { seance, targets, events, applied: true }
+      },
+    )
   }
 }
 

@@ -79,6 +79,15 @@ describe('succès', () => {
     expect(result?.target.w).toBe(72.5)
   })
 
+  it('nomme « ajuste » un succès qui fait baisser la cible, pas « progresse »', () => {
+    // P2 de la contre-revue de #6 : l'interface ne doit pas afficher une flèche
+    // montante sur une cible qui descend.
+    const result = applyTopSet('squat', SQUAT(), attempt(70, 4, 8))
+    expect(result?.event.outcome).toBe('ajuste')
+    expect(result?.event.previous).toBe(75)
+    expect(result?.event.next).toBe(72.5)
+  })
+
   it("utilise l'incrément porté par la cible, pas celui du programme", () => {
     // La cible voyage dans l'export et un ajustement manuel peut changer son pas.
     const surMesure = target({ w: 100, inc: 1, reps: 4 })

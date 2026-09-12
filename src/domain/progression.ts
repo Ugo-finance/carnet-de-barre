@@ -80,6 +80,7 @@ function describe(
   const load = formatLoad(next, LIFTS[lift].loadKind)
   const phrases: Record<ProgressionEvent['outcome'], string> = {
     progresse: `${label} → ${load}`,
+    ajuste: `${label} → ${load} (ajusté sous la cible précédente)`,
     maintien: `${label} → ${load} (on reste là)`,
     'second-essai': `${label} → ${load} (deuxième essai)`,
     reset: `${label} → ${load} (reset après deux échecs)`,
@@ -131,9 +132,10 @@ export function applyTopSet(
   // Succès : répétitions cibles atteintes et RPE confortable.
   if (repsMet && rpeEasy) {
     const next = tidy(done + target.inc)
+    const outcome = next === previous ? 'inchange' : next > previous ? 'progresse' : 'ajuste'
     return {
       target: { ...target, w: next, fail: null },
-      event: describe(lift, previous, next, next === previous ? 'inchange' : 'progresse'),
+      event: describe(lift, previous, next, outcome),
     }
   }
 
