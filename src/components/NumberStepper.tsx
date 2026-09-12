@@ -6,6 +6,7 @@ type NumberStepperProps = {
   onChange: (value: number | null) => void
   step: number
   min?: number
+  max?: number
   unit?: string
   disabled?: boolean
 }
@@ -34,6 +35,7 @@ export function NumberStepper({
   onChange,
   step,
   min = 0,
+  max,
   unit,
   disabled = false,
 }: NumberStepperProps) {
@@ -45,7 +47,8 @@ export function NumberStepper({
     const parsed = editing ? parseNumber(draft) : value
     const current = typeof parsed === 'number' ? parsed : (value ?? min)
     const precision = precisionFor(step)
-    const next = Math.max(min, Math.round((current + direction * step) * precision) / precision)
+    const stepped = Math.round((current + direction * step) * precision) / precision
+    const next = Math.max(min, max === undefined ? stepped : Math.min(max, stepped))
     setDraft(formatNumber(next))
     onChange(next)
   }
@@ -53,13 +56,19 @@ export function NumberStepper({
   const commitInput = (input: string) => {
     setDraft(input)
     const parsed = parseNumber(input)
-    if (parsed !== undefined && (parsed === null || parsed >= min)) onChange(parsed)
+    if (
+      parsed !== undefined &&
+      (parsed === null || (parsed >= min && (max === undefined || parsed <= max)))
+    ) {
+      onChange(parsed)
+    }
   }
 
   const normalizeInput = () => {
     const parsed = parseNumber(draft)
     setDraft(
-      parsed === undefined || (parsed !== null && parsed < min)
+      parsed === undefined ||
+        (parsed !== null && (parsed < min || (max !== undefined && parsed > max)))
         ? formatNumber(value)
         : formatNumber(parsed),
     )
@@ -106,7 +115,7 @@ export function NumberStepper({
           className="min-h-11 min-w-11 border-l border-line text-xl text-fg disabled:opacity-40"
           aria-label={`Augmenter ${label} de ${stepLabel}`}
           onClick={() => changeBy(1)}
-          disabled={disabled}
+          disabled={disabled || (max !== undefined && value !== null && value >= max)}
         >
           +
         </button>

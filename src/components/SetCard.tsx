@@ -1,12 +1,12 @@
 import { NumberStepper } from './NumberStepper'
-import { RpeChips, type RpeValue } from './RpeChips'
+import { RpeChips } from './RpeChips'
 
 export type SetStatus = 'planned' | 'entered' | 'validated' | 'skipped'
 
 export type EditableSet = {
   weight: number | null
   reps: number | null
-  rpe: RpeValue | null
+  rpe: number | null
   status: SetStatus
 }
 
@@ -77,24 +77,32 @@ export function SetCard({
         </div>
       ) : null}
 
-      <div className="mt-3 grid grid-cols-[1fr_2fr] gap-2">
+      {done ? (
         <button
           type="button"
-          className="min-h-11 rounded-xl border border-line px-3 font-medium text-muted"
-          onClick={skip}
-          disabled={done}
+          className="mt-3 min-h-11 w-full rounded-xl border border-line px-4 font-semibold text-fg"
+          onClick={() => onChange({ ...value, status: 'entered' })}
         >
-          Sauter
+          Modifier
         </button>
-        <button
-          type="button"
-          className="min-h-11 rounded-xl bg-accent px-4 font-semibold text-bg"
-          onClick={validate}
-          disabled={done}
-        >
-          Valider
-        </button>
-      </div>
+      ) : (
+        <div className="mt-3 grid grid-cols-[1fr_2fr] gap-2">
+          <button
+            type="button"
+            className="min-h-11 rounded-xl border border-line px-3 font-medium text-muted"
+            onClick={skip}
+          >
+            Sauter
+          </button>
+          <button
+            type="button"
+            className="min-h-11 rounded-xl bg-accent px-4 font-semibold text-bg"
+            onClick={validate}
+          >
+            Valider
+          </button>
+        </div>
+      )}
     </article>
   )
 }

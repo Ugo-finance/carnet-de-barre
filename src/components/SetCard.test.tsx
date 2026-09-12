@@ -43,4 +43,25 @@ describe('SetCard', () => {
     expect(screen.getByText('Saisie')).toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: 'Poids' })).toHaveValue('77,5')
   })
+
+  it('permet de corriger une série validée avant finalisation', () => {
+    function ControlledSet() {
+      const [value, setValue] = useState<EditableSet>({ ...planned, status: 'validated' })
+      return (
+        <SetCard
+          label="Top set"
+          value={value}
+          onChange={setValue}
+          onValidate={setValue}
+          onSkip={setValue}
+        />
+      )
+    }
+
+    render(<ControlledSet />)
+    fireEvent.click(screen.getByRole('button', { name: 'Modifier' }))
+
+    expect(screen.getByText('Saisie')).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Poids' })).toBeEnabled()
+  })
 })

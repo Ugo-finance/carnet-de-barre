@@ -1,9 +1,9 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { useState } from 'react'
-import { RpeChips, type RpeValue } from './RpeChips'
+import { RpeChips } from './RpeChips'
 
 function ControlledRpe() {
-  const [value, setValue] = useState<RpeValue | null>(null)
+  const [value, setValue] = useState<number | null>(null)
   return <RpeChips value={value} onChange={setValue} />
 }
 
@@ -23,5 +23,11 @@ describe('RpeChips', () => {
     fireEvent.click(choice)
 
     expect(screen.getByText('RPE non renseigné')).toBeInTheDocument()
+  })
+
+  it('affiche sans erreur une valeur importée hors des chips', () => {
+    render(<RpeChips value={8.25} onChange={vi.fn()} />)
+
+    expect(screen.getByText('RPE 8,25 · maintien')).toBeInTheDocument()
   })
 })

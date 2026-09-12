@@ -26,4 +26,21 @@ describe('NumberStepper', () => {
 
     expect(input).toHaveValue('22,5')
   })
+
+  it('revient à la valeur contrôlée avant un pas si la saisie est invalide', () => {
+    render(<ControlledStepper />)
+    const input = screen.getByRole('textbox', { name: 'Poids' })
+
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: 'invalide' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Augmenter Poids de 2,5' }))
+
+    expect(input).toHaveValue('22,5')
+  })
+
+  it('respecte une borne maximale optionnelle', () => {
+    render(<NumberStepper label="Répétitions" value={100} onChange={vi.fn()} step={1} max={100} />)
+
+    expect(screen.getByRole('button', { name: 'Augmenter Répétitions de 1' })).toBeDisabled()
+  })
 })
