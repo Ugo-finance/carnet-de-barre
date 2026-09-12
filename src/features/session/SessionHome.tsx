@@ -182,8 +182,9 @@ function SessionEditor({
           </h2>
           <p className="mt-1 text-sm text-muted">
             {unfinishedCount}{' '}
-            {unfinishedCount === 1 ? 'série n’est pas validée' : 'séries ne sont pas validées'}. Les
-            terminer ou les marquer comme sautées évite d’enregistrer une séance par erreur.
+            {unfinishedCount === 1 ? 'série n’est pas validée' : 'séries ne sont pas validées'}.
+            Leurs charges et répétitions ne seront pas enregistrées. Termine-les ou marque-les comme
+            sautées avant de continuer.
           </p>
           <div className="mt-4 grid gap-2">
             <button
