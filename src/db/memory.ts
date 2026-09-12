@@ -12,7 +12,16 @@
  * amorçage compris. Si les deux divergent, c'est un défaut, pas une facilité.
  */
 
-import type { Draft, ProgressionEvent, Seance, SeanceType, Targets } from '../domain/types.ts'
+import type {
+  Draft,
+  LiftKey,
+  ProgressionEvent,
+  Seance,
+  SeanceType,
+  Targets,
+} from '../domain/types.ts'
+import { todayInZurich } from '../domain/schedule.ts'
+import { applyTargetPatch, type TargetPatch } from './targets.ts'
 import { StoreError, type FinalizeResult } from './contracts.ts'
 import { loadSeed } from './seed.ts'
 import { buildDraft } from './draft.ts'
@@ -122,16 +131,15 @@ export class MemoryStore implements DraftStore {
     }
   }
 
-  /**
-   * Ajuste une cible, comme le fera `adjustTarget` en CB-33.
-   * Présent ici pour éprouver la détection de cibles obsolètes.
-   */
-  async adjustTargetForTest(
-    lift: 'squat' | 'bench' | 'deadlift' | 'tractions' | 'benchVol',
-    w: number,
-  ): Promise<void> {
-    const targets = await this.getTargets()
-    this.targets = { ...targets, [lift]: { ...targets[lift], w } }
+  async adjustTarget(lift: LiftKey, patch: TargetPatch): Promise<Targets> {
+    const targets = applyTargetPatch(await this.getTargets(), lift, patch, this.today())
+    this.targets = targets
+    return structuredClone(targets)
+  }
+
+  /** Surchargeable dans les tests, pour dater l'ajustement de façon déterministe. */
+  protected today(): string {
+    return todayInZurich()
   }
 
   /** Efface l'historique sans réarmer l'amorçage, comme `clearHistory`. */

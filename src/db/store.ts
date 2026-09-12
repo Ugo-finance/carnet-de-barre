@@ -13,13 +13,21 @@
  * supplémentaire n'a donc été nécessaire.
  */
 
-import type { Draft, Seance, Targets } from '../domain/types.ts'
-import type { ProgressionEvent, SeanceType } from '../domain/types.ts'
+import type {
+  Draft,
+  LiftKey,
+  ProgressionEvent,
+  Seance,
+  SeanceType,
+  Targets,
+} from '../domain/types.ts'
 import type { CarnetStore, FinalizeResult } from './contracts.ts'
 import { StoreError } from './contracts.ts'
 import { TARGETS_KEY, type CarnetDatabase, db as defaultDb, ensureSeeded } from './database.ts'
 import { buildDraft } from './draft.ts'
 import { applyProgression, draftToSeance, targetsDiverged } from './derive.ts'
+import { applyTargetPatch, type TargetPatch } from './targets.ts'
+import { todayInZurich } from '../domain/schedule.ts'
 
 /**
  * Clé du journal des événements de progression d'une séance.
@@ -44,6 +52,7 @@ export type DraftStore = Pick<
   | 'saveDraft'
   | 'clearDraft'
   | 'finalizeSeance'
+  | 'adjustTarget'
 >
 
 export class DexieStore implements DraftStore {
@@ -195,6 +204,23 @@ export class DexieStore implements DraftStore {
         return { seance, targets, events, applied: true }
       },
     )
+  }
+
+  /**
+   * Ajuste une cible à la main. Le moteur repart de la valeur posée.
+   *
+   * Une seule transaction : la lecture et l'écriture ne peuvent pas être séparées par
+   * une finalisation de séance qui écrirait entre les deux.
+   */
+  async adjustTarget(lift: LiftKey, patch: TargetPatch): Promise<Targets> {
+    return this.database.transaction('rw', this.database.targets, async () => {
+      const row = await this.database.targets.get(TARGETS_KEY)
+      if (!row) throw new StoreError('storage-unavailable', 'Cibles introuvables.')
+      const { key: _key, ...courant } = row
+      const targets = applyTargetPatch(courant, lift, patch, todayInZurich())
+      await this.database.targets.put({ key: TARGETS_KEY, ...targets })
+      return targets
+    })
   }
 }
 
