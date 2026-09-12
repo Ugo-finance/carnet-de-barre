@@ -91,10 +91,18 @@ function EditeurSerie({
   const [poids, setPoids] = useState(nombreOuVide(set.weight))
   const [reps, setReps] = useState(nombreOuVide(set.reps))
   const [rpe, setRpe] = useState(nombreOuVide(set.rpe))
+  const [confirmeRetrait, setConfirmeRetrait] = useState(false)
+  const [saisieInvalide, setSaisieInvalide] = useState(false)
 
   const enregistrer = () => {
     const valeurs = { weight: lireChamp(poids), reps: lireChamp(reps), rpe: lireChamp(rpe) }
-    if (Object.values(valeurs).includes(undefined)) return
+    // Sortir en silence serait le pire retour possible : Ugo taperait « Enregistrer »
+    // et rien ne se passerait, sans qu'aucun écran ne dise pourquoi.
+    if (Object.values(valeurs).includes(undefined)) {
+      setSaisieInvalide(true)
+      return
+    }
+    setSaisieInvalide(false)
     onSave(valeurs as SetPatch)
   }
 
@@ -125,31 +133,68 @@ function EditeurSerie({
         {champ('Reps', reps, setReps, 'numeric')}
         {champ('RPE', rpe, setRpe, 'decimal')}
       </div>
-      <div className="mt-3 grid grid-cols-3 gap-2">
-        <button
-          type="button"
-          className="min-h-11 rounded-xl bg-accent px-3 text-sm font-semibold text-bg disabled:opacity-50"
-          disabled={occupe}
-          onClick={enregistrer}
-        >
-          Enregistrer
-        </button>
-        <button
-          type="button"
-          className="min-h-11 rounded-xl border border-line px-3 text-sm font-medium text-muted"
-          onClick={onCancel}
-        >
-          Annuler
-        </button>
-        <button
-          type="button"
-          className="min-h-11 rounded-xl border border-line px-3 text-sm font-medium text-bad disabled:opacity-50"
-          disabled={occupe}
-          onClick={onRemove}
-        >
-          Retirer
-        </button>
-      </div>
+      {saisieInvalide ? (
+        <p className="mt-2 text-sm text-bad" role="alert">
+          Entre des nombres, par exemple 92,5 — ou laisse vide si tu n’as pas noté.
+        </p>
+      ) : null}
+
+      {confirmeRetrait ? (
+        /*
+         * Retirer une série est irréversible et ces données n'existent nulle part
+         * ailleurs. Supprimer une séance entière demande déjà un second geste ; il
+         * n'y a aucune raison qu'en retirer une part en demande moins.
+         */
+        <div className="mt-3 rounded-xl border border-bad/60 p-3" role="alert">
+          <p className="text-sm font-semibold text-bad">Retirer cette série ?</p>
+          <p className="mt-1 text-sm text-muted">
+            Elle disparaîtra de la séance et du résumé. Tes cibles ne changeront pas — pour les
+            corriger, passe par l’onglet Cibles.
+          </p>
+          <div className="mt-3 grid gap-2">
+            <button
+              type="button"
+              className="min-h-11 rounded-xl bg-accent px-3 text-sm font-semibold text-bg"
+              onClick={() => setConfirmeRetrait(false)}
+            >
+              Garder la série
+            </button>
+            <button
+              type="button"
+              className="min-h-11 rounded-xl border border-line px-3 text-sm font-medium text-bad disabled:opacity-50"
+              disabled={occupe}
+              onClick={onRemove}
+            >
+              {occupe ? 'Retrait…' : 'Retirer définitivement'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          <button
+            type="button"
+            className="min-h-11 rounded-xl bg-accent px-3 text-sm font-semibold text-bg disabled:opacity-50"
+            disabled={occupe}
+            onClick={enregistrer}
+          >
+            Enregistrer
+          </button>
+          <button
+            type="button"
+            className="min-h-11 rounded-xl border border-line px-3 text-sm font-medium text-muted"
+            onClick={onCancel}
+          >
+            Annuler
+          </button>
+          <button
+            type="button"
+            className="min-h-11 rounded-xl border border-line px-3 text-sm font-medium text-bad"
+            onClick={() => setConfirmeRetrait(true)}
+          >
+            Retirer
+          </button>
+        </div>
+      )}
     </div>
   )
 }

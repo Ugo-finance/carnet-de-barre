@@ -249,6 +249,10 @@ describe('historique', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Squat — top set/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Retirer' }))
+    // Depuis la contre-revue de #27, retirer demande un second geste : ces données
+    // n'existent nulle part ailleurs, et supprimer une séance entière en demandait
+    // déjà un.
+    fireEvent.click(screen.getByRole('button', { name: 'Retirer définitivement' }))
 
     await waitFor(() => expect(screen.queryByText(/Squat :/)).not.toBeInTheDocument())
   })
@@ -271,5 +275,59 @@ describe('historique', () => {
     // du texte fabriquerait des données jamais saisies.
     render(<HistoryPanel seances={[JUILLET]} store={faux([JUILLET])} />)
     expect(screen.queryByText('Corriger une série')).not.toBeInTheDocument()
+  })
+
+  it('ne retire pas une série au premier tap, et dit que les cibles ne bougent pas', () => {
+    const enregistree = seanceAvecSeries()
+    const store = faux([enregistree])
+    render(<HistoryPanel seances={[enregistree]} store={store} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /Squat — top set/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Retirer' }))
+
+    expect(store.updateSeance).not.toHaveBeenCalled()
+    expect(screen.getByText(/cibles ne changeront pas/)).toBeInTheDocument()
+  })
+
+  it('laisse garder la série', () => {
+    const enregistree = seanceAvecSeries()
+    const store = faux([enregistree])
+    render(<HistoryPanel seances={[enregistree]} store={store} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /Squat — top set/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Retirer' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Garder la série' }))
+
+    expect(store.updateSeance).not.toHaveBeenCalled()
+    expect(screen.getByText('Squat : 95×4 @8')).toBeInTheDocument()
+  })
+
+  it('dit pourquoi quand la saisie n’est pas un nombre, au lieu de ne rien faire', () => {
+    // Le pire retour possible : taper « Enregistrer » et que rien ne se passe.
+    const enregistree = seanceAvecSeries()
+    const store = faux([enregistree])
+    render(<HistoryPanel seances={[enregistree]} store={store} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /Squat — top set/ }))
+    fireEvent.change(screen.getByLabelText(/Charge — Squat — top set/), {
+      target: { value: '92,5abc' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+
+    expect(store.updateSeance).not.toHaveBeenCalled()
+    expect(screen.getByText(/Entre des nombres/)).toBeInTheDocument()
+  })
+
+  it('accepte un champ laissé vide, qui veut dire « non noté »', async () => {
+    const enregistree = seanceAvecSeries()
+    const store = faux([enregistree])
+    render(<HistoryPanel seances={[enregistree]} store={store} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /Squat — top set/ }))
+    fireEvent.change(screen.getByLabelText(/RPE — Squat — top set/), { target: { value: '' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+
+    await waitFor(() => expect(store.updateSeance).toHaveBeenCalled())
+    expect(screen.queryByText(/Entre des nombres/)).not.toBeInTheDocument()
   })
 })
