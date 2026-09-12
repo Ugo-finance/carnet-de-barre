@@ -12,9 +12,11 @@
  * amorçage compris. Si les deux divergent, c'est un défaut, pas une facilité.
  */
 
-import type { Draft, Seance, Targets } from '../domain/types.ts'
-import { StoreError } from './contracts.ts'
+import type { Draft, ProgressionEvent, Seance, SeanceType, Targets } from '../domain/types.ts'
+import { StoreError, type FinalizeResult } from './contracts.ts'
 import { loadSeed } from './seed.ts'
+import { buildDraft } from './draft.ts'
+import { applyProgression, draftToSeance, targetsDiverged } from './derive.ts'
 import type { DraftStore } from './store.ts'
 
 export class MemoryStore implements DraftStore {
@@ -22,6 +24,8 @@ export class MemoryStore implements DraftStore {
   private targets: Targets | null = null
   private draft: Draft | undefined
   private seeded = false
+  /** Journal des événements de progression, par séance. Local, jamais exporté. */
+  private readonly events = new Map<string, ProgressionEvent[]>()
 
   /** Amorçage à l'identique de `ensureSeeded` : une seule fois, marqueur compris. */
   async ready(): Promise<void> {
@@ -59,6 +63,75 @@ export class MemoryStore implements DraftStore {
 
   async clearDraft(): Promise<void> {
     this.draft = undefined
+  }
+
+  /**
+   * Rend le brouillon déjà ouvert, **quel que soit le type demandé**.
+   *
+   * Changer de sélecteur A/B/C ne doit jamais détruire une saisie en cours : D9 dit
+   * que rien ne se perd. C'est à l'interface de proposer explicitement d'abandonner
+   * la séance en cours, via `clearDraft`, avant d'en ouvrir une autre.
+   */
+  async openDraft(type: SeanceType, date: string): Promise<Draft> {
+    if (this.draft) return structuredClone(this.draft)
+    const draft = buildDraft(type, date, await this.getTargets(), { id: crypto.randomUUID() })
+    this.draft = draft
+    return structuredClone(draft)
+  }
+
+  async finalizeSeance(draftId: string): Promise<FinalizeResult> {
+    const already = this.seances.find((seance) => seance.id === draftId)
+    if (already) {
+      if (this.draft?.id === draftId) this.draft = undefined
+      return {
+        seance: structuredClone(already),
+        targets: await this.getTargets(),
+        // Rejoués depuis le journal : une reprise après réponse perdue doit pouvoir
+        // réafficher le récapitulatif, pas une liste vide.
+        events: structuredClone(this.events.get(draftId) ?? []),
+        applied: false,
+      }
+    }
+
+    const draft = this.draft?.id === draftId ? this.draft : undefined
+    if (!draft) {
+      throw new StoreError('draft-not-found', 'Aucune séance en cours sous cet identifiant.')
+    }
+
+    const current = await this.getTargets()
+    if (targetsDiverged(draft.baseTargets, current)) {
+      throw new StoreError(
+        'stale-targets',
+        'Les cibles ont été ajustées depuis le début de cette séance. Rouvre la séance avant d’enregistrer.',
+      )
+    }
+
+    const seance = draftToSeance(draft)
+    const { targets, events } = applyProgression(draft, current)
+
+    this.seances = [...this.seances, seance]
+    this.targets = targets
+    this.events.set(seance.id, events)
+    this.draft = undefined
+
+    return {
+      seance: structuredClone(seance),
+      targets: structuredClone(targets),
+      events,
+      applied: true,
+    }
+  }
+
+  /**
+   * Ajuste une cible, comme le fera `adjustTarget` en CB-33.
+   * Présent ici pour éprouver la détection de cibles obsolètes.
+   */
+  async adjustTargetForTest(
+    lift: 'squat' | 'bench' | 'deadlift' | 'tractions' | 'benchVol',
+    w: number,
+  ): Promise<void> {
+    const targets = await this.getTargets()
+    this.targets = { ...targets, [lift]: { ...targets[lift], w } }
   }
 
   /** Efface l'historique sans réarmer l'amorçage, comme `clearHistory`. */
