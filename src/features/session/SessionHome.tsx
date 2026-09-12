@@ -154,8 +154,7 @@ export function SessionHome({ store, now = new Date() }: { store: SessionStore; 
         .filter((seance) => seance.date === today)
         .map((seance) => seance.type)
       const suggestion = currentSession(nowValue.current, isScheduledSessionDone(today, typesToday))
-      const draft =
-        existing ?? (await storeValue.current.openDraft(suggestion.type, today))
+      const draft = existing ?? (await storeValue.current.openDraft(suggestion.type, today))
       return { draft, suggestion, today }
     })()
 
