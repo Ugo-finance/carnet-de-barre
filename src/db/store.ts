@@ -35,6 +35,7 @@ import {
 import { buildDraft } from './draft.ts'
 import { applyProgression, draftToSeance, targetsDiverged } from './derive.ts'
 import { applyTargetPatch, type TargetPatch } from './targets.ts'
+import { seanceSchema } from '../domain/schema.ts'
 import { buildExport, describeImport, validateImport } from './exchange.ts'
 import { todayInZurich } from '../domain/schedule.ts'
 
@@ -282,6 +283,53 @@ export class DexieStore implements DraftStore {
   async listTargetAdjustments(): Promise<TargetAdjustment[]> {
     const journal = await this.database.meta.get(ADJUSTMENTS_KEY)
     return (journal?.value ?? []) as TargetAdjustment[]
+  }
+
+  // ---- correction de l'historique (D6) ----
+
+  /**
+   * Corrige une séance déjà enregistrée.
+   *
+   * **Ne touche jamais aux cibles** (D6). Corriger une séance de juillet ne doit pas
+   * rejouer une progression vieille de deux mois : les cibles d'aujourd'hui sont le
+   * produit de tout ce qui s'est passé depuis, et les recalculer à partir d'un point
+   * du passé effacerait chaque décision prise entre-temps.
+   *
+   * Pas de contrôle de brouillon ici, contrairement à `adjustTarget` et
+   * `importReplace` : puisque rien ne bouge côté cibles, `targetsDiverged` ne verra
+   * aucune divergence et une séance en cours reste finalisable.
+   */
+  async updateSeance(id: string, patch: Partial<Omit<Seance, 'id'>>): Promise<Seance> {
+    return this.database.transaction('rw', this.database.seances, async () => {
+      const courante = await this.database.seances.get(id)
+      if (!courante) {
+        throw new StoreError('storage-unavailable', 'Cette séance n’existe pas ou plus.')
+      }
+
+      const suivante = { ...courante, ...patch, id }
+      // Valider avant d'écrire : une correction manuelle est exactement l'endroit où
+      // une date impossible ou un type inconnu peut entrer dans la base.
+      const verdict = seanceSchema.safeParse(suivante)
+      if (!verdict.success) {
+        throw new StoreError('storage-unavailable', 'Cette correction rendrait la séance invalide.')
+      }
+
+      await this.database.seances.put(verdict.data)
+      return verdict.data
+    })
+  }
+
+  /**
+   * Supprime une séance. **Sans effet sur les cibles** (D6), pour la même raison.
+   *
+   * Supprimer une séance dont la progression a déjà été appliquée laisse donc les
+   * cibles où elles sont. C'est voulu : Ugo a réellement soulevé ces charges, et la
+   * cible reflète ce qu'il sait faire, pas le contenu de la table `seances`. S'il veut
+   * aussi revenir en arrière sur une cible, l'ajustement manuel est là pour ça — un
+   * geste explicite, journalisé.
+   */
+  async deleteSeance(id: string): Promise<void> {
+    await this.database.seances.delete(id)
   }
 
   // ---- échange ----
