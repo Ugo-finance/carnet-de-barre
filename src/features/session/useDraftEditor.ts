@@ -3,6 +3,7 @@ import type { CarnetStore } from '../../db/contracts'
 import { findExercise } from '../../domain/program'
 import { backoffWeight } from '../../domain/progression'
 import type { AccessoryLog, Draft, SetLog } from '../../domain/types'
+import { shiftedDeadline } from './timer'
 
 export type DraftPort = Pick<CarnetStore, 'loadDraft' | 'saveDraft'>
 
@@ -143,6 +144,37 @@ export function useDraftEditor(store: DraftPort, initialDraft?: Draft) {
     [commit],
   )
 
+  const validateSet = useCallback(
+    (setId: string, value: SetValue, timer: { seconds: number; label: string }) => {
+      commit((current) => ({
+        ...current,
+        sets: current.sets.map((set) =>
+          set.id === setId ? { ...set, ...value, status: 'validated' } : set,
+        ),
+        timerEndsAt: Date.now() + timer.seconds * 1000,
+        timerLabel: timer.label,
+      }))
+    },
+    [commit],
+  )
+
+  const adjustTimer = useCallback(
+    (deltaMs: number) => {
+      commit((current) => ({
+        ...current,
+        timerEndsAt:
+          current.timerEndsAt === null
+            ? null
+            : shiftedDeadline(current.timerEndsAt, deltaMs, Date.now()),
+      }))
+    },
+    [commit],
+  )
+
+  const stopTimer = useCallback(() => {
+    commit((current) => ({ ...current, timerEndsAt: null, timerLabel: null }))
+  }, [commit])
+
   return {
     draft,
     loading,
@@ -151,9 +183,11 @@ export function useDraftEditor(store: DraftPort, initialDraft?: Draft) {
     changeSet,
     updateSet,
     updateAccessory,
-    validateSet: (setId: string) => setStatus(setId, 'validated'),
+    validateSet,
     skipSet: (setId: string) => setStatus(setId, 'skipped'),
     editSet: (setId: string) => setStatus(setId, 'entered'),
+    adjustTimer,
+    stopTimer,
     flush: () => saveQueue.current,
   }
 }
