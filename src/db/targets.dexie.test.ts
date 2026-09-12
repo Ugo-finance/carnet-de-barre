@@ -118,4 +118,43 @@ describe('ajustement manuel sur une vraie base', () => {
     const { store } = await magasinPret()
     expect(await store.listTargetAdjustments()).toEqual([])
   })
+
+  it('refuse d’ajuster pendant une séance en cours, même sans passer par l’écran', async () => {
+    // L'invariant doit vivre au point d'écriture, pas seulement dans l'interface.
+    // L'écran peut lire « pas de brouillon » une fraction de seconde avant que la
+    // séance n'en ouvre un ; une seconde fenêtre contourne l'interface entièrement.
+    // Dans les deux cas, la cible déplacée rendrait la séance impossible à enregistrer.
+    const { store } = await magasinPret()
+    await store.openDraft('C', '2026-09-12')
+    const avant = await store.getTargets()
+
+    await expect(store.adjustTarget('squat', { w: 80 })).rejects.toThrow(/séance est en cours/)
+
+    expect((await store.getTargets()).squat.w).toBe(avant.squat.w)
+    expect(await store.listTargetAdjustments()).toEqual([])
+  })
+
+  it('refuse aussi d’effacer un échec en attente pendant une séance', async () => {
+    // « Repartir à zéro » change la cible autant qu'un déplacement de charge.
+    const { store } = await magasinPret()
+    await store.adjustTarget('bench', { fail: 70 })
+    await store.openDraft('C', '2026-09-12')
+
+    await expect(store.adjustTarget('bench', { fail: null })).rejects.toThrow(/séance est en cours/)
+
+    expect((await store.getTargets()).bench.fail).toBe(70)
+  })
+
+  it('laisse ajuster de nouveau une fois la séance finalisée', async () => {
+    const { store } = await magasinPret()
+    const draft = await store.openDraft('C', '2026-09-12')
+    await store.saveDraft({
+      ...draft,
+      sets: draft.sets.map((set) => ({ ...set, status: 'validated' as const })),
+    })
+    await store.finalizeSeance(draft.id)
+
+    const apres = await store.adjustTarget('squat', { w: 80 })
+    expect(apres.squat.w).toBe(80)
+  })
 })

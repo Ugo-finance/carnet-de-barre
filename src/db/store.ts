@@ -237,12 +237,28 @@ export class DexieStore implements DraftStore {
     return this.database.transaction(
       'rw',
       this.database.targets,
+      // `drafts` est dans la portée pour que le refus soit **atomique** avec la lecture :
+      // un garde d'interface ne suffit pas. L'écran peut lire « pas de brouillon » une
+      // fraction de seconde avant que l'écran de séance n'en ouvre un, et une seconde
+      // fenêtre contourne l'interface entièrement.
+      this.database.drafts,
       // `meta` porte le journal des ajustements. Écrire la cible et sa trace dans
       // deux transactions séparées laisserait exister un état où la cible a bougé
       // sans que rien ne dise pourquoi — exactement la question à laquelle ce
       // journal existe pour répondre.
       this.database.meta,
       async () => {
+        // L'invariant vit ici, au point d'écriture, et pas seulement dans l'écran :
+        // déplacer une cible pendant une séance rendrait le brouillon impossible à
+        // finaliser (`stale-targets`), et aucun écran ne sait rebaser un brouillon.
+        // Ugo devrait abandonner toute sa saisie. Même règle que `importReplace`.
+        if ((await this.database.drafts.count()) > 0) {
+          throw new StoreError(
+            'draft-in-progress',
+            'Une séance est en cours. Termine-la avant d’ajuster une cible.',
+          )
+        }
+
         const row = await this.database.targets.get(TARGETS_KEY)
         if (!row) throw new StoreError('storage-unavailable', 'Cibles introuvables.')
         const { key: _key, ...courant } = row
