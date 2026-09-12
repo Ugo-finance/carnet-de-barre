@@ -117,4 +117,82 @@ describe('useDraftEditor', () => {
 
     await waitFor(() => expect(result.current.saveError?.message).toBe('quota'))
   })
+
+  it('écrit la valeur complète renvoyée par une carte de série', async () => {
+    const saveDraft = vi.fn<(draft: Draft) => Promise<void>>().mockResolvedValue(undefined)
+    const store: DraftPort = {
+      loadDraft: vi.fn().mockResolvedValue(draftFixture()),
+      saveDraft,
+    }
+    const { result } = renderHook(() => useDraftEditor(store))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    act(() =>
+      result.current.updateSet('set-1', {
+        weight: 77.5,
+        reps: 4,
+        rpe: 8,
+        status: 'validated',
+      }),
+    )
+    await act(() => result.current.flush())
+
+    expect(saveDraft).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sets: [expect.objectContaining({ weight: 77.5, reps: 4, rpe: 8, status: 'validated' })],
+      }),
+    )
+  })
+
+  it('recalcule seulement les backoffs encore vierges quand le top set change', async () => {
+    const initial = draftFixture()
+    initial.sets.push(
+      {
+        ...initial.sets[0],
+        id: 'backoff-planned',
+        role: 'backoff',
+        index: 0,
+        weight: 67.5,
+        reps: 5,
+        targetWeight: 67.5,
+        targetReps: 5,
+      },
+      {
+        ...initial.sets[0],
+        id: 'backoff-entered',
+        role: 'backoff',
+        index: 1,
+        status: 'entered',
+        weight: 65,
+        reps: 5,
+        targetWeight: 67.5,
+        targetReps: 5,
+      },
+    )
+    const saveDraft = vi.fn<(draft: Draft) => Promise<void>>().mockResolvedValue(undefined)
+    const store: DraftPort = { loadDraft: vi.fn().mockResolvedValue(initial), saveDraft }
+    const { result } = renderHook(() => useDraftEditor(store))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    act(() =>
+      result.current.updateSet('set-1', {
+        weight: 80,
+        reps: 4,
+        rpe: null,
+        status: 'entered',
+      }),
+    )
+    await act(() => result.current.flush())
+
+    const saved = saveDraft.mock.calls[0][0]
+    expect(saved.sets.find((set) => set.id === 'backoff-planned')).toMatchObject({
+      weight: 72.5,
+      status: 'planned',
+      targetWeight: 67.5,
+    })
+    expect(saved.sets.find((set) => set.id === 'backoff-entered')).toMatchObject({
+      weight: 65,
+      status: 'entered',
+    })
+  })
 })

@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CarnetStore } from '../../db/contracts'
-import type { Draft, SetLog } from '../../domain/types'
+import { findExercise } from '../../domain/program'
+import { backoffWeight } from '../../domain/progression'
+import type { AccessoryLog, Draft, SetLog } from '../../domain/types'
 
 export type DraftPort = Pick<CarnetStore, 'loadDraft' | 'saveDraft'>
 
 type SetPatch = Partial<Pick<SetLog, 'weight' | 'reps' | 'rpe'>>
+type SetValue = Pick<SetLog, 'weight' | 'reps' | 'rpe' | 'status'>
 
 function asError(error: unknown): Error {
   return error instanceof Error ? error : new Error('Échec de sauvegarde du brouillon')
@@ -92,12 +95,58 @@ export function useDraftEditor(store: DraftPort) {
     [commit],
   )
 
+  const updateSet = useCallback(
+    (setId: string, value: SetValue) => {
+      commit((current) => ({
+        ...current,
+        sets: (() => {
+          const changed = current.sets.find((set) => set.id === setId)
+          const exercise = changed ? findExercise(changed.exerciseId) : undefined
+          const nextBackoff =
+            changed?.role === 'top' && exercise?.backoff && changed.weight !== value.weight
+              ? value.weight === null
+                ? null
+                : backoffWeight(value.weight, exercise.backoff)
+              : undefined
+
+          return current.sets.map((set) => {
+            if (set.id === setId) return { ...set, ...value }
+            if (
+              nextBackoff !== undefined &&
+              set.exerciseId === changed?.exerciseId &&
+              set.role === 'backoff' &&
+              set.status === 'planned'
+            ) {
+              return { ...set, weight: nextBackoff }
+            }
+            return set
+          })
+        })(),
+      }))
+    },
+    [commit],
+  )
+
+  const updateAccessory = useCallback(
+    (exerciseId: string, value: Pick<AccessoryLog, 'done' | 'note'>) => {
+      commit((current) => ({
+        ...current,
+        accessories: current.accessories.map((accessory) =>
+          accessory.exerciseId === exerciseId ? { ...accessory, ...value } : accessory,
+        ),
+      }))
+    },
+    [commit],
+  )
+
   return {
     draft,
     loading,
     loadError,
     saveError,
     changeSet,
+    updateSet,
+    updateAccessory,
     validateSet: (setId: string) => setStatus(setId, 'validated'),
     skipSet: (setId: string) => setStatus(setId, 'skipped'),
     editSet: (setId: string) => setStatus(setId, 'entered'),

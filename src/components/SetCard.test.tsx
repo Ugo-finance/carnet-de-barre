@@ -64,4 +64,21 @@ describe('SetCard', () => {
     expect(screen.getByText('Saisie')).toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: 'Poids' })).toBeEnabled()
   })
+
+  it('ne demande que les répétitions pour une série au poids du corps', () => {
+    render(
+      <SetCard
+        label="Série 1"
+        value={{ ...planned, weight: null }}
+        onChange={vi.fn()}
+        onValidate={vi.fn()}
+        onSkip={vi.fn()}
+        showWeight={false}
+        showRpe={false}
+      />,
+    )
+
+    expect(screen.queryByRole('textbox', { name: 'Poids' })).not.toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Répétitions' })).toBeInTheDocument()
+  })
 })
