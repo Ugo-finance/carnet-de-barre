@@ -13,7 +13,14 @@
  * - un import de remplacement est atomique, et refusé tant qu'un brouillon est ouvert.
  */
 
-import type { Draft, ProgressionEvent, Seance, SeanceType, Targets } from '../domain/types.ts'
+import type {
+  Draft,
+  ProgressionEvent,
+  Seance,
+  SeanceType,
+  TargetAdjustment,
+  Targets,
+} from '../domain/types.ts'
 import type { ExportFile } from '../domain/schema.ts'
 
 /** Échec attendu et nommé, par opposition à une exception de stockage. */
@@ -112,11 +119,22 @@ export interface CarnetStore {
   /**
    * Ajuste une cible à la main. Action explicite : le moteur repart de cette valeur.
    * Passer `fail: null` efface un échec en attente.
+   *
+   * **Journalisé** : la cible et sa trace sont écrites dans la même transaction, pour
+   * qu'il n'existe jamais d'état où une cible a bougé sans que rien ne dise pourquoi.
    */
   adjustTarget(
     lift: keyof Omit<Targets, 'updatedAt'>,
     patch: { w?: number; fail?: number | null },
   ): Promise<Targets>
+
+  /**
+   * Le journal des ajustements manuels, du plus ancien au plus récent.
+   *
+   * Répond à « pourquoi cette cible est-elle là ? » des semaines après coup. Local :
+   * il n'entre pas dans le format d'échange, et le moteur ne le lit jamais.
+   */
+  listTargetAdjustments(): Promise<TargetAdjustment[]>
 
   // ---- échange ----
 

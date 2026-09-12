@@ -12,7 +12,17 @@
  * amorçage compris. Si les deux divergent, c'est un défaut, pas une facilité.
  */
 
-import type { Draft, ProgressionEvent, Seance, SeanceType, Targets } from '../domain/types.ts'
+import type {
+  Draft,
+  LiftKey,
+  ProgressionEvent,
+  Seance,
+  SeanceType,
+  TargetAdjustment,
+  Targets,
+} from '../domain/types.ts'
+import { todayInZurich } from '../domain/schedule.ts'
+import { applyTargetPatch, type TargetPatch } from './targets.ts'
 import { StoreError, type FinalizeResult } from './contracts.ts'
 import { loadSeed } from './seed.ts'
 import { buildDraft } from './draft.ts'
@@ -26,6 +36,7 @@ export class MemoryStore implements DraftStore {
   private seeded = false
   /** Journal des événements de progression, par séance. Local, jamais exporté. */
   private readonly events = new Map<string, ProgressionEvent[]>()
+  private readonly adjustments: TargetAdjustment[] = []
 
   /** Amorçage à l'identique de `ensureSeeded` : une seule fois, marqueur compris. */
   async ready(): Promise<void> {
@@ -122,16 +133,25 @@ export class MemoryStore implements DraftStore {
     }
   }
 
-  /**
-   * Ajuste une cible, comme le fera `adjustTarget` en CB-33.
-   * Présent ici pour éprouver la détection de cibles obsolètes.
-   */
-  async adjustTargetForTest(
-    lift: 'squat' | 'bench' | 'deadlift' | 'tractions' | 'benchVol',
-    w: number,
-  ): Promise<void> {
-    const targets = await this.getTargets()
-    this.targets = { ...targets, [lift]: { ...targets[lift], w } }
+  async adjustTarget(lift: LiftKey, patch: TargetPatch): Promise<Targets> {
+    const courant = await this.getTargets()
+    const at = this.today()
+    const targets = applyTargetPatch(courant, lift, patch, at)
+    if (targets !== courant) {
+      this.targets = targets
+      this.adjustments.push({ at, lift, before: courant[lift], after: targets[lift] })
+    }
+    return structuredClone(targets)
+  }
+
+  /** Le journal des ajustements manuels, du plus ancien au plus récent. */
+  async listTargetAdjustments(): Promise<TargetAdjustment[]> {
+    return structuredClone(this.adjustments)
+  }
+
+  /** Surchargeable dans les tests, pour dater l'ajustement de façon déterministe. */
+  protected today(): string {
+    return todayInZurich()
   }
 
   /** Efface l'historique sans réarmer l'amorçage, comme `clearHistory`. */

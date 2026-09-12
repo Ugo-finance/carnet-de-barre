@@ -13,13 +13,22 @@
  * supplémentaire n'a donc été nécessaire.
  */
 
-import type { Draft, Seance, Targets } from '../domain/types.ts'
-import type { ProgressionEvent, SeanceType } from '../domain/types.ts'
+import type {
+  Draft,
+  LiftKey,
+  ProgressionEvent,
+  Seance,
+  SeanceType,
+  TargetAdjustment,
+  Targets,
+} from '../domain/types.ts'
 import type { CarnetStore, FinalizeResult } from './contracts.ts'
 import { StoreError } from './contracts.ts'
 import { TARGETS_KEY, type CarnetDatabase, db as defaultDb, ensureSeeded } from './database.ts'
 import { buildDraft } from './draft.ts'
 import { applyProgression, draftToSeance, targetsDiverged } from './derive.ts'
+import { applyTargetPatch, type TargetPatch } from './targets.ts'
+import { todayInZurich } from '../domain/schedule.ts'
 
 /**
  * Clé du journal des événements de progression d'une séance.
@@ -28,6 +37,15 @@ import { applyProgression, draftToSeance, targetsDiverged } from './derive.ts'
  * pas à faire évoluer le format d'échange pour un besoin purement d'affichage.
  */
 const eventsKey = (seanceId: string): string => `events:${seanceId}`
+
+/**
+ * Clé du journal des ajustements manuels de cibles (UGO-172).
+ *
+ * Une seule entrée `meta` porte toute la liste : un ajustement manuel est rare, et
+ * les relire tous d'un coup est précisément l'usage qu'on en fera — comprendre après
+ * coup pourquoi une cible est là où elle est.
+ */
+const ADJUSTMENTS_KEY = 'target-adjustments'
 
 /**
  * La part du contrat implémentée à ce stade : lecture de l'historique et cycle de vie
@@ -44,6 +62,7 @@ export type DraftStore = Pick<
   | 'saveDraft'
   | 'clearDraft'
   | 'finalizeSeance'
+  | 'adjustTarget'
 >
 
 export class DexieStore implements DraftStore {
@@ -195,6 +214,47 @@ export class DexieStore implements DraftStore {
         return { seance, targets, events, applied: true }
       },
     )
+  }
+
+  /**
+   * Ajuste une cible à la main. Le moteur repart de la valeur posée.
+   *
+   * Une seule transaction : la lecture et l'écriture ne peuvent pas être séparées par
+   * une finalisation de séance qui écrirait entre les deux.
+   */
+  async adjustTarget(lift: LiftKey, patch: TargetPatch): Promise<Targets> {
+    return this.database.transaction(
+      'rw',
+      this.database.targets,
+      // `meta` porte le journal des ajustements. Écrire la cible et sa trace dans
+      // deux transactions séparées laisserait exister un état où la cible a bougé
+      // sans que rien ne dise pourquoi — exactement la question à laquelle ce
+      // journal existe pour répondre.
+      this.database.meta,
+      async () => {
+        const row = await this.database.targets.get(TARGETS_KEY)
+        if (!row) throw new StoreError('storage-unavailable', 'Cibles introuvables.')
+        const { key: _key, ...courant } = row
+        const at = todayInZurich()
+        const targets = applyTargetPatch(courant, lift, patch, at)
+        // Un patch vide rend l'objet inchangé : ne rien journaliser plutôt que
+        // d'inscrire un ajustement qui n'a rien ajusté.
+        if (targets === courant) return targets
+
+        await this.database.targets.put({ key: TARGETS_KEY, ...targets })
+        const journal = await this.database.meta.get(ADJUSTMENTS_KEY)
+        const precedents = (journal?.value ?? []) as TargetAdjustment[]
+        const trace: TargetAdjustment = { at, lift, before: courant[lift], after: targets[lift] }
+        await this.database.meta.put({ key: ADJUSTMENTS_KEY, value: [...precedents, trace] })
+        return targets
+      },
+    )
+  }
+
+  /** Le journal des ajustements manuels, du plus ancien au plus récent. */
+  async listTargetAdjustments(): Promise<TargetAdjustment[]> {
+    const journal = await this.database.meta.get(ADJUSTMENTS_KEY)
+    return (journal?.value ?? []) as TargetAdjustment[]
   }
 }
 

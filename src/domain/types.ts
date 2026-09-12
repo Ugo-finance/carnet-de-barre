@@ -198,3 +198,20 @@ export interface ProgressionEvent {
   /** Phrase prête à afficher, en français. */
   message: string
 }
+
+/**
+ * Trace durable d'un ajustement manuel d'une cible (UGO-172).
+ *
+ * Sert à répondre, des semaines plus tard, à « pourquoi cette cible est-elle là ? ».
+ * Le moteur ne la lit jamais : c'est une mémoire, pas une entrée de calcul. Elle vit
+ * en local, hors du format d'échange, comme le journal de progression.
+ */
+export interface TargetAdjustment {
+  /** Date civile de Zurich, au format AAAA-MM-JJ. */
+  at: string
+  lift: LiftKey
+  /** La cible telle qu'elle était avant l'ajustement. */
+  before: Target
+  /** La cible telle qu'elle est après. */
+  after: Target
+}

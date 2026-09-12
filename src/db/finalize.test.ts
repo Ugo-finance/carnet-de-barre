@@ -311,7 +311,7 @@ describe('finalisation', () => {
     draft = validate(draft, setId('a-squat', 'top', 0), { weight: 75, reps: 4, rpe: 8 })
     await store.saveDraft(draft)
 
-    await store.adjustTargetForTest('squat', 80)
+    await store.adjustTarget('squat', { w: 80 })
 
     await expect(store.finalizeSeance(draft.id)).rejects.toThrow(/ajustées/)
     // Et surtout : le brouillon est intact, la saisie n'est pas perdue.
