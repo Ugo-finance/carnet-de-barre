@@ -86,7 +86,12 @@ describe('ce que propose l’écran d’accueil', () => {
   it('propose la séance du jour quand c’en est un', () => {
     // Dimanche 20.09.2026, la séance visée pour la première utilisation réelle.
     const session = currentSession(instant('2026-09-20T14:00:00Z'), false)
-    expect(session).toMatchObject({ type: 'C', date: '2026-09-20', inDays: 0, isToday: true })
+    expect(session).toMatchObject({
+      type: 'C',
+      scheduledDate: '2026-09-20',
+      inDays: 0,
+      isToday: true,
+    })
   })
 
   it('garde la séance du jour tant qu’elle n’est pas terminée, même tard', () => {
@@ -97,19 +102,24 @@ describe('ce que propose l’écran d’accueil', () => {
   it('passe à la suivante une fois la séance du jour enregistrée', () => {
     // Dimanche terminé → mardi, séance A, dans deux jours.
     const session = currentSession(instant('2026-09-20T18:00:00Z'), true)
-    expect(session).toMatchObject({ type: 'A', date: '2026-09-22', inDays: 2, isToday: false })
+    expect(session).toMatchObject({
+      type: 'A',
+      scheduledDate: '2026-09-22',
+      inDays: 2,
+      isToday: false,
+    })
   })
 
   it('propose la prochaine séance un jour creux', () => {
     // Lundi 21.09 → mardi 22.09, séance A.
     const session = currentSession(instant('2026-09-21T10:00:00Z'), false)
-    expect(session).toMatchObject({ type: 'A', date: '2026-09-22', inDays: 1 })
+    expect(session).toMatchObject({ type: 'A', scheduledDate: '2026-09-22', inDays: 1 })
   })
 
   it('enjambe le week-end depuis un vendredi', () => {
     // Vendredi 18.09 → dimanche 20.09, séance C.
     const session = currentSession(instant('2026-09-18T10:00:00Z'), false)
-    expect(session).toMatchObject({ type: 'C', date: '2026-09-20', inDays: 2 })
+    expect(session).toMatchObject({ type: 'C', scheduledDate: '2026-09-20', inDays: 2 })
   })
 
   it('ne saute pas la séance prévue après une séance hors rotation', () => {
@@ -126,7 +136,7 @@ describe('ce que propose l’écran d’accueil', () => {
     expect(isScheduledSessionDone(dimanche, ['C'])).toBe(true)
     expect(isScheduledSessionDone(dimanche, ['A', 'C'])).toBe(true)
     const session = currentSession(instant(`${dimanche}T18:00:00Z`), true)
-    expect(session).toMatchObject({ type: 'A', date: '2026-09-22' })
+    expect(session).toMatchObject({ type: 'A', scheduledDate: '2026-09-22' })
   })
 
   it('ne considère aucune séance comme prévue un jour creux', () => {
@@ -145,18 +155,20 @@ describe('ce que propose l’écran d’accueil', () => {
   it('utilise la date de Zurich, pas celle d’UTC, juste après minuit', () => {
     // 22 h 30 UTC samedi 19.09 = 00 h 30 dimanche 20.09 à Zurich : c'est jour de séance C.
     const session = currentSession(instant('2026-09-19T22:30:00Z'), false)
-    expect(session).toMatchObject({ type: 'C', date: '2026-09-20', isToday: true })
+    expect(session).toMatchObject({ type: 'C', scheduledDate: '2026-09-20', isToday: true })
   })
 })
 
 describe('libellé de l’échéance', () => {
   it('dit aujourd’hui, demain, puis nomme le jour', () => {
-    expect(describeWhen({ type: 'C', date: '2026-09-20', inDays: 0, isToday: true })).toBe(
+    expect(describeWhen({ type: 'C', scheduledDate: '2026-09-20', inDays: 0, isToday: true })).toBe(
       "Aujourd'hui",
     )
-    expect(describeWhen({ type: 'A', date: '2026-09-22', inDays: 1, isToday: false })).toBe(
-      'Demain',
-    )
-    expect(describeWhen({ type: 'B', date: '2026-09-17', inDays: 3, isToday: false })).toBe('Jeudi')
+    expect(
+      describeWhen({ type: 'A', scheduledDate: '2026-09-22', inDays: 1, isToday: false }),
+    ).toBe('Demain')
+    expect(
+      describeWhen({ type: 'B', scheduledDate: '2026-09-17', inDays: 3, isToday: false }),
+    ).toBe('Jeudi')
   })
 })
