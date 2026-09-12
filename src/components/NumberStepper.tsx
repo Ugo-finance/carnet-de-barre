@@ -1,4 +1,5 @@
 import { useId, useState } from 'react'
+import { formatNumber as formatDomainNumber } from '../domain/format'
 
 type NumberStepperProps = {
   label: string
@@ -12,7 +13,7 @@ type NumberStepperProps = {
 }
 
 function formatNumber(value: number | null): string {
-  return value === null ? '' : String(value).replace('.', ',')
+  return value === null ? '' : formatDomainNumber(value)
 }
 
 function parseNumber(value: string): number | null | undefined {
