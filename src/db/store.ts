@@ -144,6 +144,9 @@ export class DexieStore implements DraftStore {
       this.database.seances,
       this.database.targets,
       this.database.drafts,
+      // `meta` porte le journal des événements : l'oublier ici ferait lever Dexie
+      // au premier enregistrement réel, une table hors portée étant interdite.
+      this.database.meta,
       async () => {
         const existing = await this.database.seances.get(draftId)
         if (existing) {
