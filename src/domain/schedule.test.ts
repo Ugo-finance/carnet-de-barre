@@ -3,6 +3,7 @@ import {
   addDays,
   currentSession,
   describeWhen,
+  isScheduledSessionDone,
   sessionTypeFor,
   todayInZurich,
   weekdayOf,
@@ -109,6 +110,27 @@ describe('ce que propose l’écran d’accueil', () => {
     // Vendredi 18.09 → dimanche 20.09, séance C.
     const session = currentSession(instant('2026-09-18T10:00:00Z'), false)
     expect(session).toMatchObject({ type: 'C', date: '2026-09-20', inDays: 2 })
+  })
+
+  it('ne saute pas la séance prévue après une séance hors rotation', () => {
+    // Dimanche : la rotation prévoit C. Un A lancé à la main ne doit pas faire
+    // disparaître le C du jour, sinon le programme perd une séance.
+    const dimanche = '2026-09-20'
+    expect(isScheduledSessionDone(dimanche, ['A'])).toBe(false)
+    const session = currentSession(instant(`${dimanche}T14:00:00Z`), false)
+    expect(session).toMatchObject({ type: 'C', isToday: true })
+  })
+
+  it('passe à la suivante quand c’est bien la séance prévue qui est faite', () => {
+    const dimanche = '2026-09-20'
+    expect(isScheduledSessionDone(dimanche, ['C'])).toBe(true)
+    expect(isScheduledSessionDone(dimanche, ['A', 'C'])).toBe(true)
+    const session = currentSession(instant(`${dimanche}T18:00:00Z`), true)
+    expect(session).toMatchObject({ type: 'A', date: '2026-09-22' })
+  })
+
+  it('ne considère aucune séance comme prévue un jour creux', () => {
+    expect(isScheduledSessionDone('2026-09-21', ['A', 'B', 'C'])).toBe(false)
   })
 
   it('trouve toujours une séance dans les sept jours', () => {

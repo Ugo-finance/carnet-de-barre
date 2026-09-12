@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { describePlates, platesPerSide } from './plates.ts'
+import { MAX_TOTAL, describePlates, platesPerSide } from './plates.ts'
 import { BAR_WEIGHT, PLATES } from './program.ts'
 
 /** Recompose le total depuis une décomposition, pour vérifier qu'elle est exacte. */
@@ -51,10 +51,44 @@ describe('cas où il n’y a pas de décomposition', () => {
     expect(describePlates(platesPerSide(20))).toBe('Barre seule')
   })
 
-  it('ne prétend rien sous le poids de la barre', () => {
+  it('dit explicitement que la barre pèse déjà plus que la charge demandée', () => {
     expect(platesPerSide(17.5)).toEqual({ kind: 'below-bar', bar: 20 })
     expect(platesPerSide(0)).toEqual({ kind: 'below-bar', bar: 20 })
-    expect(describePlates(platesPerSide(17.5))).toBeNull()
+    // Le silence laisserait croire que l'app n'a pas compris la question.
+    expect(describePlates(platesPerSide(17.5))).toContain('La barre pèse déjà 20 kg')
+  })
+
+  it('refuse une charge qui ne tombe pas sur un quart de kilo', () => {
+    // 22,4 n'existe pas en salle. Arrondir à 22,5 et en montrer la décomposition
+    // répondrait à une autre question que celle posée.
+    const load = platesPerSide(22.4)
+    expect(load.kind).toBe('not-loadable')
+    if (load.kind !== 'not-loadable') return
+    expect(load.closest).toBe(22.5)
+  })
+
+  it('ne répond pas « barre seule » pour 20,1 kg', () => {
+    const load = platesPerSide(20.1)
+    expect(load.kind).toBe('not-loadable')
+    if (load.kind !== 'not-loadable') return
+    expect(load.closest).toBe(20)
+  })
+
+  it('accepte les charges légitimes malgré le bruit des flottants', () => {
+    expect(platesPerSide(0.1 + 0.2 + 62.2).kind).toBe('plates')
+    expect(platesPerSide(62.5).kind).toBe('plates')
+  })
+
+  it('refuse une valeur hors limites au lieu de boucler', () => {
+    const debut = Date.now()
+    expect(platesPerSide(Number.MAX_VALUE)).toEqual({ kind: 'out-of-range', max: MAX_TOTAL })
+    expect(platesPerSide(MAX_TOTAL + 1).kind).toBe('out-of-range')
+    // Une valeur corrompue venue d'un import ne doit pas figer l'écran en pleine séance.
+    expect(Date.now() - debut).toBeLessThan(200)
+  })
+
+  it('traite encore la charge maximale acceptée', () => {
+    expect(platesPerSide(MAX_TOTAL).kind).not.toBe('out-of-range')
   })
 
   it('refuse une charge non réalisable plutôt que d’en décomposer une partie', () => {
@@ -78,8 +112,9 @@ describe('cas où il n’y a pas de décomposition', () => {
   })
 
   it('ne casse pas sur une valeur absurde', () => {
-    expect(platesPerSide(Number.NaN).kind).toBe('below-bar')
-    expect(platesPerSide(Number.POSITIVE_INFINITY).kind).toBe('below-bar')
+    expect(platesPerSide(Number.NaN).kind).toBe('out-of-range')
+    expect(platesPerSide(Number.POSITIVE_INFINITY).kind).toBe('out-of-range')
+    expect(platesPerSide(-10).kind).toBe('below-bar')
   })
 })
 

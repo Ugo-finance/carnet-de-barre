@@ -63,6 +63,19 @@ export function sessionTypeFor(isoDate: string): SeanceType | null {
   return WEEKDAY_TO_TYPE[weekdayOf(isoDate)] ?? null
 }
 
+/**
+ * `true` si la séance prévue par la rotation ce jour-là figure parmi les types déjà
+ * enregistrés aujourd'hui. C'est ce que `currentSession` attend, et rien d'autre :
+ * une séance hors rotation ne compte pas.
+ */
+export function isScheduledSessionDone(
+  isoDate: string,
+  typesLoggedToday: readonly SeanceType[],
+): boolean {
+  const prevu = sessionTypeFor(isoDate)
+  return prevu != null && typesLoggedToday.includes(prevu)
+}
+
 export interface UpcomingSession {
   type: SeanceType
   /** Date civile de cette séance, `AAAA-MM-JJ`. */
@@ -75,18 +88,25 @@ export interface UpcomingSession {
 /**
  * Ce que l'écran d'accueil doit proposer.
  *
- * Règle D7 : la séance du jour reste proposée tant qu'elle n'est pas terminée ; une
- * fois terminée, on montre la suivante. Passer `doneToday: true` quand une séance a
- * déjà été enregistrée aujourd'hui.
+ * Règle D7 : la séance **prévue ce jour-là** reste proposée tant qu'elle n'est pas
+ * terminée ; une fois terminée, on montre la suivante.
+ *
+ * `scheduledSessionDone` ne vaut `true` que si c'est bien la séance **de la rotation**
+ * qui a été enregistrée aujourd'hui. Une séance hors rotation — un A lancé à la main
+ * un dimanche — ne doit pas faire disparaître le C prévu ce dimanche : ce sont deux
+ * choses différentes, et confondre les deux ferait sauter une séance du programme.
  *
  * Le sélecteur A/B/C reste disponible en permanence : ceci est une proposition, pas
  * une contrainte.
  */
-export function currentSession(now: Date = new Date(), doneToday = false): UpcomingSession {
+export function currentSession(
+  now: Date = new Date(),
+  scheduledSessionDone = false,
+): UpcomingSession {
   const today = todayInZurich(now)
   const todayType = sessionTypeFor(today)
 
-  if (todayType && !doneToday) {
+  if (todayType && !scheduledSessionDone) {
     return { type: todayType, date: today, inDays: 0, isToday: true }
   }
 
