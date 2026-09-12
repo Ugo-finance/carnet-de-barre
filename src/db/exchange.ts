@@ -24,6 +24,7 @@ import { SCHEMA_VERSION, parseImport, type ExportFile } from '../domain/schema.t
 import type { Seance, Targets } from '../domain/types.ts'
 import { StoreError, type ImportPreview } from './contracts.ts'
 import { legacySeanceId } from './seed.ts'
+import { todayInZurich } from '../domain/schedule.ts'
 
 export interface ExchangeSource {
   getTargets(): Promise<Targets>
@@ -52,8 +53,10 @@ export async function buildExport(source: ExchangeSource, now = new Date()): Pro
 
 /** Nom de fichier proposé au téléchargement : daté, donc triable et non écrasable. */
 export function exportFilename(now = new Date()): string {
-  const iso = now.toISOString().slice(0, 10)
-  return `carnet-de-barre-${iso}.json`
+  // Date civile de Zurich, pas UTC. Entre minuit et 2 h du matin l'été, `toISOString()`
+  // rend encore la veille : le fichier d'une séance du samedi soir tard porterait la
+  // date du vendredi, et Ugo classerait ses exports de travers sans jamais le voir.
+  return `carnet-de-barre-${todayInZurich(now)}.json`
 }
 
 /** JSON indenté : il finit souvent collé dans une conversation, autant qu'il soit lisible. */

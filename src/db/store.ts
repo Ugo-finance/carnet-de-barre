@@ -22,12 +22,20 @@ import type {
   TargetAdjustment,
   Targets,
 } from '../domain/types.ts'
-import type { CarnetStore, FinalizeResult } from './contracts.ts'
+import type { ExportFile } from '../domain/schema.ts'
+import type { CarnetStore, FinalizeResult, ImportPreview } from './contracts.ts'
 import { StoreError } from './contracts.ts'
-import { TARGETS_KEY, type CarnetDatabase, db as defaultDb, ensureSeeded } from './database.ts'
+import {
+  SEEDED_KEY,
+  TARGETS_KEY,
+  type CarnetDatabase,
+  db as defaultDb,
+  ensureSeeded,
+} from './database.ts'
 import { buildDraft } from './draft.ts'
 import { applyProgression, draftToSeance, targetsDiverged } from './derive.ts'
 import { applyTargetPatch, type TargetPatch } from './targets.ts'
+import { buildExport, describeImport, validateImport } from './exchange.ts'
 import { todayInZurich } from '../domain/schedule.ts'
 
 /**
@@ -63,6 +71,9 @@ export type DraftStore = Pick<
   | 'clearDraft'
   | 'finalizeSeance'
   | 'adjustTarget'
+  | 'exportAll'
+  | 'previewImport'
+  | 'importReplace'
 >
 
 export class DexieStore implements DraftStore {
@@ -255,6 +266,68 @@ export class DexieStore implements DraftStore {
   async listTargetAdjustments(): Promise<TargetAdjustment[]> {
     const journal = await this.database.meta.get(ADJUSTMENTS_KEY)
     return (journal?.value ?? []) as TargetAdjustment[]
+  }
+
+  // ---- échange ----
+
+  async exportAll(): Promise<ExportFile> {
+    return buildExport(this)
+  }
+
+  async previewImport(input: unknown): Promise<ImportPreview> {
+    const candidate = validateImport(input)
+    const [seanceCount, targets] = await Promise.all([
+      this.database.seances.count(),
+      this.getTargets(),
+    ])
+    return describeImport(candidate, { seanceCount, targetsUpdatedAt: targets.updatedAt })
+  }
+
+  /**
+   * Remplace intégralement l'historique et les cibles.
+   *
+   * Refusé tant qu'une séance est en cours : écraser l'historique sous les pieds d'une
+   * saisie laisserait un brouillon dont les cibles de référence ne correspondraient
+   * plus à rien.
+   *
+   * La validation du fichier a lieu **avant** la transaction — elle ne lit pas la base,
+   * et un fichier invalide n'a donc aucune raison d'ouvrir quoi que ce soit. Le contrôle
+   * du brouillon, lui, est **dans** la transaction et avant la première écriture
+   * destructive : le vérifier dehors laisserait une fenêtre pendant laquelle une autre
+   * fenêtre du navigateur, ou l'app installée qui partage la même base, peut ouvrir un
+   * brouillon. L'import passerait le contrôle puis effacerait une séance qu'Ugo est en
+   * train de saisir — précisément ce que ce refus existe pour empêcher.
+   */
+  async importReplace(input: unknown): Promise<{ seanceCount: number; targets: Targets }> {
+    const candidate = validateImport(input)
+
+    return this.database.transaction(
+      'rw',
+      this.database.seances,
+      this.database.targets,
+      this.database.drafts,
+      this.database.meta,
+      async () => {
+        if ((await this.database.drafts.count()) > 0) {
+          throw new StoreError(
+            'draft-in-progress',
+            'Une séance est en cours. Termine-la ou abandonne-la avant de remplacer tes données.',
+          )
+        }
+
+        await this.database.seances.clear()
+        await this.database.drafts.clear()
+        await this.database.seances.bulkPut(candidate.seances)
+        await this.database.targets.put({ key: TARGETS_KEY, ...candidate.targets })
+        // Le marqueur d'amorçage reste posé : après un import, on ne veut surtout pas
+        // que le seed d'origine revienne se superposer au prochain lancement.
+        await this.database.meta.put({
+          key: SEEDED_KEY,
+          value: { at: new Date().toISOString(), seanceCount: candidate.seances.length },
+        })
+        return { seanceCount: candidate.seances.length, targets: candidate.targets }
+      },
+    )
   }
 }
 

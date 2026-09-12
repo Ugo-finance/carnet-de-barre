@@ -176,3 +176,13 @@ describe('aperçu avant remplacement', () => {
     expect(preview.firstDate).toBeNull()
   })
 })
+
+describe('nom de fichier', () => {
+  it('porte la date civile de Zurich, pas celle d’UTC', () => {
+    // 00 h 30 à Zurich en été, c'est encore 22 h 30 la veille en UTC. `toISOString()`
+    // datait donc le fichier de la veille : un export fait juste après une séance
+    // tardive se serait classé au mauvais jour, sans que rien ne le signale.
+    expect(exportFilename(new Date('2026-09-19T22:30:00Z'))).toBe('carnet-de-barre-2026-09-20.json')
+    expect(exportFilename(new Date('2026-09-20T14:00:00Z'))).toBe('carnet-de-barre-2026-09-20.json')
+  })
+})

@@ -21,12 +21,14 @@ import type {
   TargetAdjustment,
   Targets,
 } from '../domain/types.ts'
+import type { ExportFile } from '../domain/schema.ts'
 import { todayInZurich } from '../domain/schedule.ts'
 import { applyTargetPatch, type TargetPatch } from './targets.ts'
-import { StoreError, type FinalizeResult } from './contracts.ts'
+import { StoreError, type FinalizeResult, type ImportPreview } from './contracts.ts'
 import { loadSeed } from './seed.ts'
 import { buildDraft } from './draft.ts'
 import { applyProgression, draftToSeance, targetsDiverged } from './derive.ts'
+import { buildExport, describeImport, validateImport } from './exchange.ts'
 import type { DraftStore } from './store.ts'
 
 export class MemoryStore implements DraftStore {
@@ -152,6 +154,53 @@ export class MemoryStore implements DraftStore {
   /** Surchargeable dans les tests, pour dater l'ajustement de façon déterministe. */
   protected today(): string {
     return todayInZurich()
+  }
+
+  // ---- échange ----
+
+  async exportAll(): Promise<ExportFile> {
+    return buildExport(this)
+  }
+
+  async previewImport(input: unknown): Promise<ImportPreview> {
+    const candidate = validateImport(input)
+    const targets = await this.getTargets()
+    return describeImport(candidate, {
+      seanceCount: this.seances.length,
+      targetsUpdatedAt: targets.updatedAt,
+    })
+  }
+
+  async importReplace(input: unknown): Promise<{ seanceCount: number; targets: Targets }> {
+    // Même ordre que l'adaptateur Dexie : le fichier est validé d'abord (c'est pur et
+    // ça ne lit pas la base), le brouillon ensuite. Inverser ici ferait qu'un même
+    // import rendrait deux erreurs différentes selon l'implémentation.
+    const candidate = validateImport(input)
+
+    if (this.draft) {
+      throw new StoreError(
+        'draft-in-progress',
+        'Une séance est en cours. Termine-la ou abandonne-la avant de remplacer tes données.',
+      )
+    }
+    this.seances = structuredClone(candidate.seances)
+    this.targets = structuredClone(candidate.targets)
+    this.events.clear()
+    this.seeded = true
+
+    return { seanceCount: candidate.seances.length, targets: structuredClone(candidate.targets) }
+  }
+
+  /**
+   * Ajuste une cible, comme le fera `adjustTarget` en CB-33.
+   * Présent ici pour éprouver la détection de cibles obsolètes.
+   */
+  async adjustTargetForTest(
+    lift: 'squat' | 'bench' | 'deadlift' | 'tractions' | 'benchVol',
+    w: number,
+  ): Promise<void> {
+    const targets = await this.getTargets()
+    this.targets = { ...targets, [lift]: { ...targets[lift], w } }
   }
 
   /** Efface l'historique sans réarmer l'amorçage, comme `clearHistory`. */
