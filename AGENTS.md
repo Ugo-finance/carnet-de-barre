@@ -5,9 +5,12 @@ PWA mobile de carnet de musculation pour un seul utilisateur (Ugo), offline-firs
 ## Sources de vérité, dans cet ordre
 
 1. `handoff/carnet-de-barre-handoff/SPEC.md` — produit.
-2. `PLAN.md` § 2 et § 7 — décisions D1–D10 et arbitrages. Elles ne se rouvrent pas dans une PR : ticket « Décision requise » et attente d'Ugo.
-3. `REVUE-CODEX.md` — motifs des arbitrages.
-4. Le prototype `handoff/.../prototype/carnet-de-barre.html` est une **référence fonctionnelle, pas un oracle** : son moteur diffère de la spec et n'est pas porté à l'identique.
+2. `PLAN.md` § 2, § 7 et § 8 — décisions D1–D10 et arbitrages. Elles ne se rouvrent pas dans une PR : ticket « Décision requise » et attente d'Ugo.
+3. `docs/refonte/` — refonte UX et échauffement, dossier validé par Ugo le 13.09.2026.
+   `docs/refonte/00-contrat.md` fige les paliers et les arbitrages ; il prime sur les autres
+   pièces du dossier, et la maquette n'est qu'une référence de rendu.
+4. `REVUE-CODEX.md` — motifs des arbitrages.
+5. Le prototype `handoff/.../prototype/carnet-de-barre.html` est une **référence fonctionnelle, pas un oracle** : son moteur diffère de la spec et n'est pas porté à l'identique.
 
 ## Règles dures
 

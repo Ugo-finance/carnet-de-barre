@@ -1,0 +1,823 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+<title>Carnet de barre 2.0</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;600;700&family=IBM+Plex+Mono:wght@500;600;700&display=swap">
+<style>
+  /* ── Palette : plaques calibrées sur graphite chaud — thème unique (séances le soir) ── */
+  :root{
+    --bg:#141210; --surface:#1d1a17; --surface-2:#262119; --line:#332e27;
+    --text:#f2efe8; --muted:#9a9388; --faint:#6b655b;
+    --accent:#e23b30;
+    --p25:#d93a31; --p20:#2f63da; --p15:#e9b62d; --p10:#3fa65b; --p5:#edeae3; --p25s:#c64434; --p125:#b9bdc4;
+    --ok:#3fa65b; --warn:#e9b62d;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--bg); color:var(--text); font-family:Archivo,system-ui,sans-serif; font-size:15px; line-height:1.55; padding-block:0 64px; padding-inline:20px}
+  .knurl{background-image:repeating-linear-gradient(45deg,rgba(242,239,232,.028) 0 1px,transparent 1px 7px),repeating-linear-gradient(-45deg,rgba(242,239,232,.028) 0 1px,transparent 1px 7px)}
+  h1,h2,h3{margin:0; text-wrap:balance}
+  .display{font-family:Anton,Archivo,sans-serif; font-weight:400; letter-spacing:.01em; text-transform:uppercase}
+  .num{font-family:var(--mono); font-variant-numeric:tabular-nums}
+  .eyebrow{font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); font-weight:600}
+  button{font-family:Archivo,system-ui,sans-serif}
+  button:focus-visible{outline:2px solid var(--p20); outline-offset:2px}
+
+  header.page{max-width:1180px; margin:0 auto; padding:46px 24px 26px; border:1px solid var(--line); border-top:0; border-radius:0 0 22px 22px}
+  header.page h1{font-size:clamp(34px,6vw,58px); line-height:1.02}
+  header.page h1 em{font-style:normal; color:var(--accent)}
+  header.page p{max-width:62ch; color:var(--muted); margin:14px 0 0}
+  .barline{height:6px; max-width:1180px; margin:26px auto 0; border-radius:3px;
+    background:linear-gradient(90deg,var(--p25) 0 22%,var(--p20) 22% 42%,var(--p15) 42% 58%,var(--p10) 58% 72%,var(--p5) 72% 84%,var(--p125) 84% 100%)}
+
+  .group-title{max-width:1180px; margin:52px auto 0; display:flex; align-items:baseline; gap:14px}
+  .group-title h2{font-size:clamp(20px,2.6vw,26px)}
+  .group-title .eyebrow{color:var(--faint)}
+  .phones{max-width:1180px; margin:24px auto 0; display:flex; flex-wrap:wrap; gap:30px; justify-content:center; align-items:flex-start}
+  .slot{width:356px; max-width:100%; display:flex; flex-direction:column; gap:14px}
+  .phone{background:linear-gradient(160deg,#12100e,#0b0a09); border:1px solid #3a352d; border-radius:36px; padding:10px; box-shadow:0 30px 70px -32px rgba(0,0,0,.85), inset 0 1px 0 rgba(242,239,232,.06)}
+  .screen{background:var(--bg); border-radius:27px; overflow:hidden; border:1px solid #262219; display:flex; flex-direction:column; min-height:660px}
+  .statusbar{display:flex; justify-content:space-between; padding:10px 18px 0; font:500 11px var(--mono); color:var(--faint)}
+  .screen-body{padding:14px 16px 16px; display:flex; flex-direction:column; gap:12px; flex:1}
+  .caption{color:var(--muted); font-size:13.5px}
+  .caption b{color:var(--text); font-weight:700}
+  .slot > .eyebrow{padding-left:6px}
+  .card{background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:14px}
+  .chip{display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); border-radius:999px; padding:3px 10px; font-size:12px; color:var(--muted)}
+  .screen-title{font-size:26px}
+
+  /* barre d'onglets des écrans de consultation */
+  .tabbar{display:grid; grid-template-columns:repeat(4,1fr); border-top:1px solid var(--line); background:var(--surface); padding:9px 6px 12px; margin-top:auto}
+  .tab{text-align:center; font:600 10.5px Archivo; letter-spacing:.06em; color:var(--faint)}
+  .tab i{display:block; font-style:normal; font-size:16px; margin-bottom:2px}
+  .tab.on{color:var(--accent)}
+
+  /* ── Écran 1 : accueil ── */
+  .today-eyebrow{display:flex; justify-content:space-between; align-items:center}
+  .h-seance{font-size:52px; line-height:.98; margin-top:6px; white-space:nowrap}
+  .h-seance small{display:block; font-family:Archivo; font-size:13px; font-weight:600; letter-spacing:.14em; color:var(--muted); margin-top:8px; white-space:normal}
+  .streak{display:flex; gap:5px; align-items:center}
+  .dot{width:9px; height:9px; border-radius:2px; background:var(--surface-2); border:1px solid var(--line)}
+  .dot.now{background:none; border-color:var(--accent); animation:dotblink 1.4s ease-in-out infinite}
+  @keyframes dotblink{50%{background:var(--accent)}}
+  .target-row{display:grid; grid-template-columns:1fr auto; column-gap:12px; padding:8px 2px; border-bottom:1px solid var(--line)}
+  .target-row:last-child{border-bottom:0}
+  .target-row .lift{grid-area:1/1; font-weight:600; font-size:13.5px; white-space:nowrap}
+  .target-row .trend{grid-area:2/1; font:600 10.5px var(--mono); color:var(--ok)}
+  .target-row .trend.flat{color:var(--faint)}
+  .target-row .val{grid-area:1/2/3/3; align-self:center; font-family:var(--mono); font-size:15px; font-weight:600; text-align:right}
+  .target-row .val span{color:var(--faint); font-size:12px; font-weight:500}
+  .go{position:relative; overflow:hidden; margin-top:auto; border:0; border-radius:16px; padding:16px; width:100%; background:var(--accent); color:#fff; font:700 17px Archivo; letter-spacing:.06em; text-transform:uppercase; cursor:pointer}
+  .go::after{content:""; position:absolute; inset:0; background:linear-gradient(115deg,transparent 35%,rgba(255,255,255,.28) 50%,transparent 65%); transform:translateX(-130%); animation:sheen 3.4s ease-in-out infinite}
+  @keyframes sheen{0%,60%{transform:translateX(-130%)}85%,100%{transform:translateX(130%)}}
+  .go small{display:block; font:500 11px var(--mono); letter-spacing:.05em; opacity:.85; margin-top:3px; text-transform:none}
+
+  /* ── Écran 2 : mode focus ── */
+  .sess-progress{display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:center; font:600 11.5px var(--mono); color:var(--muted)}
+  .sess-progress .track{height:4px; border-radius:2px; background:var(--surface-2); overflow:hidden}
+  .sess-progress .fill{width:7%; height:100%; border-radius:2px; background:linear-gradient(90deg,var(--p10),var(--accent)); transition:width .45s ease}
+  .exo-eyebrow{display:flex; justify-content:space-between; align-items:baseline}
+  .seance-sel{display:flex; gap:6px}
+  .sel{flex:1; border:1px solid var(--line); background:none; color:var(--muted); border-radius:10px; padding:7px 0; font:700 12px Archivo; letter-spacing:.08em; cursor:pointer}
+  .sel.on{border-color:var(--accent); color:var(--accent); background:rgba(226,59,48,.08)}
+  .skipbtn{margin-top:8px; width:100%; background:none; border:1px dashed var(--line); color:var(--faint); border-radius:12px; padding:10px; font:600 13px Archivo; cursor:pointer}
+  .focus .tag2{display:inline-block; font:600 10px var(--mono); color:var(--p20); border:1px solid rgba(47,99,218,.45); border-radius:6px; padding:3px 8px; margin-left:6px; letter-spacing:.08em}
+  .focus{border-color:#4a4131; display:flex; flex-direction:column; animation:cardin .4s ease both}
+  @keyframes cardin{from{opacity:0; transform:translateY(10px)}to{opacity:1; transform:none}}
+  .focus .tag{align-self:flex-start; font:700 10px Archivo; letter-spacing:.14em; text-transform:uppercase; border-radius:6px; padding:3px 8px; background:var(--surface-2); color:var(--warn); border:1px solid var(--line)}
+  .focus .tag.top{color:var(--accent)}
+  .focus .tag.acc{color:var(--p10)}
+  .focus h3{font-size:21px; margin-top:8px}
+  .focus .serie-count{font:600 12px var(--mono); color:var(--faint)}
+  .bigload{display:flex; align-items:baseline; gap:8px; margin:8px 0 0}
+  .bigload .kg{font-family:var(--mono); font-weight:700; font-size:54px; line-height:1; letter-spacing:-.02em}
+  .bigload .unit{font-family:var(--mono); color:var(--muted); font-size:15px}
+  .perside{font:600 12px var(--mono); color:var(--muted); margin:2px 0 0; min-height:18px}
+  .perside b{color:var(--text)}
+  .bar{display:flex; align-items:center; height:78px; margin:6px 0 0}
+  .shaft{height:8px; background:linear-gradient(#a49f94,#5d5a53 60%,#87837a); flex:1; border-radius:2px; box-shadow:0 1px 0 rgba(0,0,0,.5)}
+  .collar{width:10px; height:18px; background:linear-gradient(#8b877e,#565349); border-radius:2px; flex-shrink:0}
+  .plates{display:flex; align-items:center; gap:3px; padding:0 2px}
+  .plate{border-radius:3.5px; display:block; box-shadow:inset 0 0 0 1.5px rgba(0,0,0,.28), inset 0 -8px 12px rgba(0,0,0,.25); animation:slidein .5s cubic-bezier(.2,.9,.3,1.25) both}
+  @keyframes slidein{from{transform:translateX(24px) rotate(4deg); opacity:0}to{transform:none; opacity:1}}
+  .reps-editor{display:grid; grid-template-columns:52px 1fr 52px; gap:10px; align-items:center; margin:10px 0 0}
+  .reps-editor button{height:52px; border-radius:14px; border:1px solid var(--line); background:var(--surface-2); color:var(--text); font:700 24px var(--mono); cursor:pointer}
+  .reps-editor .val{text-align:center; font:700 44px var(--mono); line-height:1}
+  .reps-editor .val small{display:block; font:600 11px Archivo; letter-spacing:.12em; text-transform:uppercase; color:var(--faint)}
+  .gauge{display:flex; gap:4px; margin-top:12px}
+  .gauge .cell{flex:1; height:24px; border-radius:6px; border:1px solid var(--line); display:grid; place-items:center; font:600 12px var(--mono); color:var(--faint)}
+  .gauge .cell.hit{background:rgba(63,166,91,.14); border-color:var(--p10); color:var(--p10)}
+  .gauge .cell.mid{border-color:var(--warn); color:var(--warn)}
+  .acc-note{font-size:12px; color:var(--muted); margin-top:10px}
+  .acc-note b{color:var(--text)}
+  .rpe-row{display:flex; gap:6px; margin-top:12px}
+  .rpe{flex:1; text-align:center; padding:9px 0; border:1px solid var(--line); border-radius:10px; font-family:var(--mono); font-weight:600; font-size:14px; color:var(--muted); cursor:pointer; background:none; transition:transform .12s}
+  .rpe:active{transform:scale(.94)}
+  .rpe.sel{border-color:var(--p10); color:var(--p10); background:rgba(63,166,91,.1)}
+  .rpe[data-rpe="8,5"].sel{border-color:var(--warn); color:var(--warn); background:rgba(233,182,45,.1)}
+  .rpe[data-rpe="9"].sel{border-color:var(--accent); color:var(--accent); background:rgba(226,59,48,.1)}
+  .validate{margin-top:14px; width:100%; border:0; border-radius:14px; padding:15px; background:var(--text); color:#141210; font:700 15px Archivo; letter-spacing:.04em; cursor:pointer; transition:transform .12s}
+  .validate:active{transform:scale(.97)}
+  .timer{display:flex; align-items:center; gap:14px; margin-top:auto; min-height:68px}
+  .ring{width:60px; height:60px; transform:rotate(-90deg); flex-shrink:0}
+  .ring circle{fill:none; stroke-width:5}
+  .ring .track{stroke:var(--surface-2)}
+  .ring .arc{stroke:var(--accent); stroke-linecap:round; stroke-dasharray:163.4}
+  .timer.running .arc{animation:countdown 12s linear infinite}
+  @keyframes countdown{from{stroke-dashoffset:0}to{stroke-dashoffset:163.4}}
+  .timer .t{font-family:var(--mono); font-size:24px; font-weight:700}
+  .timer .lbl{font-size:12px; color:var(--muted)}
+  .nextline{display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:center; background:var(--surface-2); border:1px solid var(--line); border-radius:14px; padding:11px 14px; font-size:13px}
+  .nextline .what{color:var(--text); font-weight:600; text-align:right}
+  .nextline .what .num{color:var(--muted); font-weight:500}
+
+  /* ── Écran 3 : récap ── */
+  .pr{position:relative; overflow:hidden; border:1px solid rgba(233,182,45,.5); background:linear-gradient(160deg,rgba(233,182,45,.14),var(--surface) 55%); border-radius:16px; padding:16px}
+  .pr::after{content:""; position:absolute; inset:0; background:linear-gradient(115deg,transparent 30%,rgba(255,255,255,.16) 50%,transparent 62%); transform:translateX(-120%); animation:shine 3.2s ease-in-out infinite}
+  @keyframes shine{0%,55%{transform:translateX(-120%)}80%,100%{transform:translateX(130%)}}
+  .pr .tag{display:inline-block; background:var(--p15); color:#141210; font:700 11px Archivo; letter-spacing:.12em; border-radius:6px; padding:3px 8px}
+  .pr .v{font-family:var(--mono); font-size:38px; font-weight:700; line-height:1.15}
+  .pr .d{color:var(--muted); font-size:13px}
+  .spark-wrap{margin-top:10px}
+  .spark-wrap .spark-title{display:flex; justify-content:space-between; font:600 11px var(--mono); color:var(--muted); letter-spacing:.08em; text-transform:uppercase}
+  .stats{display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px}
+  .stat{background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:10px 12px}
+  .stat .v{font-family:var(--mono); font-weight:700; font-size:19px}
+  .stat .v small{font-size:12px; font-weight:600; color:var(--muted); margin-left:2px}
+  .stat .l{font-size:11px; color:var(--muted); letter-spacing:.04em}
+  .evt{display:grid; grid-template-columns:1fr auto auto; gap:10px; align-items:baseline; padding:8px 2px; border-bottom:1px solid var(--line); font-size:13.5px}
+  .evt:last-child{border-bottom:0}
+  .evt .sub{color:var(--faint); font-size:11.5px}
+  .evt .arrow{color:var(--ok); font-family:var(--mono)}
+  .evt .arrow.flat{color:var(--faint)}
+  .evt .to{font-family:var(--mono); font-weight:600; text-align:right; min-width:64px}
+  .next{display:flex; justify-content:space-between; align-items:center; margin-top:auto; background:var(--surface-2); border:1px solid var(--line); border-radius:14px; padding:12px 14px; font-size:13.5px}
+  .next .num{font-weight:700}
+
+  /* ── Écran 4 : historique ── */
+  .hist-item{display:grid; grid-template-columns:40px 1fr auto; gap:12px; align-items:start; padding:11px 2px; border-bottom:1px solid var(--line)}
+  .hist-item:last-child{border-bottom:0}
+  .type-badge{width:36px; height:36px; border-radius:10px; display:grid; place-items:center; font-family:Anton; font-size:17px; color:#141210}
+  .type-badge.A{background:var(--p20); color:#fff}
+  .type-badge.B{background:var(--p15)}
+  .type-badge.C{background:var(--p25); color:#fff}
+  .hist-item .when{font:600 12px var(--mono); color:var(--muted)}
+  .hist-item .sum{font-size:13px; color:var(--text); margin-top:1px}
+  .hist-item .sum .num{color:var(--muted)}
+  .hist-item .dur{font:600 12px var(--mono); color:var(--faint); padding-top:2px}
+  .hist-detail{background:var(--surface-2); border:1px solid var(--line); border-radius:12px; padding:10px 12px; margin:8px 0 2px; grid-column:1/-1}
+  .hist-detail .line{display:grid; grid-template-columns:92px 1fr; gap:10px; font:500 12px var(--mono); padding:4px 0; border-bottom:1px dashed var(--line); align-items:start}
+  .hist-detail .line:last-child{border-bottom:0}
+  .hist-detail .line span:first-child{color:var(--muted); font-family:Archivo; font-weight:600; font-size:12px}
+  .hist-detail .line span:last-child{text-align:right}
+  .weekhead{display:flex; justify-content:space-between; align-items:baseline; margin:4px 0 0}
+  .weekhead .eyebrow{color:var(--faint)}
+
+  /* ── Écran 5 : progression ── */
+  .lift-card{display:grid; grid-template-columns:1fr 96px; gap:4px 12px; padding:11px 2px; border-bottom:1px solid var(--line); align-items:center}
+  .lift-card:last-child{border-bottom:0}
+  .lift-card .name{font-weight:600; font-size:13.5px}
+  .lift-card .meta{font:600 11px var(--mono); color:var(--muted)}
+  .lift-card .meta .up{color:var(--ok)}
+  .lift-card svg{grid-area:1/2/3/3}
+  .prchip{display:inline-block; font:600 10px var(--mono); color:var(--warn); border:1px solid rgba(233,182,45,.4); border-radius:6px; padding:1px 6px; margin-left:6px; vertical-align:1px}
+
+  /* bottom sheet ajustement */
+  .sheet-veil{margin-top:auto; background:linear-gradient(transparent,rgba(0,0,0,.5)); padding:26px 0 0}
+  .sheet{background:var(--surface); border:1px solid #4a4131; border-bottom:0; border-radius:22px 22px 0 0; padding:16px 16px 18px; box-shadow:0 -18px 40px rgba(0,0,0,.5)}
+  .sheet .grab{width:38px; height:4px; border-radius:2px; background:var(--line); margin:0 auto 12px}
+  .sheet h3{font-size:16px}
+  .sheet .warn-note{display:flex; gap:8px; align-items:flex-start; font-size:12px; color:var(--warn); background:rgba(233,182,45,.08); border:1px solid rgba(233,182,45,.3); border-radius:10px; padding:8px 10px; margin-top:10px}
+  .stepper{display:grid; grid-template-columns:56px 1fr 56px; gap:10px; align-items:center; margin-top:12px}
+  .stepper button{height:56px; border-radius:14px; border:1px solid var(--line); background:var(--surface-2); color:var(--text); font:700 26px var(--mono); cursor:pointer}
+  .stepper .val{text-align:center; font:700 46px var(--mono); line-height:1}
+  .stepper .val small{display:block; font:600 11px Archivo; letter-spacing:.1em; text-transform:uppercase; color:var(--faint); margin-top:2px}
+  .sheet .validate{margin-top:14px}
+
+  /* ── Écran 6 : édition d'une séance ── */
+  .set-row{display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:center; padding:9px 2px; border-bottom:1px solid var(--line); font-size:13.5px}
+  .set-row:last-child{border-bottom:0}
+  .set-row .role{font:600 10px Archivo; letter-spacing:.1em; text-transform:uppercase; color:var(--faint); width:76px}
+  .set-row .role.top{color:var(--accent)}
+  .set-row .perf{font:600 14px var(--mono)}
+  .set-row .perf .at{color:var(--muted); font-weight:500}
+  .set-row .edit{font:600 12px Archivo; color:var(--p20); background:none; border:0; cursor:pointer; padding:4px 6px}
+  .set-row.editing{background:rgba(47,99,218,.08); border-radius:10px; border-bottom-color:transparent}
+  .set-row.skipped .perf{color:var(--faint); text-decoration:line-through}
+
+  /* ── Écran 7 : export & réglages ── */
+  .setting{display:grid; grid-template-columns:1fr auto; gap:10px; align-items:center; padding:10px 2px; border-bottom:1px solid var(--line); font-size:13.5px}
+  .setting:last-child{border-bottom:0}
+  .setting .sub{display:block; font-size:11.5px; color:var(--faint)}
+  .setting .v{font:600 13px var(--mono); color:var(--muted)}
+  .toggle{width:40px; height:24px; border-radius:12px; background:var(--surface-2); border:1px solid var(--line); position:relative}
+  .toggle::after{content:""; position:absolute; top:2px; left:2px; width:18px; height:18px; border-radius:50%; background:var(--faint); transition:.15s}
+  .toggle.on{background:rgba(63,166,91,.25); border-color:var(--p10)}
+  .toggle.on::after{left:18px; background:var(--p10)}
+  .json{background:#0e0d0b; border:1px solid var(--line); border-radius:12px; padding:10px 12px; font:500 11px var(--mono); color:var(--muted); overflow-x:auto; white-space:pre; line-height:1.6}
+  .json .k{color:var(--p20)} .json .s{color:var(--p10)} .json .n{color:var(--warn)}
+  .export-btn{width:100%; border:0; border-radius:14px; padding:14px; background:var(--text); color:#141210; font:700 15px Archivo; cursor:pointer}
+  .export-btn small{display:block; font:500 11px var(--mono); color:#4a4640; margin-top:2px}
+
+  /* ── Sections basses ── */
+  .rules{max-width:1180px; margin:60px auto 0}
+  .rules h2{font-size:clamp(22px,3vw,30px)}
+  .rules-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:16px; margin-top:18px}
+  .rule-card{background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:16px}
+  .rule-card h3{font-size:15px; margin-bottom:8px}
+  .rule-card .step{display:grid; grid-template-columns:1fr auto; gap:10px; align-items:baseline; padding:7px 2px; border-bottom:1px dashed var(--line); font-size:14px}
+  .rule-card .step:last-of-type{border-bottom:0}
+  .rule-card .w{font-family:var(--mono); font-weight:600; text-align:right}
+  .rule-card p{margin:8px 0 0; font-size:12.5px; color:var(--muted)}
+  footer{max-width:1180px; margin:48px auto 0; color:var(--faint); font-size:12.5px; border-top:1px solid var(--line); padding-top:16px}
+
+  @media (prefers-reduced-motion:reduce){
+    .go::after,.dot.now,.timer.running .arc,.pr::after,.plate,.focus{animation:none}
+  }
+</style>
+
+<header class="page knurl">
+  <p class="eyebrow">Carnet de barre · démo complète des pages · v5 · 13.09.2026</p>
+  <h1 class="display">Les 7 pages, <em>à valider une par une</em></h1>
+  <p>Le flux de séance (01–03) puis les pages de consultation (04–07), chacune avec ses partis pris à valider en légende. <b style="color:var(--text)">L'écran 02 est jouable pour les trois séances</b> : sélecteur A / B / C, puis validez les séries — chaque exercice du programme y passe (top sets, backoffs, volume, supersets, AMRAP, optionnels), une série à l'écran, jamais plus. Couleurs = plaques calibrées ; thème sombre unique.</p>
+</header>
+<div class="barline" aria-hidden="true"></div>
+
+<div class="group-title"><h2 class="display">Flux de séance</h2><span class="eyebrow">01 → 03 · l'usage nominal, zéro navigation</span></div>
+<div class="phones">
+
+  <!-- ══ 01 · Accueil ══ -->
+  <div class="slot">
+    <p class="eyebrow">01 · Accueil</p>
+    <div class="phone"><div class="screen">
+      <div class="statusbar"><span>16:02</span><span>▮▮▮</span></div>
+      <div class="screen-body">
+        <div class="today-eyebrow">
+          <span class="eyebrow" style="color:var(--accent)">Bloc 2 · Semaine 1/8</span>
+          <span class="streak" title="Semaine 1 sur 8 du bloc">
+            <span class="dot now"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+            <span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          </span>
+        </div>
+        <h2 class="display h-seance">Séance C<small>Dimanche 13.09 · Deadlift + haut du corps · ~52 min</small></h2>
+        <div class="card">
+          <p class="eyebrow" style="margin-bottom:4px">Cibles du jour</p>
+          <div class="target-row"><span class="lift">Soulevé de terre</span><span class="trend">↗ +5 sem. dern.</span><span class="val">92,5 <span>×3 @8</span></span></div>
+          <div class="target-row"><span class="lift">Incliné haltères</span><span class="trend">↗ 3×12 → +2</span><span class="val">24 <span>kg/h</span></span></div>
+          <div class="target-row"><span class="lift">Presse 45°</span><span class="trend flat">→ 10/12</span><span class="val">+120 <span>disques</span></span></div>
+          <div class="target-row"><span class="lift">Tractions PDC</span><span class="trend flat">max −2</span><span class="val">2× <span>AMRAP</span></span></div>
+        </div>
+        <div style="display:flex; gap:8px">
+          <span class="chip">⚡ Pressé · ~30 min</span>
+          <span class="chip">Échauffement · ~6 min</span>
+        </div>
+        <button class="go">Démarrer la séance<small>1er geste : charger la barre à 60 kg (20/côté)</small></button>
+      </div>
+    </div></div>
+    <p class="caption"><b>À valider :</b> la séance du jour EST l'écran d'accueil (zéro navigation), cibles avec tendance, bouton qui donne le premier geste, semaines du bloc en carrés. Le sélecteur A/B/C hors rotation vit derrière l'onglet Séance.</p>
+  </div>
+
+  <!-- ══ 02 · En séance ══ -->
+  <div class="slot">
+    <p class="eyebrow">02 · En séance — jouable</p>
+    <div class="seance-sel" id="seanceSel">
+      <button class="sel" data-s="A">Démo A</button>
+      <button class="sel" data-s="B">Démo B</button>
+      <button class="sel on" data-s="C">Démo C</button>
+    </div>
+    <div class="phone"><div class="screen">
+      <div class="statusbar"><span>16:14</span><span>▮▮▮</span></div>
+      <div class="screen-body">
+        <div class="sess-progress"><span id="serieCount">Série 1/9</span><div class="track"><div class="fill" id="fill"></div></div><span id="elapsed">0 min</span></div>
+        <div class="exo-eyebrow">
+          <span class="eyebrow" id="exoCount">Exercice 1/2</span>
+        </div>
+        <div class="card focus" id="focusCard"></div>
+        <div class="nextline"><span class="eyebrow">Ensuite</span><span></span><span class="what" id="nextWhat"></span></div>
+        <div class="timer" id="timer">
+          <svg class="ring" viewBox="0 0 60 60" aria-hidden="true">
+            <circle class="track" cx="30" cy="30" r="26"></circle>
+            <circle class="arc" cx="30" cy="30" r="26" id="arc"></circle>
+          </svg>
+          <div><div class="t" id="clock">—</div><div class="lbl" id="timerLbl">Le chrono part à la première série validée</div></div>
+        </div>
+      </div>
+    </div></div>
+    <p class="caption"><b>À valider :</b> mode focus — la série en cours, rien d'autre ; Valider fait défiler, la ligne « Ensuite » est la seule trace du reste. Les boutons « Démo A/B/C » au-dessus du téléphone sont un contrôle de démo : dans l'app, aucun sélecteur en séance. Les 3 séances sont jouables en entier : A = 23 séries, B = 22, C = 16 — top sets, backoffs, volume, supersets (badge bleu « SS »), AMRAP, optionnels (bouton pointillé « Sauter »).</p>
+  </div>
+
+  <!-- ══ 03 · Récap ══ -->
+  <div class="slot">
+    <p class="eyebrow">03 · Fin de séance</p>
+    <div class="phone"><div class="screen">
+      <div class="statusbar"><span>17:04</span><span>▮▮▮</span></div>
+      <div class="screen-body">
+        <h2 class="display screen-title" style="font-size:30px">Séance validée</h2>
+        <div class="pr">
+          <span class="tag">Record</span>
+          <div class="v">e1RM 101,8</div>
+          <div class="d">Soulevé de terre — meilleur total du bloc</div>
+          <div class="spark-wrap">
+            <div class="spark-title"><span>Top sets · 8 séances</span></div>
+            <svg viewBox="0 0 300 64" width="100%" height="64" role="img" aria-label="Évolution du top set de soulevé de terre sur huit séances, de 75 à 92,5 kg">
+              <line x1="8" y1="56" x2="292" y2="56" stroke="#332e27" stroke-width="1"/>
+              <path d="M8,52 L48,44 L88,40 L128,35 L168,35 L208,27 L248,22 L280,14 L280,56 L8,56 Z" fill="rgba(226,59,48,.12)"/>
+              <path d="M8,52 L48,44 L88,40 L128,35 L168,35 L208,27 L248,22 L280,14" fill="none" stroke="#e23b30" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+              <circle cx="8" cy="52" r="3" fill="#6b655b"><title>75 kg</title></circle>
+              <circle cx="280" cy="14" r="4.5" fill="#e23b30" stroke="#1d1a17" stroke-width="2"><title>92,5 kg — aujourd'hui</title></circle>
+              <text x="8" y="47" font-family="IBM Plex Mono,monospace" font-size="9" fill="#9a9388">75</text>
+              <text x="292" y="12" font-family="IBM Plex Mono,monospace" font-size="9" fill="#f2efe8" text-anchor="end">92,5</text>
+            </svg>
+          </div>
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="v">52<small>min</small></div><div class="l">Durée</div></div>
+          <div class="stat"><div class="v">4 310</div><div class="l">Tonnage kg</div></div>
+          <div class="stat"><div class="v">14/14</div><div class="l">Séries</div></div>
+        </div>
+        <div class="card">
+          <p class="eyebrow" style="margin-bottom:4px">Prochaines cibles</p>
+          <div class="evt"><span>Soulevé de terre</span><span class="arrow">↗</span><span class="to">97,5</span></div>
+          <div class="evt"><span>Incliné haltères <span class="sub">3×12 sorties</span></span><span class="arrow">↗</span><span class="to">26 kg/h</span></div>
+          <div class="evt"><span>Presse 45°</span><span class="arrow flat">→</span><span class="to">+120</span></div>
+        </div>
+        <div class="next"><span>Mardi · Séance A</span><span class="num">Squat 75 ×4 @8</span></div>
+      </div>
+    </div></div>
+    <p class="caption"><b>À valider :</b> le récap se termine sur une décision — record mis en scène avec la trajectoire du bloc, prochaines cibles recalculées (accessoires compris), et la prochaine séance. Champ notes libre accessible ici (replié).</p>
+  </div>
+</div>
+
+<div class="group-title"><h2 class="display">Consultation &amp; réglages</h2><span class="eyebrow">04 → 07 · derrière la barre d'onglets</span></div>
+<div class="phones">
+
+  <!-- ══ 04 · Historique ══ -->
+  <div class="slot">
+    <p class="eyebrow">04 · Historique</p>
+    <div class="phone"><div class="screen">
+      <div class="statusbar"><span>18:20</span><span>▮▮▮</span></div>
+      <div class="screen-body">
+        <h2 class="display screen-title">Historique</h2>
+        <div class="weekhead"><span class="eyebrow">Cette semaine</span><span class="eyebrow">3 séances</span></div>
+        <div class="card" style="padding:6px 12px">
+          <div class="hist-item">
+            <span class="type-badge C">C</span>
+            <div>
+              <div class="when">Dim 13.09 · 16:04 → 16:56</div>
+              <div class="sum">Deadlift <span class="num">92,5×3 @8</span> · Incliné <span class="num">24</span> · Presse</div>
+              <div class="hist-detail">
+                <div class="line"><span>Soulevé de terre</span><span>92,5×3 @8 | 82,5×4 | 82,5×4</span></div>
+                <div class="line"><span>Incliné haltères</span><span>24×12 | 24×11 | 24×10</span></div>
+                <div class="line"><span>Presse 45°</span><span>+120×11 | +120×10</span></div>
+                <div class="line"><span>Tractions PDC</span><span>9 | 8 reps</span></div>
+              </div>
+            </div>
+            <span class="dur">52 min</span>
+          </div>
+          <div class="hist-item">
+            <span class="type-badge B">B</span>
+            <div>
+              <div class="when">Jeu 10.09 · 19:02 → 19:51</div>
+              <div class="sum">Bench <span class="num">70×4 @8</span> · Tractions <span class="num">+15×4</span> · Rowing</div>
+            </div>
+            <span class="dur">49 min</span>
+          </div>
+          <div class="hist-item">
+            <span class="type-badge A">A</span>
+            <div>
+              <div class="when">Mar 08.09 · 19:05 → 19:58</div>
+              <div class="sum">Squat <span class="num">75×4 @8</span> · Bench vol <span class="num">60 3×8</span> · Dips</div>
+            </div>
+            <span class="dur">53 min</span>
+          </div>
+        </div>
+        <div class="weekhead"><span class="eyebrow">Semaine du 31.08</span><span class="eyebrow">3 séances</span></div>
+        <div class="card" style="padding:6px 12px">
+          <div class="hist-item">
+            <span class="type-badge C">C</span>
+            <div>
+              <div class="when">Dim 06.09 · 16:10 → 17:01</div>
+              <div class="sum">Deadlift <span class="num">87,5×3 @8</span> · Incliné <span class="num">24</span></div>
+            </div>
+            <span class="dur">51 min</span>
+          </div>
+          <div class="hist-item">
+            <span class="type-badge B">B</span>
+            <div>
+              <div class="when">Jeu 03.09 · 19:00 → 19:46</div>
+              <div class="sum">Bench <span class="num">75×3 @9,5</span> ✗ · Tractions <span class="num">+15×5</span></div>
+            </div>
+            <span class="dur">46 min</span>
+          </div>
+          <div class="hist-item">
+            <span class="type-badge A">A</span>
+            <div>
+              <div class="when">Mar 01.09 · 19:04 → 19:57</div>
+              <div class="sum">Squat <span class="num">80×4 @9</span> ✗ · Bench vol <span class="num">57,5 3×8</span></div>
+            </div>
+            <span class="dur">53 min</span>
+          </div>
+        </div>
+        <div class="tabbar">
+          <span class="tab"><i>▶</i>Séance</span><span class="tab on"><i>≣</i>Historique</span><span class="tab"><i>↗</i>Progression</span><span class="tab"><i>⚙</i>Réglages</span>
+        </div>
+      </div>
+    </div></div>
+    <p class="caption"><b>À valider :</b> liste groupée par semaine, badge A/B/C en couleur de plaque, résumé compact en notation du carnet (« 92,5×3 @8 »), durée à droite ; un tap déplie le détail complet (ici la séance du jour). Séance ratée marquée ✗. La barre d'onglets n'apparaît que hors séance.</p>
+  </div>
+
+  <!-- ══ 05 · Progression + ajustement ══ -->
+  <div class="slot">
+    <p class="eyebrow">05 · Progression — cibles &amp; ajustement</p>
+    <div class="phone"><div class="screen">
+      <div class="statusbar"><span>18:22</span><span>▮▮▮</span></div>
+      <div class="screen-body" style="padding-bottom:0">
+        <h2 class="display screen-title">Progression</h2>
+        <div class="card" style="padding:6px 12px">
+          <div class="lift-card">
+            <span class="name">Soulevé de terre <span class="prchip">PR e1RM 101,8</span></span>
+            <span class="meta"><span class="up">↗ 92,5</span> · +17,5 sur le bloc</span>
+            <svg viewBox="0 0 96 30" width="96" height="30" role="img" aria-label="Soulevé de terre, 75 à 92,5 kg"><path d="M4,25 L18,22 L32,20 L46,17 L60,17 L74,13 L88,7" fill="none" stroke="#e23b30" stroke-width="2" stroke-linecap="round"/><circle cx="88" cy="7" r="3" fill="#e23b30"/></svg>
+          </div>
+          <div class="lift-card">
+            <span class="name">Développé couché</span>
+            <span class="meta"><span class="up">↗ 70</span> · reset après 2× 75×3</span>
+            <svg viewBox="0 0 96 30" width="96" height="30" role="img" aria-label="Développé couché, reset à 70 kg"><path d="M4,22 L18,19 L32,16 L46,12 L60,9 L74,9 L88,16" fill="none" stroke="#e23b30" stroke-width="2" stroke-linecap="round"/><circle cx="88" cy="16" r="3" fill="#e23b30"/></svg>
+          </div>
+          <div class="lift-card">
+            <span class="name">Squat</span>
+            <span class="meta"><span class="up">↗ 75</span> · reset après 2× 80×4 @9</span>
+            <svg viewBox="0 0 96 30" width="96" height="30" role="img" aria-label="Squat, reset à 75 kg"><path d="M4,20 L18,16 L32,12 L46,8 L60,8 L74,8 L88,14" fill="none" stroke="#e23b30" stroke-width="2" stroke-linecap="round"/><circle cx="88" cy="14" r="3" fill="#e23b30"/></svg>
+          </div>
+          <div class="lift-card">
+            <span class="name">Tractions lestées</span>
+            <span class="meta">→ +15 large · pic +20 étroite</span>
+            <svg viewBox="0 0 96 30" width="96" height="30" role="img" aria-label="Tractions lestées, stable à 15 kg"><path d="M4,18 L18,15 L32,15 L46,12 L60,15 L74,15 L88,12" fill="none" stroke="#e23b30" stroke-width="2" stroke-linecap="round"/><circle cx="88" cy="12" r="3" fill="#e23b30"/></svg>
+          </div>
+          <div class="lift-card">
+            <span class="name">Incliné haltères</span>
+            <span class="meta"><span class="up">↗ 24 kg/h</span> · accessoire · 3×8–12</span>
+            <svg viewBox="0 0 96 30" width="96" height="30" role="img" aria-label="Incliné haltères, 20 à 24 kg"><path d="M4,24 L18,24 L32,19 L46,19 L60,13 L74,13 L88,9" fill="none" stroke="#e23b30" stroke-width="2" stroke-linecap="round"/><circle cx="88" cy="9" r="3" fill="#e23b30"/></svg>
+          </div>
+        </div>
+        <div class="sheet-veil"><div class="sheet">
+          <div class="grab"></div>
+          <h3>Ajuster la cible — Soulevé de terre</h3>
+          <div class="stepper">
+            <button aria-label="Moins 2,5 kg">−</button>
+            <div class="val">92,5<small>kg · pas de 2,5</small></div>
+            <button aria-label="Plus 2,5 kg">+</button>
+          </div>
+          <div class="warn-note"><span>⚠</span><span>Le moteur repartira de cette valeur. L'échec mémorisé sera effacé.</span></div>
+          <button class="validate">Enregistrer la cible</button>
+        </div></div>
+      </div>
+    </div></div>
+    <p class="caption"><b>À valider :</b> un lift par ligne — cible actuelle, contexte (reset, PR) et sparkline du bloc ; un tap ouvre le détail. L'ajustement manuel (CB-33) est un bottom sheet : stepper au pas du matériel, avertissement explicite, jamais caché dans un menu.</p>
+  </div>
+
+  <!-- ══ 06 · Édition d'une séance passée ══ -->
+  <div class="slot">
+    <p class="eyebrow">06 · Édition d'une séance passée</p>
+    <div class="phone"><div class="screen">
+      <div class="statusbar"><span>18:25</span><span>▮▮▮</span></div>
+      <div class="screen-body">
+        <div class="exo-eyebrow"><h2 class="display screen-title">Jeu 10.09 · B</h2><span class="chip">Correction</span></div>
+        <div class="card" style="padding:8px 12px">
+          <p class="eyebrow" style="margin:4px 0 2px">Développé couché</p>
+          <div class="set-row"><span class="role top">Top set</span><span class="perf">70 ×4 <span class="at">@8</span></span><button class="edit">Modifier</button></div>
+          <div class="set-row editing">
+            <span class="role">Backoff 1</span>
+            <span class="perf" style="display:flex; gap:8px; align-items:center">
+              <span class="num" style="border:1px solid var(--p20); border-radius:8px; padding:2px 10px">62,5</span>×
+              <span class="num" style="border:1px solid var(--p20); border-radius:8px; padding:2px 10px">5</span>
+            </span>
+            <button class="edit">OK</button>
+          </div>
+          <div class="set-row"><span class="role">Backoff 2</span><span class="perf">62,5 ×5</span><button class="edit">Modifier</button></div>
+          <p class="eyebrow" style="margin:10px 0 2px">Tractions lestées</p>
+          <div class="set-row"><span class="role top">Top set</span><span class="perf">+15 ×4 <span class="at">@8</span></span><button class="edit">Modifier</button></div>
+          <div class="set-row"><span class="role">Backoff 1</span><span class="perf">+7,5 ×6</span><button class="edit">Modifier</button></div>
+          <div class="set-row skipped"><span class="role">Backoff 2</span><span class="perf">sautée</span><button class="edit">Rétablir</button></div>
+          <p class="eyebrow" style="margin:10px 0 2px">Rowing haltères</p>
+          <div class="set-row"><span class="role">Série 1–3</span><span class="perf">22 ×10 | 22 ×9 | 22 ×8</span><button class="edit">Modifier</button></div>
+        </div>
+        <div class="warn-note" style="display:flex; gap:8px; align-items:flex-start; font-size:12px; color:var(--warn); background:rgba(233,182,45,.08); border:1px solid rgba(233,182,45,.3); border-radius:10px; padding:8px 10px">
+          <span>⚠</span><span>Corriger une séance passée ne recalcule jamais les cibles (D6). Pour changer une cible : Progression → Ajuster.</span>
+        </div>
+        <button class="validate" style="margin-top:auto">Enregistrer les corrections</button>
+      </div>
+    </div></div>
+    <p class="caption"><b>À valider :</b> édition série par série depuis l'historique — champ en édition encadré bleu, série sautée barrée avec « Rétablir », et le contrat D6 affiché plutôt qu'implicite : corriger ≠ ajuster les cibles.</p>
+  </div>
+
+  <!-- ══ 07 · Export & réglages ══ -->
+  <div class="slot">
+    <p class="eyebrow">07 · Export &amp; réglages</p>
+    <div class="phone"><div class="screen">
+      <div class="statusbar"><span>18:27</span><span>▮▮▮</span></div>
+      <div class="screen-body">
+        <h2 class="display screen-title">Réglages</h2>
+        <div class="card">
+          <p class="eyebrow" style="margin-bottom:8px">Export vers Claude</p>
+          <button class="export-btn">Copier l'export JSON<small>12 séances · cibles · schemaVersion 2</small></button>
+          <div class="json" style="margin-top:10px"><span class="k">"targets"</span>: { <span class="k">"deadlift"</span>: { <span class="k">"w"</span>: <span class="n">92.5</span>, <span class="k">"fail"</span>: <span class="s">null</span> }, … },
+<span class="k">"seances"</span>: [ { <span class="k">"date"</span>: <span class="s">"2026-09-13"</span>, <span class="k">"type"</span>: <span class="s">"C"</span>, … } ]</div>
+          <div class="setting" style="margin-top:6px"><span>Importer un JSON<span class="sub">restaure ou fusionne l'historique</span></span><span class="v">›</span></div>
+        </div>
+        <div class="card" style="padding:6px 14px">
+          <div class="setting"><span>Vibration à la validation</span><span class="toggle on"></span></div>
+          <div class="setting"><span>Son en fin de chrono</span><span class="toggle"></span></div>
+          <div class="setting"><span>Écran allumé pendant le chrono</span><span class="toggle on"></span></div>
+          <div class="setting"><span>Mode pressé par défaut<span class="sub">exercices 1–2 seulement</span></span><span class="toggle"></span></div>
+        </div>
+        <div class="card" style="padding:6px 14px">
+          <div class="setting"><span>Barre olympique</span><span class="v">20 kg</span></div>
+          <div class="setting"><span>Chariot presse 45°<span class="sub">hors charge saisie — tonnage seulement</span></span><span class="v">75,7 kg</span></div>
+          <div class="setting"><span>Pas haltères / barre</span><span class="v">2 · 2,5 kg</span></div>
+        </div>
+        <p class="caption" style="font-size:11.5px; color:var(--faint); text-align:center">Données locales sur cet appareil · dernière sauvegarde 13.09 · 16:56</p>
+        <div class="tabbar" style="margin-top:auto">
+          <span class="tab"><i>▶</i>Séance</span><span class="tab"><i>≣</i>Historique</span><span class="tab"><i>↗</i>Progression</span><span class="tab on"><i>⚙</i>Réglages</span>
+        </div>
+      </div>
+    </div></div>
+    <p class="caption"><b>À valider :</b> l'export = un bouton qui copie le JSON (même format que <span class="num" style="font-size:12px">seed.json</span>) pour le coller à Claude ; import en dessous. Réglages en trois blocs : séance, matériel (constantes de la salle), données. Rien d'autre.</p>
+  </div>
+</div>
+
+<!-- ══ Règles d'échauffement ══ -->
+<section class="rules">
+  <h2 class="display">L'échauffement, en règles de moteur</h2>
+  <p style="color:var(--muted); max-width:70ch; margin-top:8px">Paliers dérivés de la cible du jour, arrondis au chargeable (2,5 kg barre / 2 kg haltère). Rôle <span class="num" style="font-size:13px">warmup</span> : cochable en un tap, exclu des tops, du résumé d'historique et du moteur de progression. Repos libre entre paliers, pas de chrono.</p>
+  <div class="rules-grid">
+    <div class="rule-card">
+      <h3>Squat · Bench <span style="color:var(--faint)">(barre, départ à vide)</span></h3>
+      <div class="step"><span>Barre à vide</span><span class="w">20 ×8</span></div>
+      <div class="step"><span>~50 %</span><span class="w">×5</span></div>
+      <div class="step"><span>~70 %</span><span class="w">×3</span></div>
+      <div class="step"><span>~87 %</span><span class="w">×1</span></div>
+      <p>Ex. bench 70 : 20×8 → 35×5 → 50×3 → 60×1 → top. Sous 60 kg de cible, le palier ~87 % saute.</p>
+    </div>
+    <div class="rule-card">
+      <h3>Soulevé de terre <span style="color:var(--faint)">(jamais à vide)</span></h3>
+      <div class="step"><span>~60 %</span><span class="w">×5</span></div>
+      <div class="step"><span>~78 %</span><span class="w">×3</span></div>
+      <div class="step"><span>~90 %</span><span class="w">×1</span></div>
+      <p>Ex. 92,5 : 60×5 → 72,5×3 → 85×1 → top. Plancher à 60 kg (hauteur d'une plaque de 25 — sinon caler).</p>
+    </div>
+    <div class="rule-card">
+      <h3>Tractions lestées</h3>
+      <div class="step"><span>Poids de corps</span><span class="w">×5</span></div>
+      <div class="step"><span>~50 % du lest</span><span class="w">×2</span></div>
+      <p>Ex. +15 : PDC×5 → +7,5×2 → top. En séance A, les tractions +10 servent elles-mêmes d'échauffement.</p>
+    </div>
+    <div class="rule-card">
+      <h3>Accessoires</h3>
+      <div class="step"><span>1er exercice d'un pattern froid</span><span class="w">~60 % ×8</span></div>
+      <p>Incliné en séance C : 14 kg/h ×8 avant les 24. Tout ce qui vient en superset après du travail lourd part sans palier.</p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  Maquette statique — aucune donnée réelle modifiée. Écrans 04–07 : données illustratives cohérentes avec le seed (resets bench/squat, +20 prise étroite, chariot 75,7). Micro-interactions prévues : vibration à la validation, compte à rebours écran verrouillé, balayage arrière pour corriger. Toutes les animations respectent <span class="num" style="font-size:12px">prefers-reduced-motion</span>.
+</footer>
+
+<script>
+(function(){
+  'use strict';
+  var reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var PLATE = { 25:{h:70,w:14,c:'var(--p25)'}, 20:{h:62,w:13,c:'var(--p20)'}, 15:{h:54,w:12,c:'var(--p15)'},
+                10:{h:46,w:12,c:'var(--p10)'}, 5:{h:34,w:10,c:'var(--p5)'}, 2.5:{h:26,w:9,c:'var(--p25s)'}, 1.25:{h:22,w:9,c:'var(--p125)'} };
+  var fmt = function(n){ return String(n).replace('.', ','); };
+
+  /* Constructeurs de séries — la séance est une file plate, une carte par série. */
+  function ech(exo, i, n, load, unit, side){
+    return {tag:'Échauffement', cls:'', exo:exo, serie:'palier '+i+'/'+n, load:load, unit:unit, side:side, hint:'repos libre entre paliers', timer:0};
+  }
+  function top(exo, load, reps, side){
+    return {tag:'Top set', cls:'top', exo:exo, serie:'', load:load, unit:'×'+reps+' @8', side:side, rpe:true, repsTxt:reps, hint:'', timer:150};
+  }
+  function bo(exo, i, n, load, unit, side){
+    return {tag:'Backoff', cls:'', exo:exo, serie:i+'/'+n, load:load, unit:unit, side:side, hint:'−10 % du top set', timer:150};
+  }
+  function vol(exo, i, n, load, side, key){
+    return {tag:'Volume · 3×8', cls:'acc', exo:exo, serie:'série '+i+'/'+n, load:load, unit:'', side:side,
+            reps:{def:8, max:8, cells:n, key:key, cible:'cible 8'}, hint:'double progression', timer:150,
+            note:'Les '+n+' séries à <b>8</b> → <b>+2,5 kg</b> la prochaine fois.'};
+  }
+  function acc(exo, i, n, load, unit, key, max, min, note, ss){
+    return {tag:'Accessoire · '+n+'×'+min+'–'+max, cls:'acc', exo:exo, serie:'série '+i+'/'+n, load:load, unit:unit,
+            reps:{def:min+2>max?min:min+2, max:max, cells:n, key:key, cible:'cible '+min+'–'+max}, ss:ss,
+            hint:'double progression', timer:90, note:note};
+  }
+  function opt(step){ step.skippable = true; step.tag = 'Optionnel · ' + step.tag.replace(/^Accessoire · /,''); return step; }
+
+  var SEANCES = {
+    A: [
+      ech('Squat',1,4,'20','×8',[]), ech('Squat',2,4,'37,5','×5',[5,2.5,1.25]), ech('Squat',3,4,'52,5','×3',[15,1.25]), ech('Squat',4,4,'65','×1',[20,2.5]),
+      top('Squat','75',4,[25,2.5]),
+      bo('Squat',1,2,'67,5','×5',[20,2.5,1.25]), bo('Squat',2,2,'67,5','×5',[20,2.5,1.25]),
+      ech('Développé couché volume',1,2,'20','×10',[]), ech('Développé couché volume',2,2,'40','×5',[10]),
+      vol('Développé couché volume',1,3,'60',[20],'bvol'), vol('Développé couché volume',2,3,'60',[20],'bvol'), vol('Développé couché volume',3,3,'60',[20],'bvol'),
+      {tag:'Échauffement', cls:'', exo:'Tractions lestées', serie:'palier 1/1', load:'PDC', unit:'×5', hint:'pattern tirage à froid', timer:0},
+      acc('Tractions lestées',1,3,'+10','lest','trA',10,8,'Superset avec les dips — 60–90 s de repos.','Dips'),
+      acc('Dips lestés',1,3,'+10','lest','dips',10,8,'Superset avec les tractions.','Tractions'),
+      acc('Tractions lestées',2,3,'+10','lest','trA',10,8,'','Dips'),
+      acc('Dips lestés',2,3,'+10','lest','dips',10,8,'','Tractions'),
+      acc('Tractions lestées',3,3,'+10','lest','trA',10,8,'','Dips'),
+      acc('Dips lestés',3,3,'+10','lest','dips',10,8,'Les 3 séries à <b>10</b> → <b>+2,5 kg</b> de lest.','Tractions'),
+      opt(acc('Curls haltères',1,2,'12','kg/haltère','curl',12,10,'')),
+      opt(acc('Curls haltères',2,2,'12','kg/haltère','curl',12,10,'')),
+      opt(acc('Élévations latérales',1,2,'8','kg/haltère','elevA',20,12,'Fourchette élargie 12–20 : haltères de 2 en 2 kg.')),
+      opt(acc('Élévations latérales',2,2,'8','kg/haltère','elevA',20,12,''))
+    ],
+    B: [
+      ech('Développé couché',1,4,'20','×8',[]), ech('Développé couché',2,4,'35','×5',[5,2.5]), ech('Développé couché',3,4,'50','×3',[15]), ech('Développé couché',4,4,'60','×1',[20]),
+      top('Développé couché','70',4,[25]),
+      bo('Développé couché',1,2,'62,5','×5',[20,1.25]), bo('Développé couché',2,2,'62,5','×5',[20,1.25]),
+      {tag:'Échauffement', cls:'', exo:'Tractions lestées', serie:'palier 1/2', load:'PDC', unit:'×5', hint:'repos libre entre paliers', timer:0},
+      {tag:'Échauffement', cls:'', exo:'Tractions lestées', serie:'palier 2/2', load:'+7,5', unit:'×2 lest', hint:'~50 % du lest', timer:0},
+      {tag:'Top set', cls:'top', exo:'Tractions lestées', serie:'prise large', load:'+15', unit:'×4 @8 lest', rpe:true, repsTxt:4, hint:'', timer:150},
+      {tag:'Backoff', cls:'', exo:'Tractions lestées', serie:'1/2', load:'+7,5', unit:'×6 lest', hint:'lest fixe, quelle que soit la charge du top', timer:150},
+      {tag:'Backoff', cls:'', exo:'Tractions lestées', serie:'2/2', load:'+7,5', unit:'×6 lest', hint:'lest fixe', timer:150},
+      acc('Rowing haltères',1,3,'22','kg/haltère','row',12,8,'Superset avec le développé militaire — 60–90 s.','DM'),
+      acc('Développé militaire haltères',1,3,'20','kg/haltère','dm',12,8,'Superset avec le rowing.','Rowing'),
+      acc('Rowing haltères',2,3,'22','kg/haltère','row',12,8,'','DM'),
+      acc('Développé militaire haltères',2,3,'20','kg/haltère','dm',12,8,'','Rowing'),
+      acc('Rowing haltères',3,3,'22','kg/haltère','row',12,8,'','DM'),
+      acc('Développé militaire haltères',3,3,'20','kg/haltère','dm',12,8,'Les 3 séries à <b>12</b> → <b>+2 kg/h</b>, retour à 8.','Rowing'),
+      opt({tag:'Accessoire · 2×15', cls:'acc', exo:'Face pulls', serie:'série 1/2', load:'25', unit:'poulie', reps:{def:15, max:15, cells:2, key:'fp', cible:'cible 15'}, hint:'hors moteur (poulie)', timer:60}),
+      opt({tag:'Accessoire · 2×15', cls:'acc', exo:'Face pulls', serie:'série 2/2', load:'25', unit:'poulie', reps:{def:15, max:15, cells:2, key:'fp', cible:'cible 15'}, hint:'hors moteur (poulie)', timer:60}),
+      opt({tag:'Accessoire · 2×10', cls:'acc', exo:'Abdos roulette', serie:'série 1/2', load:'PDC', unit:'×10', reps:{def:10, max:10, cells:2, key:'ab', cible:'cible 10'}, hint:'', timer:60}),
+      opt({tag:'Accessoire · 2×10', cls:'acc', exo:'Abdos roulette', serie:'série 2/2', load:'PDC', unit:'×10', reps:{def:10, max:10, cells:2, key:'ab', cible:'cible 10'}, hint:'', timer:60})
+    ],
+    C: [
+      ech('Soulevé de terre',1,3,'60','×5',[20]), ech('Soulevé de terre',2,3,'72,5','×3',[25,1.25]), ech('Soulevé de terre',3,3,'82,5','×1',[25,5,1.25]),
+      top('Soulevé de terre','92,5',3,[25,10,1.25]),
+      bo('Soulevé de terre',1,2,'82,5','×4',[25,5,1.25]), bo('Soulevé de terre',2,2,'82,5','×4',[25,5,1.25]),
+      {tag:'Échauffement', cls:'', exo:'Incliné haltères', serie:'palier 1/1', load:'14', unit:'×8 kg/haltère', hint:'~60 % — pattern froid', timer:0},
+      acc('Incliné haltères',1,3,'24','kg/haltère','inc',12,8,'Les 3 séries à <b>12</b> → <b>26 kg/h</b>, retour à 3×8.'),
+      acc('Incliné haltères',2,3,'24','kg/haltère','inc',12,8,''),
+      acc('Incliné haltères',3,3,'24','kg/haltère','inc',12,8,''),
+      acc('Presse 45°',1,2,'+120','disques','presse',12,10,'Superset avec les tractions PDC. Chariot 75,7 kg hors compte.','Tractions PDC'),
+      {tag:'Accessoire · AMRAP −2', cls:'acc', exo:'Tractions poids de corps', serie:'série 1/2', load:'PDC', unit:'max −2', reps:{def:9, max:99, cells:2, key:'pdc', cible:'garde 2 en réserve'}, ss:'Presse', hint:'superset', timer:75},
+      acc('Presse 45°',2,2,'+120','disques','presse',12,10,'Les 2 séries à <b>12</b> → <b>+5 kg</b> de disques.','Tractions PDC'),
+      {tag:'Accessoire · AMRAP −2', cls:'acc', exo:'Tractions poids de corps', serie:'série 2/2', load:'PDC', unit:'max −2', reps:{def:8, max:99, cells:2, key:'pdc', cible:'garde 2 en réserve'}, ss:'Presse', hint:'superset', timer:75},
+      opt(acc('Élévations latérales',1,2,'8','kg/haltère','elevC',20,12,'Fourchette élargie 12–20 : haltères de 2 en 2 kg.')),
+      opt(acc('Élévations latérales',2,2,'8','kg/haltère','elevC',20,12,''))
+    ]
+  };
+
+  var $ = function(id){ return document.getElementById(id); };
+  var current = 'C', STEPS = SEANCES.C, idx = 0, selectedRpe = '8', curReps = 0, repsByKey = {};
+  var timerOn = false, t0 = 0, timerTotal = 150;
+
+  /* Numérotation des exercices d'une séance (échauffement rattaché à son exercice). */
+  function exoIndex(steps){
+    var order = [], map = {};
+    steps.forEach(function(s){ if (!(s.exo in map)){ map[s.exo] = order.length; order.push(s.exo); } });
+    return {map:map, n:order.length};
+  }
+
+  function plateSpan(kg){
+    var p = PLATE[kg];
+    return '<span class="plate" style="height:'+p.h+'px;width:'+p.w+'px;background:'+p.c+'" title="'+fmt(kg)+' kg"></span>';
+  }
+  function renderBar(side){
+    var bar = $('barViz'), ps = $('perside');
+    if (!bar) return;
+    if (!side){ bar.innerHTML=''; bar.style.display='none'; ps.style.display='none'; return; }
+    bar.style.display='flex'; ps.style.display='block';
+    if (side.length === 0){
+      ps.innerHTML = '<b>Barre seule</b>';
+      bar.innerHTML = '<span class="collar"></span><span class="shaft"></span><span class="collar"></span>';
+      return;
+    }
+    ps.innerHTML = 'Par côté : <b>' + side.map(fmt).join(' + ') + '</b>';
+    var left = side.map(plateSpan).join('');
+    var right = side.slice().reverse().map(plateSpan).join('');
+    bar.innerHTML = '<span class="plates">'+left+'</span><span class="collar"></span><span class="shaft"></span><span class="collar"></span><span class="plates">'+right+'</span>';
+  }
+  function renderExtra(s){
+    var x = $('extra'); x.innerHTML = '';
+    if (s.rpe){
+      x.innerHTML = '<div class="rpe-row" id="rpeRow">'+['7','7,5','8','8,5','9'].map(function(r){
+        return '<button class="rpe'+(r===selectedRpe?' sel':'')+'" data-rpe="'+r+'">'+r+'</button>';
+      }).join('')+'</div>';
+      x.querySelector('#rpeRow').addEventListener('click', function(e){
+        var chip = e.target.closest('.rpe'); if(!chip) return;
+        x.querySelectorAll('.rpe').forEach(function(c){c.classList.remove('sel');});
+        chip.classList.add('sel'); selectedRpe = chip.dataset.rpe; syncBtn();
+      });
+    }
+    if (s.reps){
+      curReps = s.reps.def;
+      var done = repsByKey[s.reps.key] || [];
+      var cells = [];
+      for (var i = 0; i < s.reps.cells; i++){
+        if (done[i] != null) cells.push('<span class="cell '+(done[i]>=s.reps.max||s.reps.max===99?'hit':'mid')+'">'+done[i]+'</span>');
+        else cells.push('<span class="cell">—</span>');
+      }
+      x.innerHTML =
+        '<div class="reps-editor"><button id="rMinus" aria-label="Une répétition de moins">−</button>'+
+        '<div class="val" id="repsVal">'+curReps+'<small>répétitions · '+s.reps.cible+'</small></div>'+
+        '<button id="rPlus" aria-label="Une répétition de plus">+</button></div>'+
+        '<div class="gauge">'+cells.join('')+'</div>'+
+        (s.note ? '<p class="acc-note">'+s.note+'</p>' : '');
+      $('rMinus').addEventListener('click', function(){ curReps = Math.max(1, curReps-1); $('repsVal').childNodes[0].nodeValue = curReps; syncBtn(); });
+      $('rPlus').addEventListener('click', function(){ curReps = Math.min(30, curReps+1); $('repsVal').childNodes[0].nodeValue = curReps; syncBtn(); });
+    } else if (s.note){
+      x.innerHTML = '<p class="acc-note">'+s.note+'</p>';
+    }
+  }
+  function stepLabel(s){
+    if (!s) return 'Fin de séance → écran 03';
+    var what = s.load + (s.unit ? ' ' + s.unit : '');
+    return s.exo + ' · ' + what;
+  }
+  function syncBtn(){
+    var s = STEPS[idx]; if (!s) return;
+    var label;
+    if (s.rpe) label = 'Valider · ' + s.load + ' ×' + s.repsTxt + ' @' + selectedRpe;
+    else if (s.reps) label = 'Valider · ' + s.load + ' ×' + curReps;
+    else label = 'Valider · ' + s.load + ' ' + s.unit;
+    $('validateBtn').textContent = label;
+  }
+  function render(){
+    var s = STEPS[idx];
+    var card = $('focusCard');
+    if (!s){
+      card.innerHTML = '<span class="tag acc">Terminé</span><h3 style="margin-top:8px">Séance '+current+' validée</h3>'+
+        '<p class="acc-note" style="margin-top:6px">Dans l\'app : bascule automatique sur l\'écran de fin (03).</p>'+
+        '<button class="validate" id="replayBtn" style="margin-top:14px">Rejouer la séance '+current+'</button>';
+      $('replayBtn').addEventListener('click', function(){ reset(current); });
+      $('nextWhat').innerHTML = '—';
+      return;
+    }
+    var ex = exoIndex(STEPS);
+    $('serieCount').textContent = 'Série ' + (idx+1) + '/' + STEPS.length;
+    $('fill').style.width = Math.round(100*idx/STEPS.length) + '%';
+    $('elapsed').textContent = Math.round(idx*3.2) + ' min';
+    $('exoCount').textContent = 'Exercice ' + (ex.map[s.exo]+1) + '/' + ex.n;
+    card.innerHTML =
+      '<span style="display:flex; align-items:center; flex-wrap:wrap; gap:0"><span class="tag '+s.cls+'">'+s.tag+'</span>'+(s.ss?'<span class="tag2">SS · '+s.ss+'</span>':'')+'</span>'+
+      '<h3>'+s.exo+' <span class="serie-count">'+s.serie+'</span></h3>'+
+      '<div class="bigload"><span class="kg" style="'+(s.load==='PDC'?'font-size:40px':'')+'">'+s.load+'</span><span class="unit">'+s.unit+'</span></div>'+
+      '<p class="perside" id="perside"></p><div class="bar" id="barViz"></div><div id="extra"></div>'+
+      '<button class="validate" id="validateBtn"></button>'+
+      (s.skippable ? '<button class="skipbtn" id="skipBtn">Sauter — optionnel</button>' : '');
+    if (!reduced){ card.style.animation='none'; void card.offsetWidth; card.style.animation=''; }
+    renderBar(s.side || null);
+    renderExtra(s);
+    syncBtn();
+    $('nextWhat').innerHTML = stepLabel(STEPS[idx+1]).replace(/·\s*(.+)$/, '· <span class="num">$1</span>');
+    $('validateBtn').addEventListener('click', function(){
+      if (s.reps){ (repsByKey[s.reps.key] = repsByKey[s.reps.key] || []).push(curReps); }
+      if (s.timer) startTimer(s.timer, stepLabel(STEPS[idx+1]));
+      else $('timerLbl').textContent = 'Repos libre — palier suivant';
+      idx += 1;
+      setTimeout(render, 350);
+    });
+    var sk = $('skipBtn');
+    if (sk) sk.addEventListener('click', function(){ idx += 1; render(); });
+  }
+  function startTimer(total, nextLabel){
+    timerOn = true; timerTotal = total; t0 = performance.now();
+    $('timer').classList.add('running');
+    var arc = $('arc');
+    if (arc && !reduced){ arc.style.animation='none'; void arc.getBBox(); arc.style.animation=''; }
+    $('timerLbl').textContent = 'Récup ' + Math.floor(total/60) + ':' + String(total%60).padStart(2,'0') + ' — ensuite : ' + nextLabel.toLowerCase();
+  }
+  function reset(type){
+    current = type; STEPS = SEANCES[type]; idx = 0; selectedRpe = '8'; repsByKey = {};
+    timerOn = false; $('timer').classList.remove('running');
+    $('clock').textContent = '—'; $('timerLbl').textContent = 'Le chrono part à la première série validée';
+    document.querySelectorAll('#seanceSel .sel').forEach(function(b){ b.classList.toggle('on', b.dataset.s === type); });
+    render();
+  }
+  $('seanceSel').addEventListener('click', function(e){
+    var b = e.target.closest('.sel'); if (!b) return;
+    reset(b.dataset.s);
+  });
+  (function tick(now){
+    if (timerOn && !reduced){
+      var DEMO = 12;
+      var frac = ((now - t0) / 1000 % DEMO) / DEMO;
+      var sLeft = Math.max(0, Math.round(timerTotal * (1 - frac)));
+      $('clock').textContent = Math.floor(sLeft/60) + ':' + String(sLeft%60).padStart(2,'0');
+    }
+    requestAnimationFrame(tick);
+  })(performance.now());
+
+  reset('C');
+})();
+</script>
+
+</body>
+</html>

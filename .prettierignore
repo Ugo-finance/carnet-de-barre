@@ -5,3 +5,6 @@ handoff
 package-lock.json
 *.md
 vercel.json
+
+# Pièce du dossier de conception importée telle quelle : référence de rendu, pas du code à nous.
+docs/refonte/maquette-ux.html
