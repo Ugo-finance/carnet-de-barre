@@ -317,6 +317,16 @@ describe('charge commune aux dips et aux tractions', () => {
     expect(plans.get('a-tractions-lestees')?.weight).toBe(10)
   })
 
+  it('ne fait pas hériter un exercice jamais fait de la charge de l’autre', () => {
+    // P1 de Codex. Les dips tirent 12,5 kg, les tractions n'ont aucun historique : les
+    // aligner sur 12,5 ferait de l'absence de preuve une preuve, ce que le moteur
+    // refuse partout ailleurs. La référence d'un membre sans passé est son départ.
+    const plans = groupe([seance('2026-09-20', 12.5, 8, 8, 8)], [])
+
+    expect(plans.get('a-dips')?.weight).toBe(10)
+    expect(plans.get('a-tractions-lestees')?.weight).toBe(10)
+  })
+
   it('n’a rien à décider sans le moindre historique', () => {
     const plans = groupe([], [])
     expect(plans.get('a-dips')).toMatchObject({ weight: 10, outcome: 'depart' })

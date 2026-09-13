@@ -205,13 +205,19 @@ export function planLinkedAccessories(
   // saut du plus grossier ferait tomber l'autre sur une charge qui n'existe pas.
   const pas = Math.min(...members.map((member) => weightStepFor(member.exercise.loadKind)))
 
-  // Charge de référence : la **plus petite** des dernières charges connues. Si les
-  // deux ont divergé par le passé, les réaligner vers le bas ne propose jamais à Ugo
-  // une charge qu'il n'a pas tenue sur les deux mouvements.
-  const dernieres = members
-    .map((member) => member.history[0]?.weight)
+  // Charge de référence : la **plus petite** de celles que chaque membre a prouvées.
+  // Réaligner vers le bas ne propose jamais à Ugo une charge qu'il n'a pas tenue sur
+  // les deux mouvements.
+  //
+  // Un membre **sans historique** compte pour sa charge de départ, il ne disparaît pas
+  // du calcul. L'ignorer faisait hériter les tractions jamais faites des 12,5 kg
+  // atteints aux dips : l'absence de preuve redevenait une preuve, ce que ce fichier
+  // refuse partout ailleurs.
+  const references = members
+    .map((member) => member.history[0]?.weight ?? member.exercise.suggestedWeight ?? null)
     .filter((weight): weight is number => weight != null)
-  const base = dernieres.length > 0 ? Math.min(...dernieres) : (plans[0]?.plan.weight ?? null)
+  const base = references.length > 0 ? Math.min(...references) : null
+  const aucunHistorique = members.every((member) => member.history[0]?.weight == null)
 
   const tousMontent = plans.every(({ plan }) => plan.outcome === 'monte')
   const tousBloquent = plans.every(({ plan }) => plan.outcome === 'blocage')
@@ -220,7 +226,7 @@ export function planLinkedAccessories(
   let commune = base
   // Aucune charge connue sur aucun membre : il n'y a rien à maintenir, on démarre.
   // Annoncer un « maintien » ici ferait passer une première séance pour une reprise.
-  if (base == null || dernieres.length === 0) {
+  if (base == null || aucunHistorique) {
     outcome = 'depart'
   } else if (tousMontent) {
     outcome = 'monte'
