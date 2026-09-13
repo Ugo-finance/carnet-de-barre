@@ -29,63 +29,63 @@ horodate() { date '+%d.%m.%Y %H:%M:%S'; }
 # Les appels n'ecrivent donc plus rien sur la sortie standard en cas d'echec : ils
 # rendent un code non nul, et l'appelant emet une alarme *jamais inscrite dans
 # l'etat*, donc repetee a chaque tour tant que la panne dure.
-ALARME=0
-
 api() { gh api --paginate "$@" 2>>"$STATE_DIR/veille-$ME.err"; }
 prs() { gh pr list --repo "$REPO" --state open "$@" 2>>"$STATE_DIR/veille-$ME.err"; }
 
 degrade() {
   echo "$(horodate) VEILLE DEGRADEE — $1 injoignable. Verifier veille-$ME.err ; ne pas se fier au silence."
-  ALARME=1
 }
 
 # Lit une source, puis signale les nouveautes. Le `<<<` evite le sous-shell d'un
 # pipe : sans lui, un `return` ou un compteur ne remonterait pas jusqu'ici.
 signaler() {
-  etiquette="$1"; source_nom="$2"; sortie="$3"
+  etiquette="$1"; sortie="$2"
   while IFS=$'\t' read -r k msg; do
     # Une cle vide vient forcement d'une anomalie, jamais d'un evenement reel :
     # l'inscrire rendrait cette anomalie silencieuse pour toujours.
     [ -z "$k" ] && continue
     vu "$k" || { marquer "$k"; echo "$(horodate) $etiquette $msg"; }
   done <<< "$sortie"
-  unset source_nom
 }
 
 echo "$(horodate) veille $ME armée sur $REPO — signale le marqueur $MARQUE (état : $STATE)"
 
 while true; do
-  ALARME=0
-
   # 1. PR ouvertes : nouvelle PR ou nouvelle tête (SHA)
   if liste=$(prs --json number,title,headRefName,headRefOid \
     --jq '.[] | "pr\(.number)@\(.headRefOid)\t#\(.number) \(.title) [\(.headRefName)] tête \(.headRefOid[0:10])"'); then
-    signaler "PR" "liste des PR" "$liste"
+    signaler "PR" "$liste"
   else
     degrade "la liste des PR"
   fi
 
-  if numeros=$(prs --json number --jq '.[].number'); then
-    for n in $numeros; do
-      # 2. Revues soumises par l'autre agent
-      if revues=$(api "repos/$REPO/pulls/$n/reviews" --jq '.[] | select((.body // "") | contains("'"$MARQUE"'")) | "r\(.id)\t#'"$n"' revue \(.state) sur \(.commit_id[0:10])"'); then
-        signaler "REVUE" "revues de #$n" "$revues"
-      else
-        degrade "les revues de #$n"
-      fi
-      # 3. Commentaires de diff de l'autre agent
-      if diffs=$(api "repos/$REPO/pulls/$n/comments" --jq '.[] | select((.body // "") | contains("'"$MARQUE"'")) | "d\(.id)@\(.updated_at)\t#'"$n"' \(.path):\(.line // .original_line // "?") — \(.body | split("\n")[0] | .[0:100])"'); then
-        signaler "DIFF" "commentaires de diff de #$n" "$diffs"
-      else
-        degrade "les commentaires de diff de #$n"
-      fi
-    done
+  if ! numeros=$(prs --json number --jq '.[].number'); then
+    # Sans cet `else`, une coupure survenue entre les deux appels faisait sauter
+    # revues et commentaires de diff en silence — le « faussement calme » que ce
+    # script existe pour empêcher, reproduit à l'intérieur de son propre correctif.
+    degrade "l'énumération des PR (revues et commentaires de diff non inspectés)"
+    numeros=""
   fi
+
+  for n in $numeros; do
+    # 2. Revues soumises par l'autre agent
+    if revues=$(api "repos/$REPO/pulls/$n/reviews" --jq '.[] | select((.body // "") | contains("'"$MARQUE"'")) | "r\(.id)\t#'"$n"' revue \(.state) sur \(.commit_id[0:10])"'); then
+      signaler "REVUE" "$revues"
+    else
+      degrade "les revues de #$n"
+    fi
+    # 3. Commentaires de diff de l'autre agent
+    if diffs=$(api "repos/$REPO/pulls/$n/comments" --jq '.[] | select((.body // "") | contains("'"$MARQUE"'")) | "d\(.id)@\(.updated_at)\t#'"$n"' \(.path):\(.line // .original_line // "?") — \(.body | split("\n")[0] | .[0:100])"'); then
+      signaler "DIFF" "$diffs"
+    else
+      degrade "les commentaires de diff de #$n"
+    fi
+  done
 
   # 4. Commentaires de conversation (PR et issues) de l'autre agent, y compris édités
   if commentaires=$(api "repos/$REPO/issues/comments?per_page=100&sort=updated&direction=desc" \
     --jq '.[] | select((.body // "") | contains("'"$MARQUE"'")) | "c\(.id)@\(.updated_at)\t\(.issue_url | split("/") | last | "#" + .) — \(.body | split("\n")[0] | .[0:110])"'); then
-    signaler "COMMENTAIRE" "commentaires" "$commentaires"
+    signaler "COMMENTAIRE" "$commentaires"
   else
     degrade "les commentaires"
   fi
