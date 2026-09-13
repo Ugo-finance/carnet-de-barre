@@ -91,14 +91,33 @@ describe('WarmupBlock', () => {
     )
 
     const summary = screen.getByRole('button', {
-      name: /✓ Échauffement 3\/3 · 60×5 · 72,5×3 · 82,5×1/,
+      name: /Échauffement 2\/3 validés · 1 sauté · 60×5 · 72,5 sauté · 82,5×1/,
     })
+    expect(summary).not.toHaveTextContent('✓')
     expect(summary).toHaveAttribute('aria-expanded', 'false')
     expect(screen.queryByRole('article', { name: 'Palier 1' })).not.toBeInTheDocument()
 
     fireEvent.click(summary)
     expect(screen.getByRole('article', { name: 'Palier 1' })).toBeInTheDocument()
     expect(summary).toHaveAttribute('aria-expanded', 'true')
+  })
+
+  it('réserve la coche et le détail réalisé à une rampe entièrement validée', () => {
+    render(
+      <WarmupBlock
+        exerciseLabel="Soulevé de terre"
+        loadKind="barTotal"
+        sets={SETS.map((set) => ({ ...set, status: 'validated' as const }))}
+        onSetChange={vi.fn()}
+        onSetValidate={vi.fn()}
+      />,
+    )
+
+    expect(
+      screen.getByRole('button', {
+        name: '✓ Échauffement 3/3 · 60×5 · 72,5×3 · 82,5×1',
+      }),
+    ).toHaveAttribute('aria-expanded', 'false')
   })
 
   it('laisse chaque palier passable avec une cible tactile de 44 px', () => {

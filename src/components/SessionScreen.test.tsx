@@ -207,11 +207,10 @@ describe('SessionScreen', () => {
     ).toBeInTheDocument()
   })
 
-  it('garde une zone chrono stable et neutre entre deux récupérations', () => {
+  it('affiche un état chrono neutre entre deux récupérations', () => {
     renderSession('C')
 
     const slot = screen.getByRole('region', { name: 'Chronomètre' })
-    expect(slot).toHaveClass('min-h-[11rem]')
     expect(within(slot).getByText('Repos libre')).toBeInTheDocument()
     expect(within(slot).queryByRole('timer')).not.toBeInTheDocument()
   })

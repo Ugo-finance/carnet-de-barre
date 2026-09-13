@@ -22,15 +22,20 @@ function isBodyweightStep(set: SetLog): boolean {
   return set.loadKind === 'bodyweight' || (set.loadKind === 'added' && set.targetWeight === null)
 }
 
-function describeSet(set: SetLog): string {
-  const reps = set.reps === null ? '?' : formatNumber(set.reps)
-
-  if (isBodyweightStep(set)) return `PDC×${reps}`
-  if (set.weight === null) return `?×${reps}`
+function describeLoad(set: SetLog): string {
+  if (isBodyweightStep(set)) return 'PDC'
+  if (set.weight === null) return '?'
   const weight = formatNumber(set.weight)
-  if (set.loadKind === 'added') return `+${weight}×${reps}`
-  if (set.loadKind === 'perDumbbell') return `${weight}×${reps}/h`
-  return `${weight}×${reps}`
+  if (set.loadKind === 'added') return `+${weight}`
+  if (set.loadKind === 'perDumbbell') return `${weight}/h`
+  return weight
+}
+
+function describeSet(set: SetLog): string {
+  const load = describeLoad(set)
+  if (set.status === 'skipped') return `${load} sauté`
+  const reps = set.reps === null ? '?' : formatNumber(set.reps)
+  return `${load}×${reps}`
 }
 
 /**
@@ -46,8 +51,10 @@ export function WarmupBlock({
   onSetValidate,
 }: WarmupBlockProps) {
   const contentId = useId()
+  const validated = sets.filter((set) => set.status === 'validated').length
   const treated = sets.filter(isTreated).length
   const complete = sets.length > 0 && treated === sets.length
+  const allValidated = validated === sets.length
   const [expanded, setExpanded] = useState(!complete)
 
   if (sets.length === 0) return null
@@ -70,7 +77,9 @@ export function WarmupBlock({
           className={`min-w-0 truncate ${complete ? 'num text-sm text-muted' : 'font-semibold'}`}
         >
           {complete
-            ? `✓ Échauffement ${treated}/${sets.length} · ${summary}`
+            ? allValidated
+              ? `✓ Échauffement ${validated}/${sets.length} · ${summary}`
+              : `Échauffement ${validated}/${sets.length} validés · ${sets.length - validated} sauté${sets.length - validated > 1 ? 's' : ''} · ${summary}`
             : `Échauffement ${treated}/${sets.length}`}
         </span>
         <span aria-hidden="true" className="shrink-0 text-muted">
