@@ -4,6 +4,7 @@ import {
   currentSession,
   describeWhen,
   isScheduledSessionDone,
+  previousScheduledDay,
   sessionTypeFor,
   todayInZurich,
   weekdayOf,
@@ -126,21 +127,32 @@ describe('ce que propose l’écran d’accueil', () => {
     // Dimanche : la rotation prévoit C. Un A lancé à la main ne doit pas faire
     // disparaître le C du jour, sinon le programme perd une séance.
     const dimanche = '2026-09-20'
-    expect(isScheduledSessionDone(dimanche, ['A'])).toBe(false)
+    expect(isScheduledSessionDone(dimanche, [{ date: dimanche, type: 'A' }])).toBe(false)
     const session = currentSession(instant(`${dimanche}T14:00:00Z`), false)
     expect(session).toMatchObject({ type: 'C', isToday: true })
   })
 
   it('passe à la suivante quand c’est bien la séance prévue qui est faite', () => {
     const dimanche = '2026-09-20'
-    expect(isScheduledSessionDone(dimanche, ['C'])).toBe(true)
-    expect(isScheduledSessionDone(dimanche, ['A', 'C'])).toBe(true)
+    expect(isScheduledSessionDone(dimanche, [{ date: dimanche, type: 'C' }])).toBe(true)
+    expect(
+      isScheduledSessionDone(dimanche, [
+        { date: dimanche, type: 'A' },
+        { date: dimanche, type: 'C' },
+      ]),
+    ).toBe(true)
     const session = currentSession(instant(`${dimanche}T18:00:00Z`), true)
     expect(session).toMatchObject({ type: 'A', scheduledDate: '2026-09-22' })
   })
 
   it('ne considère aucune séance comme prévue un jour creux', () => {
-    expect(isScheduledSessionDone('2026-09-21', ['A', 'B', 'C'])).toBe(false)
+    expect(
+      isScheduledSessionDone('2026-09-21', [
+        { date: '2026-09-21', type: 'A' },
+        { date: '2026-09-21', type: 'B' },
+        { date: '2026-09-21', type: 'C' },
+      ]),
+    ).toBe(false)
   })
 
   it('trouve toujours une séance dans les sept jours', () => {
@@ -150,6 +162,45 @@ describe('ce que propose l’écran d’accueil', () => {
       expect(session.inDays).toBeGreaterThanOrEqual(1)
       expect(session.inDays).toBeLessThanOrEqual(7)
     }
+  })
+
+  it('sert le créneau du dimanche avec un C fait la veille au soir', () => {
+    // Le cas réel du 12–13.09.2026 : Ugo s'est entraîné samedi soir au lieu du dimanche.
+    // L'app lui reproposait C le lendemain — « c'est stupide », et il avait raison.
+    const samedi = '2026-09-12'
+    const dimanche = '2026-09-13'
+    expect(isScheduledSessionDone(dimanche, [{ date: samedi, type: 'C' }])).toBe(true)
+
+    const session = currentSession(instant(`${dimanche}T10:00:00Z`), true)
+    expect(session).toMatchObject({ type: 'A', scheduledDate: '2026-09-15', isToday: false })
+  })
+
+  it('ne sert pas le créneau avec une séance d’un autre type faite en avance', () => {
+    // Un A fait samedi ne dispense pas du C prévu dimanche : s'entraîner en avance sert
+    // son créneau, ça ne décale jamais la rotation.
+    expect(isScheduledSessionDone('2026-09-13', [{ date: '2026-09-12', type: 'A' }])).toBe(false)
+  })
+
+  it('ne remonte pas au-delà du créneau précédent', () => {
+    // Le créneau du dimanche 13.09 s'ouvre après le jeudi 10.09. Un C fait le dimanche
+    // d'avant appartient au créneau passé et ne sert pas celui-ci.
+    expect(isScheduledSessionDone('2026-09-13', [{ date: '2026-09-06', type: 'C' }])).toBe(false)
+    // Borne exclusive : le jour même du créneau précédent n'y entre pas non plus.
+    expect(isScheduledSessionDone('2026-09-13', [{ date: '2026-09-10', type: 'C' }])).toBe(false)
+    // Mais le lendemain de ce jour-là, oui.
+    expect(isScheduledSessionDone('2026-09-13', [{ date: '2026-09-11', type: 'C' }])).toBe(true)
+  })
+
+  it('ne compte pas une séance postérieure au jour examiné', () => {
+    expect(isScheduledSessionDone('2026-09-13', [{ date: '2026-09-14', type: 'C' }])).toBe(false)
+  })
+
+  it('donne le jour de rotation précédent', () => {
+    expect(previousScheduledDay('2026-09-13')).toBe('2026-09-10')
+    expect(previousScheduledDay('2026-09-15')).toBe('2026-09-13')
+    expect(previousScheduledDay('2026-09-17')).toBe('2026-09-15')
+    // Depuis un jour creux aussi : le lundi 14.09 renvoie au dimanche 13.09.
+    expect(previousScheduledDay('2026-09-14')).toBe('2026-09-13')
   })
 
   it('utilise la date de Zurich, pas celle d’UTC, juste après minuit', () => {

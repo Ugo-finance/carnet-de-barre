@@ -92,8 +92,31 @@ describe('SessionHome', () => {
     render(<SessionHome store={store} now={SUNDAY} />)
 
     expect(await screen.findByRole('heading', { name: 'Séance A' })).toBeInTheDocument()
-    expect(screen.getByText("Aujourd'hui · hors rotation")).toBeInTheDocument()
+    // Ce n'est pas une sortie de route : c'est la séance suivante, entamée en avance.
+    expect(screen.getByText("Aujourd'hui · en avance")).toBeInTheDocument()
     expect(store.openDraft).toHaveBeenCalledWith('A', '2026-09-20')
+  })
+
+  it('ne repropose pas le dimanche une séance C faite la veille au soir', async () => {
+    // Le cas réel d'Ugo, 12–13.09.2026 : entraîné samedi soir au lieu du dimanche,
+    // l'app lui reproposait C le lendemain. « C'est stupide, la prochaine doit être
+    // mardi. » C'est ce test qui tient sa réponse.
+    const store = fakeStore({ seances: [saved('C', '2026-09-19')] })
+    render(<SessionHome store={store} now={SUNDAY} />)
+
+    expect(await screen.findByRole('heading', { name: 'Séance A' })).toBeInTheDocument()
+    expect(store.openDraft).toHaveBeenCalledWith('A', '2026-09-20')
+    expect(screen.queryByRole('heading', { name: 'Séance C' })).not.toBeInTheDocument()
+  })
+
+  it('propose quand même le C du dimanche si c’est un A qui a été fait la veille', async () => {
+    // S'entraîner en avance sert son créneau, ça ne décale jamais la rotation :
+    // un A fait samedi ne dispense pas du C prévu dimanche.
+    const store = fakeStore({ seances: [saved('A', '2026-09-19')] })
+    render(<SessionHome store={store} now={SUNDAY} />)
+
+    expect(await screen.findByRole('heading', { name: 'Séance C' })).toBeInTheDocument()
+    expect(screen.getByText("Aujourd'hui")).toBeInTheDocument()
   })
 
   it('reprend un brouillon existant avant la proposition du calendrier', async () => {
