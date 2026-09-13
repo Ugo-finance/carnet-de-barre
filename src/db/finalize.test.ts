@@ -60,9 +60,48 @@ describe('brouillon pré-rempli', () => {
 
   it('prépare les trois séries du développé volume', async () => {
     const draft = await store.openDraft('A', '2026-09-15')
-    const volume = draft.sets.filter((set) => set.exerciseId === 'a-bench-vol')
+    // Filtré sur le rôle depuis CB-56 : l'exercice porte aussi ses paliers
+    // d'échauffement, qui ne sont ni à 60 kg ni à 8 répétitions.
+    const volume = draft.sets.filter(
+      (set) => set.exerciseId === 'a-bench-vol' && set.role === 'volume',
+    )
     expect(volume).toHaveLength(3)
     expect(volume.every((set) => set.weight === 60 && set.reps === 8)).toBe(true)
+  })
+
+  it('précède le top set de ses paliers, jamais l’inverse', async () => {
+    // Trou trouvé par mutation : déplacer les paliers **après** la série de travail ne
+    // faisait tomber aucun test. Un échauffement qui vient après l'effort n'en est pas un,
+    // et rien ne le disait. Le squat est un `topset` avec backoffs, un chemin distinct de
+    // celui du volume testé juste en dessous.
+    const draft = await store.openDraft('A', '2026-09-15')
+    const squat = draft.sets.filter((set) => set.exerciseId === 'a-squat')
+
+    expect(squat.map((set) => set.role)).toEqual([
+      'warmup',
+      'warmup',
+      'warmup',
+      'warmup',
+      'top',
+      'backoff',
+      'backoff',
+    ])
+    expect(squat.slice(0, 4).map((set) => set.weight)).toEqual([20, 37.5, 52.5, 65])
+  })
+
+  it('précède le développé volume de ses paliers d’échauffement', async () => {
+    // Le contre-test du précédent : filtrer sur le rôle ne doit pas revenir à balayer
+    // les paliers sous le tapis. Ils sont bien là, et **avant** la série de travail.
+    const draft = await store.openDraft('A', '2026-09-15')
+    const exercice = draft.sets.filter((set) => set.exerciseId === 'a-bench-vol')
+    expect(exercice.map((set) => set.role)).toEqual([
+      'warmup',
+      'warmup',
+      'volume',
+      'volume',
+      'volume',
+    ])
+    expect(exercice.slice(0, 2).map((set) => set.weight)).toEqual([20, 40])
   })
 
   it('ne demande pas de charge sur un exercice au poids de corps', async () => {
