@@ -147,6 +147,54 @@ describe('DraftStore (implémentation en mémoire)', () => {
       expect((await store.getTargets()).squat.w).toBe(75)
     })
 
+    it('n’injecte aucun palier dans un brouillon déjà commencé', async () => {
+      // La garantie centrale de CB-56, et la plus facile à casser sans le voir : une mise
+      // à jour de l'app pendant qu'Ugo est en salle ne doit **rien** ajouter au milieu de
+      // ce qu'il est en train de faire. Sa séance changerait de forme entre deux séries.
+      //
+      // Le brouillon simulé ici est celui d'une version d'avant les paliers : on les
+      // retire, puis on valide une série pour le rendre actif.
+      const ouvert = await store.openDraft('C', '2026-09-20')
+      const ancien = {
+        ...ouvert,
+        sets: ouvert.sets
+          .filter((set) => set.role !== 'warmup')
+          .map((set, rang) => (rang === 0 ? { ...set, status: 'validated' as const } : set)),
+      }
+      await store.saveDraft(ancien)
+
+      const repris = await store.openDraft('C', '2026-09-20')
+
+      expect(repris.sets.some((set) => set.role === 'warmup')).toBe(false)
+      expect(repris.sets.map((set) => set.id)).toEqual(ancien.sets.map((set) => set.id))
+    })
+
+    it('pose en revanche les paliers sur un brouillon vierge reconstruit', async () => {
+      // Le contre-test du précédent, sans lequel « ne rien injecter » se satisferait d'un
+      // moteur qui n'injecte jamais rien. Un brouillon jamais touché ne porte aucune
+      // information (CB-27) : le reconstruire sur de nouvelles cibles doit lui donner ses
+      // paliers, et c'est ce qui fait que l'échauffement suit une cible ajustée.
+      await store.openDraft('C', '2026-09-20')
+
+      await store.adjustTarget('deadlift', { w: 95 })
+
+      const reconstruit = await store.loadDraft()
+      const paliers = (reconstruit?.sets ?? []).filter((set) => set.role === 'warmup')
+      // Nommés par exercice, et non en liste de nombres : la séance C porte aussi le
+      // palier du développé incliné, et une liste nue laissait croire à une erreur là où
+      // il n'y avait qu'un exercice oublié dans l'attente.
+      //
+      // Le soulevé de terre part de la cible **ajustée** : 60 % de 95 tombe sous le
+      // plancher et remonte à 60, puis 75 et 85. C'est ce qui prouve que l'échauffement
+      // suit la cible, et pas la valeur figée à l'ouverture du brouillon.
+      expect(paliers.map((set) => `${set.exerciseId} ${set.weight}`)).toEqual([
+        'c-deadlift 60',
+        'c-deadlift 75',
+        'c-deadlift 85',
+        'c-di 14',
+      ])
+    })
+
     it('ne perd pas la progression des accessoires en reconstruisant le brouillon', async () => {
       // P2 de Codex sur CB-45 lot B2. Le raccord n'avait été fait que dans `openDraft`,
       // pas dans la reconstruction d'`adjustTarget` : ajuster une cible ramenait
@@ -170,10 +218,14 @@ describe('DraftStore (implémentation en mémoire)', () => {
       await store.adjustTarget('deadlift', { w: 95 })
 
       const reconstruit = await store.loadDraft()
-      expect(reconstruit?.sets.find((set) => set.exerciseId === 'c-di')?.weight).toBe(26)
+      // Le rôle est filtré depuis CB-56 : ces deux exercices sont précédés d'un palier
+      // d'échauffement, et « la première série de c-di » rendrait ce palier.
+      const serie = (exerciseId: string, role: string) =>
+        reconstruit?.sets.find((set) => set.exerciseId === exerciseId && set.role === role)
+      expect(serie('c-di', 'accessory')?.weight).toBe(26)
       // Et l'ajustement demandé a bien eu lieu : sans ça le test ne prouverait que
       // la moitié de ce qu'il prétend.
-      expect(reconstruit?.sets.find((set) => set.exerciseId === 'c-deadlift')?.weight).toBe(95)
+      expect(serie('c-deadlift', 'top')?.weight).toBe(95)
     })
   })
 })

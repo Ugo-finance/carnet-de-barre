@@ -18,8 +18,8 @@ import 'fake-indexeddb/auto'
 import { describe, expect, it } from 'vitest'
 import { CarnetDatabase } from './database.ts'
 import { DexieStore } from './store.ts'
-import { BAR_WEIGHT } from '../domain/program.ts'
-import type { Draft, SetLog, Targets } from '../domain/types.ts'
+
+import type { Draft, Targets } from '../domain/types.ts'
 
 let compteur = 0
 function nomDeBase(): string {
@@ -27,58 +27,45 @@ function nomDeBase(): string {
   return `carnet-warmup-${compteur}`
 }
 
-/** Un palier tel que CB-56 en posera dans le brouillon. */
-function palier(exerciseId: string, index: number, weight: number, reps: number): SetLog {
-  return {
-    id: `${exerciseId}:warmup:${index}`,
-    exerciseId,
-    role: 'warmup',
-    index,
-    status: 'validated',
-    loadKind: 'barTotal',
-    weight,
-    reps,
-    rpe: null,
-    targetWeight: weight,
-    targetReps: reps,
-  }
-}
-
 /**
- * Les paliers de la séance A : ceux du squat **et ceux du développé volume**.
+ * Fait une séance A entière sur une base neuve, avec ou sans ses paliers d'échauffement.
  *
- * Le développé volume n'est pas décoratif ici, il est le seul endroit qui morde. Le top
- * set d'un schéma à volume est la **plus légère** des séries validées, puisque la
- * progression exige que les trois tiennent la charge : un palier à 20 kg y deviendrait le
- * record de la séance et ferait tomber la cible de 60 à 20. Le squat, lui, est piloté par
- * sa série de rôle `top` et resterait juste même sans l'exclusion — un jeu de paliers
- * limité au squat aurait donc donné un test vert qui ne prouvait rien.
- */
-const PALIERS = [
-  palier('a-squat', 0, BAR_WEIGHT, 8),
-  palier('a-squat', 1, 37.5, 5),
-  palier('a-squat', 2, 52.5, 3),
-  palier('a-squat', 3, 65, 1),
-  palier('a-bench-vol', 0, BAR_WEIGHT, 10),
-  palier('a-bench-vol', 1, 40, 5),
-]
-
-/**
- * Fait une séance A entière sur une base neuve, avec ou sans paliers d'échauffement.
+ * Les paliers ne sont plus fabriqués ici : depuis CB-56 le brouillon les porte lui-même,
+ * et une fixture écrite à la main pourrait diverger de ce que l'app produit vraiment.
+ * `sansPaliers` les retire, et c'est cette séance-là qui sert de terme de comparaison.
  *
- * Toutes les séries de travail sont validées **telles que proposées** : c'est ce qui rend
- * les deux séances comparables, la seule différence étant les paliers.
+ * Toutes les séries de travail sont validées **telles que proposées** : la seule
+ * différence entre les deux séances est donc bien les paliers.
  */
 async function seanceA(avecPaliers: boolean): Promise<{ targets: Targets; draft: Draft }> {
   const store = new DexieStore(new CarnetDatabase(nomDeBase()))
   await store.ready()
   const draft = await store.openDraft('A', '2026-09-15')
-  const travail = draft.sets.map((set) => ({ ...set, status: 'validated' as const }))
-  const complet = { ...draft, sets: avecPaliers ? [...PALIERS, ...travail] : travail }
+  const retenues = avecPaliers ? draft.sets : draft.sets.filter((set) => set.role !== 'warmup')
+  const complet = {
+    ...draft,
+    sets: retenues.map((set) => ({ ...set, status: 'validated' as const })),
+  }
 
   await store.saveDraft(complet)
   const resultat = await store.finalizeSeance(draft.id)
   return { targets: resultat.targets, draft: complet }
+}
+
+/** Une séance A déjà faite, paliers compris, sur sa propre base. */
+async function baseAvecSeanceFaite(
+  nom: string,
+): Promise<{ store: DexieStore; base: CarnetDatabase }> {
+  const base = new CarnetDatabase(nom)
+  const store = new DexieStore(base)
+  await store.ready()
+  const draft = await store.openDraft('A', '2026-09-15')
+  await store.saveDraft({
+    ...draft,
+    sets: draft.sets.map((set) => ({ ...set, status: 'validated' as const })),
+  })
+  await store.finalizeSeance(draft.id)
+  return { store, base }
 }
 
 describe('une séance échauffée, écrite pour de vrai', () => {
@@ -98,31 +85,29 @@ describe('une séance échauffée, écrite pour de vrai', () => {
   })
 
   it('garde les paliers dans la séance enregistrée, avec leur rôle', async () => {
-    const nom = nomDeBase()
-    const store = new DexieStore(new CarnetDatabase(nom))
-    await store.ready()
-    const draft = await store.openDraft('A', '2026-09-15')
-    await store.saveDraft({
-      ...draft,
-      sets: [...PALIERS, ...draft.sets.map((s) => ({ ...s, status: 'validated' as const }))],
-    })
-    await store.finalizeSeance(draft.id)
+    const { store } = await baseAvecSeanceFaite(nomDeBase())
 
     const [seance] = (await store.listSeances()).filter((s) => s.date === '2026-09-15')
     const paliers = (seance?.sets ?? []).filter((set) => set.role === 'warmup')
-    expect(paliers).toHaveLength(6)
-    expect(paliers.map((set) => set.weight)).toEqual([BAR_WEIGHT, 37.5, 52.5, 65, BAR_WEIGHT, 40])
+    // Les valeurs du contrat pour la séance A : quatre paliers de squat, deux de développé
+    // volume, un au poids du corps avant les tractions lestées. Écrites en clair, et non
+    // relues du brouillon : c'est ce qui permet à ce test de voir un palier qui se perdrait
+    // entre la construction et l'écriture.
+    expect(paliers.map((set) => `${set.exerciseId} ${set.weight}×${set.reps}`)).toEqual([
+      'a-squat 20×8',
+      'a-squat 37.5×5',
+      'a-squat 52.5×3',
+      'a-squat 65×1',
+      'a-bench-vol 20×10',
+      'a-bench-vol 40×5',
+      'a-tractions-lestees null×5',
+    ])
   })
 
   it('n’écrit aucun palier dans le résumé ni dans les tops', async () => {
-    const store = new DexieStore(new CarnetDatabase(nomDeBase()))
-    await store.ready()
-    const draft = await store.openDraft('A', '2026-09-15')
-    await store.saveDraft({
-      ...draft,
-      sets: [...PALIERS, ...draft.sets.map((s) => ({ ...s, status: 'validated' as const }))],
-    })
-    const { seance } = await store.finalizeSeance(draft.id)
+    const { store } = await baseAvecSeanceFaite(nomDeBase())
+    const [seance] = (await store.listSeances()).filter((s) => s.date === '2026-09-15')
+    if (!seance) throw new Error('séance introuvable')
 
     expect(seance.tops.squat?.w).toBe(75)
     const squat = seance.lines.find((ligne) => ligne.startsWith('Squat'))
@@ -136,15 +121,7 @@ describe('une séance échauffée, écrite pour de vrai', () => {
     // migration nécessaire — il ne fait tourner aucune version antérieure du schéma. Cette
     // absence-là se lit dans `database.ts`, qui n'indexe ni ne stocke le rôle.
     const nom = nomDeBase()
-    const base = new CarnetDatabase(nom)
-    const store = new DexieStore(base)
-    await store.ready()
-    const draft = await store.openDraft('A', '2026-09-15')
-    await store.saveDraft({
-      ...draft,
-      sets: [...PALIERS, ...draft.sets.map((s) => ({ ...s, status: 'validated' as const }))],
-    })
-    await store.finalizeSeance(draft.id)
+    const { store, base } = await baseAvecSeanceFaite(nom)
     const avant = await store.listSeances()
     base.close()
 

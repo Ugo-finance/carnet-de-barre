@@ -12,7 +12,7 @@ import { applyProgression, deriveSeance, validatedSets, workingSets } from './de
 import { buildDraft } from './draft.ts'
 import { SCHEMA_VERSION, parseImport } from '../domain/schema.ts'
 import { BAR_WEIGHT } from '../domain/program.ts'
-import type { Draft, SetLog, Targets } from '../domain/types.ts'
+import type { Draft, Targets } from '../domain/types.ts'
 
 const CIBLES: Targets = {
   updatedAt: '2026-09-12',
@@ -23,43 +23,26 @@ const CIBLES: Targets = {
   benchVol: { w: 60, inc: 2.5, reps: 8, sets: 3, fail: null },
 }
 
-/** Un palier d'échauffement tel que CB-56 en posera dans le brouillon. */
-function palier(exerciseId: string, index: number, weight: number | null, reps: number): SetLog {
-  return {
-    id: `${exerciseId}:warmup:${index}`,
-    exerciseId,
-    role: 'warmup',
-    index,
-    status: 'validated',
-    loadKind: 'barTotal',
-    weight,
-    reps,
-    rpe: null,
-    targetWeight: weight,
-    targetReps: reps,
-  }
-}
-
-/** Une séance A entière, toutes séries de travail validées telles que proposées. */
+/**
+ * Une séance A entière, telle que l'app la propose, toutes séries validées.
+ *
+ * Depuis CB-56 le brouillon **porte lui-même** ses paliers : plus rien n'est injecté à la
+ * main ici. C'est mieux ainsi — une fixture écrite à la main peut diverger de ce que l'app
+ * produit vraiment, et c'est justement contre cette divergence que le test existe.
+ */
 function seanceAFaite(): Draft {
   const draft = buildDraft('A', '2026-09-15', CIBLES, { id: 'seance-a', now: 1 })
   return { ...draft, sets: draft.sets.map((set) => ({ ...set, status: 'validated' as const })) }
 }
 
-/** La même, précédée des quatre paliers de squat et des deux du développé volume. */
-function avecPaliers(draft: Draft): Draft {
-  return {
-    ...draft,
-    sets: [
-      palier('a-squat', 0, BAR_WEIGHT, 8),
-      palier('a-squat', 1, 37.5, 5),
-      palier('a-squat', 2, 52.5, 3),
-      palier('a-squat', 3, 65, 1),
-      palier('a-bench-vol', 0, BAR_WEIGHT, 10),
-      palier('a-bench-vol', 1, 40, 5),
-      ...draft.sets,
-    ],
-  }
+/** La même séance, privée de ses paliers : le terme de comparaison. */
+function sansPaliers(draft: Draft): Draft {
+  return { ...draft, sets: draft.sets.filter((set) => set.role !== 'warmup') }
+}
+
+/** Combien de paliers la séance A comporte réellement. */
+function nombreDePaliers(draft: Draft): number {
+  return draft.sets.filter((set) => set.role === 'warmup').length
 }
 
 describe('une séance échauffée donne exactement les mêmes cibles', () => {
@@ -67,27 +50,27 @@ describe('une séance échauffée donne exactement les mêmes cibles', () => {
     // Le test qui porte le lot. Aucune valeur écrite à la main : on compare la séance à
     // elle-même. Si les paliers entraient dans le moteur, la cible du développé volume
     // tomberait à 20 kg — c'est la plus légère des séries validées qui y fait foi.
-    const nue = applyProgression(seanceAFaite(), CIBLES)
-    const echauffee = applyProgression(avecPaliers(seanceAFaite()), CIBLES)
+    const nue = applyProgression(sansPaliers(seanceAFaite()), CIBLES)
+    const echauffee = applyProgression(seanceAFaite(), CIBLES)
 
     expect(echauffee.targets).toEqual(nue.targets)
     expect(echauffee.events).toEqual(nue.events)
   })
 
   it('ne fait bouger aucune ligne du résumé', () => {
-    expect(deriveSeance(avecPaliers(seanceAFaite()))).toEqual(deriveSeance(seanceAFaite()))
+    expect(deriveSeance(seanceAFaite())).toEqual(deriveSeance(sansPaliers(seanceAFaite())))
   })
 
   it('n’écrit aucun palier dans les tops', () => {
     // Contrôle direct de la valeur, en plus de l'égalité : un test qui ne compare que deux
     // chemins reste vert si les deux se trompent de la même façon.
-    const { tops } = deriveSeance(avecPaliers(seanceAFaite()))
+    const { tops } = deriveSeance(seanceAFaite())
     expect(tops.benchVol?.w).toBe(60)
     expect(tops.squat?.w).toBe(75)
   })
 
   it('ne laisse aucune charge d’échauffement dans le résumé lisible', () => {
-    const { lines } = deriveSeance(avecPaliers(seanceAFaite()))
+    const { lines } = deriveSeance(seanceAFaite())
     const squat = lines.find((ligne) => ligne.startsWith('Squat'))
     expect(squat).toBeDefined()
     expect(squat).not.toContain('37,5')
@@ -100,14 +83,15 @@ describe('ce que les paliers ne perdent pas pour autant', () => {
     // `validatedSets` doit rendre ce qui a été fait, `workingSets` ce qui compte. Les
     // confondre ferait disparaître les paliers de l'export, et une séance ne se
     // reproduirait plus telle qu'elle a eu lieu.
-    const draft = avecPaliers(seanceAFaite())
-    expect(validatedSets(draft).length - workingSets(draft).length).toBe(6)
+    const draft = seanceAFaite()
+    expect(nombreDePaliers(draft)).toBeGreaterThan(0)
+    expect(validatedSets(draft).length - workingSets(draft).length).toBe(nombreDePaliers(draft))
     expect(validatedSets(draft).some((set) => set.role === 'warmup')).toBe(true)
     expect(workingSets(draft).some((set) => set.role === 'warmup')).toBe(false)
   })
 
   it('survit à un aller-retour par le format d’échange', () => {
-    const draft = avecPaliers(seanceAFaite())
+    const draft = seanceAFaite()
     const fichier = {
       schemaVersion: SCHEMA_VERSION,
       targets: CIBLES,
@@ -127,7 +111,7 @@ describe('ce que les paliers ne perdent pas pour autant', () => {
     expect(relu.ok, relu.ok ? '' : relu.message).toBe(true)
     if (!relu.ok || relu.format !== 'current') throw new Error('format inattendu')
     const paliers = relu.data.seances[0]!.sets!.filter((set) => set.role === 'warmup')
-    expect(paliers).toHaveLength(6)
+    expect(paliers).toHaveLength(nombreDePaliers(draft))
     expect(paliers[0]!.weight).toBe(BAR_WEIGHT)
   })
 })

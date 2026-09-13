@@ -12,6 +12,7 @@
 
 import { SEANCES, type ExerciseDef } from '../domain/program.ts'
 import { accessoryPlans } from './accessory-history.ts'
+import { warmupPlan } from '../domain/warmup.ts'
 import type { AccessoryPlan } from '../domain/accessory.ts'
 import { backoffWeight } from '../domain/progression.ts'
 import type { Draft, Seance, SeanceType, SetLog, Targets } from '../domain/types.ts'
@@ -56,6 +57,21 @@ function blankSet(
   }
 }
 
+/**
+ * Les paliers d'échauffement d'un exercice, prêts à valider — CB-56.
+ *
+ * `workWeight` est la charge de la série de travail, celle-là même que porteront les
+ * séries qui suivent : la cible du jour pour un lift, la charge proposée pour un
+ * accessoire. Les paliers se dérivent donc **de ce qu'Ugo va réellement faire**, pas de
+ * la table — un accessoire dont le moteur a fait monter la charge voit son échauffement
+ * monter avec elle, sans qu'on ait à y penser.
+ */
+function warmupSetsFor(exercise: ExerciseDef, workWeight: number | null): SetLog[] {
+  return warmupPlan(exercise.warmup, exercise.loadKind, workWeight).map((palier, index) =>
+    blankSet(exercise, 'warmup', index, palier.weight, palier.reps),
+  )
+}
+
 /** Les séries d'un exercice, dans l'ordre où elles seront faites. */
 export function setsForExercise(
   exercise: ExerciseDef,
@@ -73,14 +89,17 @@ export function setsForExercise(
         backoffs.push(blankSet(exercise, 'backoff', index, charge, exercise.backoff.reps))
       }
     }
-    return [top, ...backoffs]
+    return [...warmupSetsFor(exercise, target.w), top, ...backoffs]
   }
 
   if (exercise.kind === 'volume' && target) {
     const count = target.sets ?? exercise.sets
-    return Array.from({ length: count }, (_, index) =>
-      blankSet(exercise, 'volume', index, target.w, target.reps),
-    )
+    return [
+      ...warmupSetsFor(exercise, target.w),
+      ...Array.from({ length: count }, (_, index) =>
+        blankSet(exercise, 'volume', index, target.w, target.reps),
+      ),
+    ]
   }
 
   if (exercise.kind === 'accessory') {
@@ -92,9 +111,18 @@ export function setsForExercise(
     // Un exercice au poids du corps n'a pas de charge à porter, plan ou pas.
     const proposee = plan ? plan.weight : (exercise.suggestedWeight ?? null)
     const charge = exercise.loadKind === 'bodyweight' ? null : proposee
-    return Array.from({ length: exercise.sets }, (_, index) =>
-      blankSet(exercise, 'accessory', index, charge, plan?.reps[index] ?? suggestedReps(exercise)),
-    )
+    return [
+      ...warmupSetsFor(exercise, charge),
+      ...Array.from({ length: exercise.sets }, (_, index) =>
+        blankSet(
+          exercise,
+          'accessory',
+          index,
+          charge,
+          plan?.reps[index] ?? suggestedReps(exercise),
+        ),
+      ),
+    ]
   }
 
   // Les exercices optionnels se notent en texte libre, pas en séries.
