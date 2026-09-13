@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { LIFTS, RUSHED_EXERCISE_COUNT, SEANCES, WEEKDAY_TO_TYPE, findExercise } from './program.ts'
+import {
+  LIFTS,
+  RUSHED_EXERCISE_COUNT,
+  SEANCES,
+  WEEKDAY_TO_TYPE,
+  findExercise,
+  weightStepFor,
+} from './program.ts'
 import type { SeanceType } from './types.ts'
 
 const TYPES: SeanceType[] = ['A', 'B', 'C']
@@ -101,5 +108,36 @@ describe('programme', () => {
   it('retrouve un exercice par son identifiant', () => {
     expect(findExercise('c-di')?.label).toContain('Développé incliné')
     expect(findExercise('inexistant')).toBeUndefined()
+  })
+})
+
+describe('pas de charge du matériel', () => {
+  it('avance de 2 kg sur les haltères et de 2,5 sur la barre', () => {
+    // Le râtelier de la salle va de 2 en 2 : 20, 22, 24. La grille de 2,5 héritée de
+    // l'ancien carnet proposait des haltères qui n'existent pas.
+    expect(weightStepFor('perDumbbell')).toBe(2)
+    expect(weightStepFor('barTotal')).toBe(2.5)
+    expect(weightStepFor('added')).toBe(2.5)
+  })
+
+  it('ne propose aucune charge absente du matériel', () => {
+    // Le test parcourt la table entière plutôt que d'énumérer les exercices : un
+    // exercice ajouté plus tard est couvert sans que personne ait à y penser. C'est
+    // ainsi que le rowing à 22,5 kg a été trouvé, et il traînait depuis le début.
+    const horsGrille = Object.values(SEANCES).flatMap((seance) =>
+      seance.exercises
+        .filter((exercise) => exercise.suggestedWeight != null)
+        .filter((exercise) => {
+          const pas = weightStepFor(exercise.loadKind)
+          return (
+            Math.abs(
+              exercise.suggestedWeight! / pas - Math.round(exercise.suggestedWeight! / pas),
+            ) > 1e-9
+          )
+        })
+        .map((exercise) => `${exercise.id} : ${exercise.suggestedWeight} kg`),
+    )
+
+    expect(horsGrille).toEqual([])
   })
 })

@@ -20,6 +20,33 @@ export const REST = {
   superset: 75,
 } as const
 
+/**
+ * Pas de charge disponible en salle, par nature de charge — CB-15.
+ *
+ * Une charge proposée hors grille envoie Ugo chercher un haltère qui n'existe pas,
+ * en pleine séance. Le pas se dérive donc de `loadKind` : il décrit le **matériel**,
+ * pas l'exercice, et deux exercices sur le même râtelier ne peuvent pas diverger.
+ *
+ * - `perDumbbell` : 2 kg, l'écart entre deux haltères voisins du râtelier (confirmé
+ *   par Ugo le 13.09.2026 — la grille de 2,5 héritée de l'ancien carnet était fausse) ;
+ * - `barTotal` et `added` : 2,5 kg, le plus petit disque étant 1,25 kg par côté ;
+ * - `machine` : 2,5 kg **par défaut, non vérifié**. La presse 45° est à disques, donc
+ *   2,5 tient ; les poulies se règlent souvent de 5 en 5. À trancher avec Ugo (UGO-181).
+ * - `bodyweight` : sans objet, aucun champ de charge n'est affiché.
+ */
+export const WEIGHT_STEP_BY_LOAD_KIND: Record<LoadKind, number> = {
+  barTotal: 2.5,
+  perDumbbell: 2,
+  added: 2.5,
+  bodyweight: 2.5,
+  machine: 2.5,
+}
+
+/** Le pas du stepper pour cette nature de charge. */
+export function weightStepFor(loadKind: LoadKind): number {
+  return WEIGHT_STEP_BY_LOAD_KIND[loadKind]
+}
+
 export interface LiftDef {
   label: string
   /** Incrément de progression en kg. */
@@ -199,11 +226,13 @@ export const SEANCES: Record<SeanceType, SeanceDef> = {
         label: 'Rowing haltères',
         kind: 'accessory',
         loadKind: 'perDumbbell',
-        scheme: '3×8–10 — 22,5 à 24 kg par haltère',
+        // 22,5 venait de l'ancien carnet, qui raisonnait sur la grille de la barre.
+        // Le râtelier va de 2 en 2 : cet haltère n'existe pas dans la salle d'Ugo.
+        scheme: '3×8–10 — 22 à 24 kg par haltère',
         sets: 3,
         reps: null,
         repsRange: [8, 10],
-        suggestedWeight: 22.5,
+        suggestedWeight: 22,
         restSeconds: REST.superset,
         supersetGroup: 'b-ss',
       },
