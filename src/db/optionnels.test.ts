@@ -14,6 +14,9 @@
 
 import { describe, expect, it } from 'vitest'
 import { buildDraft, hydrateDraft, type StoredDraft } from './draft.ts'
+import { MemoryStore } from './memory.ts'
+import { buildExport, serializeExport, validateImport } from './exchange.ts'
+import { SCHEMA_VERSION, parseImport } from '../domain/schema.ts'
 import { SEANCES } from '../domain/program.ts'
 import type { Draft, Seance, SeanceType, SetLog, Targets } from '../domain/types.ts'
 
@@ -198,5 +201,61 @@ describe('ce qu’Ugo avait déjà écrit', () => {
   it('ne replie pas deux fois le même brouillon', () => {
     const une = hydrateDraft(stocke([{ exerciseId: 'a-curls', done: true, note: '' }]))
     expect(hydrateDraft(une).notes).toBe(une.notes)
+  })
+})
+
+describe('l’aller-retour d’export', () => {
+  it('reproduit une séance dont les optionnels ont été faits', async () => {
+    const store = new MemoryStore()
+    await store.ready()
+
+    let draft = await store.openDraft('A', '2026-09-15')
+    // Les deux séries d'élévations, faites et notées — ce qui était impossible avant
+    // CB-69, où elles n'existaient que comme une ligne de texte.
+    draft = {
+      ...draft,
+      sets: draft.sets.map((set) =>
+        set.exerciseId === 'a-elevations' && set.role === 'accessory'
+          ? { ...set, weight: 10, reps: 15, status: 'validated' as const }
+          : set,
+      ),
+    }
+    await store.saveDraft(draft)
+    await store.finalizeSeance(draft.id)
+
+    const relu = validateImport(JSON.parse(serializeExport(await buildExport(store))))
+    const seance = relu.seances.find((candidate) => candidate.date === '2026-09-15')
+    const elevations = seance?.sets?.filter((set) => set.exerciseId === 'a-elevations')
+
+    expect(elevations?.map((set) => [set.role, set.weight, set.reps, set.status])).toEqual([
+      ['accessory', 10, 15, 'validated'],
+      ['accessory', 10, 15, 'validated'],
+    ])
+    // Le résumé lisible les porte aussi : c'est ce qu'Ugo relit dans l'historique.
+    expect(seance?.lines.some((line) => line.startsWith('Élévations latérales'))).toBe(true)
+  })
+
+  it('accepte encore une séance enregistrée qui porte des accessoires libres', () => {
+    // Le champ reste au schéma pour les séances déjà en base. Le retirer rendrait
+    // illisible un export produit avant ce lot — et un import qui refuse est un import
+    // qui fait perdre des données.
+    const fichier = {
+      schemaVersion: SCHEMA_VERSION,
+      targets: CIBLES,
+      seances: [
+        {
+          id: 'ancienne',
+          date: '2026-09-01',
+          type: 'A' as const,
+          lines: ['Curls : 12 kg × 12'],
+          tops: {},
+          notes: '',
+          accessories: [{ exerciseId: 'a-curls', done: true, note: '12 kg × 12' }],
+        },
+      ],
+    }
+
+    const relu = parseImport(fichier)
+    expect(relu.ok).toBe(true)
   })
 })
