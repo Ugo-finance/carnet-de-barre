@@ -319,6 +319,15 @@ describe('un exercice sans fourchette', () => {
     expect(plan).toMatchObject({ weight: 24, outcome: 'depart' })
     expect(plan.reps).toEqual([8, 8, 8])
   })
+
+  it('propage l’absence de répétitions au lieu d’inventer un zéro', () => {
+    // Les tractions au poids du corps se notent « maximum moins deux » : personne ne
+    // peut deviner ce nombre à l'avance. Une première version rendait `0`, ce qui
+    // fabriquait une performance nulle là où il n'y a qu'une absence — le parcours
+    // bout en bout l'a fait tomber à l'export, aucun test unitaire ne l'avait vu.
+    const sansRien: ExerciseDef = { ...DI, repsRange: undefined, reps: null }
+    expect(planAccessory(sansRien, []).reps).toEqual([null, null, null])
+  })
 })
 
 describe('charge commune aux dips et aux tractions', () => {

@@ -11,8 +11,10 @@
  */
 
 import { SEANCES, type ExerciseDef } from '../domain/program.ts'
+import { accessoryPlans } from './accessory-history.ts'
+import type { AccessoryPlan } from '../domain/accessory.ts'
 import { backoffWeight } from '../domain/progression.ts'
-import type { Draft, SeanceType, SetLog, Targets } from '../domain/types.ts'
+import type { Draft, Seance, SeanceType, SetLog, Targets } from '../domain/types.ts'
 
 /**
  * Identifiant de série, déterministe et unique dans la séance.
@@ -55,7 +57,11 @@ function blankSet(
 }
 
 /** Les séries d'un exercice, dans l'ordre où elles seront faites. */
-export function setsForExercise(exercise: ExerciseDef, targets: Targets): SetLog[] {
+export function setsForExercise(
+  exercise: ExerciseDef,
+  targets: Targets,
+  plan?: AccessoryPlan,
+): SetLog[] {
   const target = exercise.lift ? targets[exercise.lift] : undefined
 
   if (exercise.kind === 'topset' && target) {
@@ -78,11 +84,16 @@ export function setsForExercise(exercise: ExerciseDef, targets: Targets): SetLog
   }
 
   if (exercise.kind === 'accessory') {
-    // Pas de progression automatique sur les accessoires en V1 : la charge proposée
-    // est indicative, et « à renseigner » quand on ne la connaît pas (Q2 d'UGO-179).
-    const charge = exercise.loadKind === 'bodyweight' ? null : (exercise.suggestedWeight ?? null)
+    // La charge vient du **plan** quand on en a un — c'est-à-dire de ce qu'Ugo a fait,
+    // pas de la table. Sans plan, on retombe sur la valeur de départ : c'est ce que
+    // faisait l'app avant CB-45, et c'est le défaut qu'il a vu en salle, son incliné
+    // affichant 20 kg pendant qu'il en tirait 24.
+    //
+    // Un exercice au poids du corps n'a pas de charge à porter, plan ou pas.
+    const proposee = plan ? plan.weight : (exercise.suggestedWeight ?? null)
+    const charge = exercise.loadKind === 'bodyweight' ? null : proposee
     return Array.from({ length: exercise.sets }, (_, index) =>
-      blankSet(exercise, 'accessory', index, charge, suggestedReps(exercise)),
+      blankSet(exercise, 'accessory', index, charge, plan?.reps[index] ?? suggestedReps(exercise)),
     )
   }
 
@@ -101,16 +112,23 @@ export function buildDraft(
   type: SeanceType,
   date: string,
   targets: Targets,
-  options: { id: string; now?: number } = { id: crypto.randomUUID() },
+  options: { id: string; now?: number; seances?: readonly Seance[] } = {
+    id: crypto.randomUUID(),
+  },
 ): Draft {
   const now = options.now ?? Date.now()
   const seance = SEANCES[type]
+  // Sans historique, les plans sont vides et chaque accessoire retombe sur la charge
+  // de la table. Le défaut est donc le comportement d'avant CB-45, jamais une erreur.
+  const plans = accessoryPlans(seance.exercises, options.seances ?? [])
 
   return {
     id: options.id,
     date,
     type,
-    sets: seance.exercises.flatMap((exercise) => setsForExercise(exercise, targets)),
+    sets: seance.exercises.flatMap((exercise) =>
+      setsForExercise(exercise, targets, plans.get(exercise.id)),
+    ),
     accessories: seance.exercises
       .filter((exercise) => exercise.kind === 'optional')
       .map((exercise) => ({ exerciseId: exercise.id, done: false, note: '' })),

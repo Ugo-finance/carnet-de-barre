@@ -51,8 +51,15 @@ export type AccessoryOutcome =
 
 export interface AccessoryPlan {
   weight: number | null
-  /** Répétitions à pré-remplir, une par série, dans l'ordre. */
-  reps: number[]
+  /**
+   * Répétitions à pré-remplir, une par série, dans l'ordre.
+   *
+   * `null` quand il n'y a rien à proposer — les tractions au poids du corps se notent
+   * « maximum moins deux », un nombre que personne ne peut deviner à l'avance. Une
+   * première version rendait `0` ici, ce qui fabriquait une performance nulle là où il
+   * n'y avait qu'une absence : le parcours bout en bout l'a fait tomber à l'export.
+   */
+  reps: (number | null)[]
   outcome: AccessoryOutcome
 }
 
@@ -73,7 +80,7 @@ function seanceComplete(performance: AccessoryPerformance, series: number): bool
   return performance.reps.length >= series && performance.reps.every((reps) => reps != null)
 }
 
-function repeat(value: number, count: number): number[] {
+function repeat(value: number | null, count: number): (number | null)[] {
   return Array.from({ length: count }, () => value)
 }
 
@@ -136,8 +143,9 @@ export function planAccessory(
   // Sans fourchette, il n'existe pas de « haut » à atteindre : rien ne peut décider
   // d'une montée, et inventer un seuil reviendrait à écrire du programme.
   if (!range) {
-    const reps = exercise.reps ?? 0
-    return { weight: depart, reps: repeat(reps, exercise.sets), outcome: 'depart' }
+    // `exercise.reps` peut valoir `null` — les tractions au poids du corps se notent
+    // « maximum moins deux ». On propage l'absence plutôt que d'inventer un zéro.
+    return { weight: depart, reps: repeat(exercise.reps ?? null, exercise.sets), outcome: 'depart' }
   }
 
   const [bas, haut] = range
@@ -231,9 +239,9 @@ export interface AccessoryGroupMember {
  *
  * - monter dès qu'un seul mouvement le mérite imposerait à l'autre une charge qu'il
  *   n'a pas gagnée — c'est exactement ce qu'Ugo a écarté ;
- * - descendre dès qu'un seul bloque punirait celui qui progresse. Ugo n'a tranché que
- *   la montée ; la symétrie est **mon interprétation**, signalée comme telle, et se
- *   renverse en changeant `every` en `some`.
+ * - descendre dès qu'un seul bloque punirait celui qui progresse. Ugo a tranché ce
+ *   second point aussi, le 13.09.2026 : « non, les deux doivent bloquer ». Ce n'était
+ *   au départ que ma symétrie ; ça ne l'est plus.
  *
  * Les répétitions, elles, restent **propres à chaque exercice** : il peut faire 10 aux
  * dips et 8 aux tractions à la même charge, et doit voir ces deux chiffres-là.
