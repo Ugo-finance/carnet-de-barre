@@ -365,6 +365,51 @@ describe('useDraftEditor', () => {
     })
   })
 
+  it('recrée la rampe après avoir effacé puis ressaisi la charge de travail', async () => {
+    // P1 de la contre-revue sur CB-57 : effacer 24 retirait correctement le palier de
+    // l'incliné, mais son absence était ensuite prise pour la forme d'un brouillon legacy.
+    // Ressaisir 24 ne recréait donc jamais les 14 kg d'échauffement.
+    const initial = buildDraft('C', '2026-09-20', draftFixture().baseTargets, {
+      id: 'draft-cleared-work-weight',
+      now: 1,
+    })
+    const saveDraft = vi.fn<(draft: Draft) => Promise<void>>().mockResolvedValue(undefined)
+    const store: DraftPort = { loadDraft: vi.fn().mockResolvedValue(initial), saveDraft }
+    const { result } = renderHook(() => useDraftEditor(store))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    act(() =>
+      result.current.updateSet('c-di:accessory:0', {
+        weight: null,
+        reps: 8,
+        rpe: null,
+        status: 'entered',
+      }),
+    )
+    await act(() => result.current.flush())
+    expect(
+      saveDraft.mock.calls
+        .at(-1)?.[0]
+        .sets.filter((set) => set.exerciseId === 'c-di' && set.role === 'warmup'),
+    ).toEqual([])
+
+    act(() =>
+      result.current.updateSet('c-di:accessory:0', {
+        weight: 24,
+        reps: 8,
+        rpe: null,
+        status: 'entered',
+      }),
+    )
+    await act(() => result.current.flush())
+    expect(
+      saveDraft.mock.calls
+        .at(-1)?.[0]
+        .sets.filter((set) => set.exerciseId === 'c-di' && set.role === 'warmup')
+        .map((set) => [set.id, set.weight, set.reps]),
+    ).toEqual([['c-di:warmup:0', 14, 8]])
+  })
+
   it('ne recalcule pas la rampe depuis une série de travail ultérieure', async () => {
     // La rampe prépare la première série de travail. Modifier ensuite une réalisation
     // isolée ne doit pas réécrire rétroactivement ce qui la précédait.

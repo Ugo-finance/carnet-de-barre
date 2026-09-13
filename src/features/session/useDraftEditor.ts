@@ -41,11 +41,11 @@ function recalculateWarmups(
 ): SetLog[] {
   const exerciseSets = sets.filter((set) => set.exerciseId === exercise.id)
   const currentWarmups = exerciseSets.filter((set) => set.role === 'warmup')
-  // L'absence totale de rampe distingue un brouillon legacy d'un brouillon construit par
-  // CB-56. En ajouter ici modifierait une séance ouverte avant la mise à jour, précisément
-  // l'invariant que CB-56 protège. Le cas rare d'une rampe initialement vide reste donc
-  // vide jusqu'à une nouvelle séance : sans marqueur de version, préserver gagne.
-  if (currentWarmups.length === 0) return sets
+  // « Legacy » qualifie le brouillon entier, jamais un exercice isolé. Une modification
+  // peut légitimement vider la rampe d'un exercice (charge effacée ou plan écrasé sur la
+  // charge de travail) ; les autres paliers du brouillon prouvent alors qu'il a été créé
+  // par CB-56 et autorisent la rampe à réapparaître à la saisie suivante.
+  if (!sets.some((set) => set.role === 'warmup')) return sets
 
   const plan = warmupPlan(exercise.warmup, exercise.loadKind, workWeight)
 
