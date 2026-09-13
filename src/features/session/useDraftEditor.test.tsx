@@ -1,4 +1,5 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
+import { buildDraft } from '../../db/draft'
 import type { Draft } from '../../domain/types'
 import { type DraftPort, useDraftEditor } from './useDraftEditor'
 
@@ -293,6 +294,235 @@ describe('useDraftEditor', () => {
       weight: 65,
       status: 'entered',
     })
+  })
+
+  it('recalcule le palier vierge sans toucher aux paliers déjà manipulés', async () => {
+    const initial = buildDraft('A', '2026-09-22', draftFixture().baseTargets, {
+      id: 'draft-warmup',
+      now: 1,
+    })
+    initial.sets = initial.sets.map((set) => {
+      if (set.exerciseId !== 'a-squat' || set.role !== 'warmup') return set
+      if (set.index === 0) return { ...set, status: 'validated' as const }
+      if (set.index === 1) return { ...set, status: 'entered' as const, weight: 32.5 }
+      if (set.index === 2) return { ...set, status: 'skipped' as const }
+      return set
+    })
+    const saveDraft = vi.fn<(draft: Draft) => Promise<void>>().mockResolvedValue(undefined)
+    const store: DraftPort = { loadDraft: vi.fn().mockResolvedValue(initial), saveDraft }
+    const { result } = renderHook(() => useDraftEditor(store))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    act(() =>
+      result.current.updateSet('a-squat:top:0', {
+        weight: 80,
+        reps: 4,
+        rpe: null,
+        status: 'entered',
+      }),
+    )
+    await act(() => result.current.flush())
+
+    const warmups = saveDraft.mock.calls[0][0].sets.filter(
+      (set) => set.exerciseId === 'a-squat' && set.role === 'warmup',
+    )
+    expect(warmups.map(({ weight, status }) => ({ weight, status }))).toEqual([
+      { weight: 20, status: 'validated' },
+      { weight: 32.5, status: 'entered' },
+      { weight: 52.5, status: 'skipped' },
+      { weight: 70, status: 'planned' },
+    ])
+    // La proposition d'ouverture reste l'audit de ce qui était prévu avant la saisie.
+    expect(warmups[3]?.targetWeight).toBe(65)
+  })
+
+  it('suit la charge réelle d’un accessoire et conserve sa proposition initiale', async () => {
+    const initial = buildDraft('C', '2026-09-20', draftFixture().baseTargets, {
+      id: 'draft-accessory-warmup',
+      now: 1,
+    })
+    const saveDraft = vi.fn<(draft: Draft) => Promise<void>>().mockResolvedValue(undefined)
+    const store: DraftPort = { loadDraft: vi.fn().mockResolvedValue(initial), saveDraft }
+    const { result } = renderHook(() => useDraftEditor(store))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    act(() =>
+      result.current.updateSet('c-di:accessory:0', {
+        weight: 30,
+        reps: 8,
+        rpe: null,
+        status: 'entered',
+      }),
+    )
+    await act(() => result.current.flush())
+
+    const warmup = saveDraft.mock.calls[0][0].sets.find((set) => set.id === 'c-di:warmup:0')
+    expect(warmup).toMatchObject({
+      weight: 18,
+      reps: 8,
+      status: 'planned',
+      targetWeight: 14,
+    })
+  })
+
+  it('recrée la rampe après avoir effacé puis ressaisi la charge de travail', async () => {
+    // P1 de la contre-revue sur CB-57 : effacer 24 retirait correctement le palier de
+    // l'incliné, mais son absence était ensuite prise pour la forme d'un brouillon legacy.
+    // Ressaisir 24 ne recréait donc jamais les 14 kg d'échauffement.
+    const initial = buildDraft('C', '2026-09-20', draftFixture().baseTargets, {
+      id: 'draft-cleared-work-weight',
+      now: 1,
+    })
+    const saveDraft = vi.fn<(draft: Draft) => Promise<void>>().mockResolvedValue(undefined)
+    const store: DraftPort = { loadDraft: vi.fn().mockResolvedValue(initial), saveDraft }
+    const { result } = renderHook(() => useDraftEditor(store))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    act(() =>
+      result.current.updateSet('c-di:accessory:0', {
+        weight: null,
+        reps: 8,
+        rpe: null,
+        status: 'entered',
+      }),
+    )
+    await act(() => result.current.flush())
+    expect(
+      saveDraft.mock.calls
+        .at(-1)?.[0]
+        .sets.filter((set) => set.exerciseId === 'c-di' && set.role === 'warmup'),
+    ).toEqual([])
+
+    act(() =>
+      result.current.updateSet('c-di:accessory:0', {
+        weight: 24,
+        reps: 8,
+        rpe: null,
+        status: 'entered',
+      }),
+    )
+    await act(() => result.current.flush())
+    expect(
+      saveDraft.mock.calls
+        .at(-1)?.[0]
+        .sets.filter((set) => set.exerciseId === 'c-di' && set.role === 'warmup')
+        .map((set) => [set.id, set.weight, set.reps]),
+    ).toEqual([['c-di:warmup:0', 14, 8]])
+  })
+
+  it('ne recalcule pas la rampe depuis une série de travail ultérieure', async () => {
+    // La rampe prépare la première série de travail. Modifier ensuite une réalisation
+    // isolée ne doit pas réécrire rétroactivement ce qui la précédait.
+    const initial = buildDraft('C', '2026-09-20', draftFixture().baseTargets, {
+      id: 'draft-later-accessory-set',
+      now: 1,
+    })
+    const saveDraft = vi.fn<(draft: Draft) => Promise<void>>().mockResolvedValue(undefined)
+    const store: DraftPort = { loadDraft: vi.fn().mockResolvedValue(initial), saveDraft }
+    const { result } = renderHook(() => useDraftEditor(store))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    act(() =>
+      result.current.updateSet('c-di:accessory:1', {
+        weight: 30,
+        reps: 8,
+        rpe: null,
+        status: 'entered',
+      }),
+    )
+    await act(() => result.current.flush())
+
+    expect(saveDraft.mock.calls[0][0].sets.find((set) => set.id === 'c-di:warmup:0')).toMatchObject(
+      {
+        weight: 14,
+        status: 'planned',
+      },
+    )
+  })
+
+  it('n’injecte jamais de rampe dans un ancien brouillon qui n’en portait pas', async () => {
+    // Un brouillon ouvert avant CB-56 n'a aucun palier ni marqueur de version. Une charge
+    // modifiée après la mise à jour ne doit pas changer sa forme en pleine séance.
+    const initial = draftFixture()
+    const saveDraft = vi.fn<(draft: Draft) => Promise<void>>().mockResolvedValue(undefined)
+    const store: DraftPort = { loadDraft: vi.fn().mockResolvedValue(initial), saveDraft }
+    const { result } = renderHook(() => useDraftEditor(store))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    act(() =>
+      result.current.updateSet('set-1', {
+        weight: 80,
+        reps: 4,
+        rpe: null,
+        status: 'entered',
+      }),
+    )
+    await act(() => result.current.flush())
+
+    expect(saveDraft.mock.calls[0][0].sets.map((set) => set.id)).toEqual(['set-1'])
+  })
+
+  it('retire les paliers vierges devenus inutiles quand la charge baisse', async () => {
+    const initial = buildDraft('A', '2026-09-22', draftFixture().baseTargets, {
+      id: 'draft-shorter-warmup',
+      now: 1,
+    })
+    const saveDraft = vi.fn<(draft: Draft) => Promise<void>>().mockResolvedValue(undefined)
+    const store: DraftPort = { loadDraft: vi.fn().mockResolvedValue(initial), saveDraft }
+    const { result } = renderHook(() => useDraftEditor(store))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    act(() =>
+      result.current.updateSet('a-squat:top:0', {
+        weight: 25,
+        reps: 4,
+        rpe: null,
+        status: 'entered',
+      }),
+    )
+    await act(() => result.current.flush())
+
+    const warmups = saveDraft.mock.calls[0][0].sets.filter(
+      (set) => set.exerciseId === 'a-squat' && set.role === 'warmup',
+    )
+    expect(warmups.map((set) => [set.id, set.weight])).toEqual([
+      ['a-squat:warmup:0', 20],
+      ['a-squat:warmup:1', 22.5],
+    ])
+  })
+
+  it('ajoute les nouveaux paliers avant le travail quand la charge monte', async () => {
+    const targets = structuredClone(draftFixture().baseTargets)
+    targets.squat.w = 25
+    const initial = buildDraft('A', '2026-09-22', targets, {
+      id: 'draft-longer-warmup',
+      now: 1,
+    })
+    const saveDraft = vi.fn<(draft: Draft) => Promise<void>>().mockResolvedValue(undefined)
+    const store: DraftPort = { loadDraft: vi.fn().mockResolvedValue(initial), saveDraft }
+    const { result } = renderHook(() => useDraftEditor(store))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    act(() =>
+      result.current.updateSet('a-squat:top:0', {
+        weight: 50,
+        reps: 4,
+        rpe: null,
+        status: 'entered',
+      }),
+    )
+    await act(() => result.current.flush())
+
+    const squatSets = saveDraft.mock.calls[0][0].sets.filter((set) => set.exerciseId === 'a-squat')
+    expect(squatSets.map((set) => [set.role, set.index, set.weight])).toEqual([
+      ['warmup', 0, 20],
+      ['warmup', 1, 25],
+      ['warmup', 2, 35],
+      ['warmup', 3, 42.5],
+      ['top', 0, 50],
+      ['backoff', 0, 45],
+      ['backoff', 1, 45],
+    ])
   })
 
   it('persiste l’échéance, permet ±30 s et arrête le chrono', async () => {

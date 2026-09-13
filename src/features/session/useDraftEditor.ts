@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CarnetStore } from '../../db/contracts'
-import { findExercise } from '../../domain/program'
+import { setId as warmupSetId } from '../../db/draft'
+import { findExercise, type ExerciseDef } from '../../domain/program'
 import { backoffWeight } from '../../domain/progression'
 import type { AccessoryLog, Draft, SetLog } from '../../domain/types'
+import { warmupPlan } from '../../domain/warmup'
 import { shiftedDeadline } from './timer'
 
 export type DraftPort = Pick<CarnetStore, 'loadDraft' | 'saveDraft'>
@@ -12,6 +14,76 @@ type SetValue = Pick<SetLog, 'weight' | 'reps' | 'rpe' | 'status'>
 
 function asError(error: unknown): Error {
   return error instanceof Error ? error : new Error('Échec de sauvegarde du brouillon')
+}
+
+/** La série dont la charge pilote les paliers de son exercice. */
+function drivesWarmup(set: SetLog, exercise: ExerciseDef): boolean {
+  return (
+    set.index === 0 &&
+    ((exercise.kind === 'topset' && set.role === 'top') ||
+      (exercise.kind === 'volume' && set.role === 'volume') ||
+      (exercise.kind === 'accessory' && set.role === 'accessory'))
+  )
+}
+
+/**
+ * Recalcule la partie encore vierge de la rampe, sans toucher à ce qu'Ugo a déjà manipulé.
+ *
+ * Le nombre de paliers peut changer à cible basse. Les paliers `planned` devenus inutiles
+ * disparaissent et les nouveaux sont insérés avant le travail. Une ligne `entered`,
+ * `validated` ou `skipped` reste en revanche strictement intacte, même si elle ne fait plus
+ * partie du plan recalculé : elle décrit déjà un geste d'Ugo.
+ */
+function recalculateWarmups(
+  sets: SetLog[],
+  exercise: ExerciseDef,
+  workWeight: number | null,
+): SetLog[] {
+  const exerciseSets = sets.filter((set) => set.exerciseId === exercise.id)
+  const currentWarmups = exerciseSets.filter((set) => set.role === 'warmup')
+  // « Legacy » qualifie le brouillon entier, jamais un exercice isolé. Une modification
+  // peut légitimement vider la rampe d'un exercice (charge effacée ou plan écrasé sur la
+  // charge de travail) ; les autres paliers du brouillon prouvent alors qu'il a été créé
+  // par CB-56 et autorisent la rampe à réapparaître à la saisie suivante.
+  if (!sets.some((set) => set.role === 'warmup')) return sets
+
+  const plan = warmupPlan(exercise.warmup, exercise.loadKind, workWeight)
+
+  const nextWarmups = plan.map((step, index): SetLog => {
+    const current = currentWarmups.find((set) => set.index === index)
+    if (current && current.status !== 'planned') return current
+    if (current) return { ...current, weight: step.weight, reps: step.reps }
+
+    return {
+      id: warmupSetId(exercise.id, 'warmup', index),
+      exerciseId: exercise.id,
+      role: 'warmup',
+      index,
+      status: 'planned',
+      loadKind: exercise.loadKind,
+      weight: step.weight,
+      reps: step.reps,
+      rpe: null,
+      targetWeight: step.weight,
+      targetReps: step.reps,
+    }
+  })
+
+  for (const current of currentWarmups) {
+    if (current.index >= plan.length && current.status !== 'planned') nextWarmups.push(current)
+  }
+  nextWarmups.sort((left, right) => left.index - right.index)
+
+  const firstExerciseIndex = sets.findIndex((set) => set.exerciseId === exercise.id)
+  if (firstExerciseIndex < 0) return sets
+  const withoutCurrentWarmups = (set: SetLog) =>
+    set.exerciseId !== exercise.id || set.role !== 'warmup'
+
+  return [
+    ...sets.slice(0, firstExerciseIndex).filter(withoutCurrentWarmups),
+    ...nextWarmups,
+    ...sets.slice(firstExerciseIndex).filter(withoutCurrentWarmups),
+  ]
 }
 
 /** `store` doit garder une identité stable pendant la durée de montage du composant. */
@@ -114,7 +186,15 @@ export function useDraftEditor(store: DraftPort, initialDraft?: Draft) {
                 : backoffWeight(value.weight, exercise.backoff)
               : undefined
 
-          return current.sets.map((set) => {
+          const withWarmups =
+            changed &&
+            exercise &&
+            changed.weight !== value.weight &&
+            drivesWarmup(changed, exercise)
+              ? recalculateWarmups(current.sets, exercise, value.weight)
+              : current.sets
+
+          return withWarmups.map((set) => {
             if (set.id === setId) return { ...set, ...value }
             if (
               nextBackoff !== undefined &&
