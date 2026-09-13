@@ -32,7 +32,7 @@ import {
   db as defaultDb,
   ensureSeeded,
 } from './database.ts'
-import { buildDraft, isBlankDraft } from './draft.ts'
+import { buildDraft, hydrateDraft, isBlankDraft } from './draft.ts'
 import { applyProgression, draftToSeance, targetsDiverged } from './derive.ts'
 import { applyTargetPatch, type TargetPatch } from './targets.ts'
 import { seanceSchema } from '../domain/schema.ts'
@@ -118,7 +118,12 @@ export class DexieStore implements DraftStore {
   async loadDraft(): Promise<Draft | undefined> {
     const drafts = await this.database.drafts.toArray()
     if (drafts.length === 0) return undefined
-    return drafts.reduce((latest, draft) => (draft.updatedAt > latest.updatedAt ? draft : latest))
+    const recent = drafts.reduce((latest, draft) =>
+      draft.updatedAt > latest.updatedAt ? draft : latest,
+    )
+    // Une ligne écrite avant l'ajout d'un champ n'en a pas : on la complète ici, au
+    // seul point où les brouillons entrent dans l'app.
+    return hydrateDraft(recent)
   }
 
   /**
@@ -197,10 +202,11 @@ export class DexieStore implements DraftStore {
           }
         }
 
-        const draft = await this.database.drafts.get(draftId)
-        if (!draft) {
+        const stocke = await this.database.drafts.get(draftId)
+        if (!stocke) {
           throw new StoreError('draft-not-found', 'Aucune séance en cours sous cet identifiant.')
         }
+        const draft = hydrateDraft(stocke)
 
         const row = await this.database.targets.get(TARGETS_KEY)
         if (!row) throw new StoreError('storage-unavailable', 'Cibles introuvables.')
@@ -259,7 +265,8 @@ export class DexieStore implements DraftStore {
         // finalisation. Refuser là-dessus interdisait d'ajuster une cible au moment
         // précis où Ugo sort de la salle. On le reconstruit donc sur les nouvelles
         // cibles, dans cette même transaction : il ne portait aucune information.
-        const existant = await this.database.drafts.toCollection().first()
+        const stockeExistant = await this.database.drafts.toCollection().first()
+        const existant = stockeExistant ? hydrateDraft(stockeExistant) : undefined
         if (existant && !isBlankDraft(existant)) {
           throw new StoreError(
             'draft-in-progress',
@@ -287,9 +294,13 @@ export class DexieStore implements DraftStore {
           // un identifiant neuf ferait diverger sa copie sans qu'il s'en aperçoive.
           // Il reste à l'interface à se remonter pour relire celui-ci — c'est écrit
           // dans le parcours d'acceptation du ticket.
-          await this.database.drafts.put(
-            buildDraft(existant.type, existant.date, targets, { id: existant.id }),
-          )
+          await this.database.drafts.put({
+            ...buildDraft(existant.type, existant.date, targets, { id: existant.id }),
+            // La préférence d'écran n'est pas une donnée de séance : la reconstruction
+            // remet les charges à jour, elle n'a aucune raison de rallumer ou d'éteindre
+            // l'écran d'Ugo à son insu.
+            keepAwake: existant.keepAwake,
+          })
         }
         return targets
       },

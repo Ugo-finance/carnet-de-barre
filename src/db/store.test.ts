@@ -23,6 +23,7 @@ function draftFor(targets: Targets, overrides: Partial<Draft> = {}): Draft {
     rushed: false,
     timerEndsAt: null,
     timerLabel: null,
+    keepAwake: false,
     baseTargets: targets,
     createdAt: now,
     updatedAt: now,

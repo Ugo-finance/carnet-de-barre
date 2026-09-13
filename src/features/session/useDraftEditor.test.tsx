@@ -27,6 +27,7 @@ function draftFixture(): Draft {
     rushed: false,
     timerEndsAt: null,
     timerLabel: null,
+    keepAwake: false,
     baseTargets: {
       updatedAt: '2026-09-12',
       squat: { w: 75, inc: 2.5, reps: 4, fail: null },

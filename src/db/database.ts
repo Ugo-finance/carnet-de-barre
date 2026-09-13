@@ -12,7 +12,8 @@
 
 // eslint-disable-next-line import/no-named-as-default -- Dexie s'étend par héritage de son export par défaut.
 import Dexie, { type Table } from 'dexie'
-import type { Draft, Seance, Targets } from '../domain/types.ts'
+import type { Seance, Targets } from '../domain/types.ts'
+import type { StoredDraft } from './draft.ts'
 import { loadSeed } from './seed.ts'
 
 /** Clé de la ligne unique qui porte les cibles courantes. */
@@ -32,7 +33,7 @@ export interface MetaRow {
 export class CarnetDatabase extends Dexie {
   seances!: Table<Seance, string>
   targets!: Table<TargetsRow, string>
-  drafts!: Table<Draft, string>
+  drafts!: Table<StoredDraft, string>
   meta!: Table<MetaRow, string>
 
   constructor(name = 'carnet') {

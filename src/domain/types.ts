@@ -174,6 +174,19 @@ export interface Draft {
   /** Libellé affiché sous le chrono (« Récup top set »). */
   timerLabel: string | null
   /**
+   * Garder l'écran allumé pendant toute la séance (Wake Lock) — arbitrage d'Ugo du
+   * 13.09.2026 : la préférence vaut pour la séance, pas pour un seul décompte.
+   *
+   * Elle vit dans le brouillon parce que c'est le seul objet qui dure autant que la
+   * séance et qui survit à un déchargement d'onglet. Un réglage global mentirait à la
+   * séance suivante ; un état de composant ne passerait pas le premier remontage iOS.
+   *
+   * Ce champ ne prouve **rien** sur la réalisation : le basculer laisse le brouillon
+   * vierge au sens d'`isBlankDraft`, donc toujours reconstructible sur de nouvelles
+   * cibles.
+   */
+  keepAwake: boolean
+  /**
    * Cibles au moment de l'ouverture du brouillon. Permet de détecter un brouillon
    * fondé sur des cibles devenues obsolètes (ajustement manuel entre-temps).
    */
