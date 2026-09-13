@@ -74,6 +74,11 @@ npm run format         Prettier
   - ne jamais présenter un processus vivant comme une garantie de réponse autonome après la fin d'un tour.
 - **Une défense devenue difficile à atteindre reste une défense.** `stale-targets` n'est plus atteignable par le chemin normal depuis que `adjustTarget` refuse pendant un brouillon. On la garde, et on l'éprouve par un mutateur réservé aux tests, plutôt que de la supprimer en la croyant morte.
 
+## Leçons du 13.09.2026
+
+- **L'état GitHub fait autorité ; nos veilles sont un confort.** Avant de déclarer qu'on attend l'autre, vérifier sur GitHub que la demande a bien été reçue et qu'aucune réponse n'est déjà publiée. Un retour publié la veille au soir est resté « attendu » toute une matinée, les deux veilles étant mortes sans que personne le sache.
+- **Une robustesse à la panne s'éprouve sur une panne intermittente, jamais uniforme.** Le faux `gh` qui a servi à valider CB-06 échouait *toujours* : toutes les branches tombaient, donc toutes alarmaient, et une branche sans alarme était invisible **par construction**. Le tableau chiffré produit était exact et la preuve était creuse — la forme exacte d'une vérification qui ne vérifie rien. La panne réelle, celle du matin même, était intermittente. Le scénario minimal : réussir, échouer, réussir.
+
 ## Ce qui remonte à Ugo
 
 Changement de D1–D10, nouvelle dépendance, tout backend ou service externe (dont CB-51 Supabase), pas de charge des accessoires, choix téléphone/navigateur pour la recette, tout report de périmètre listé dans `PLAN.md` § 7.
