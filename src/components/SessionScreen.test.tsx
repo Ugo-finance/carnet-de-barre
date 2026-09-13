@@ -122,6 +122,8 @@ describe('SessionScreen', () => {
       'Série 1',
       'Série 2',
       'Élévations latérales',
+      'Série 1',
+      'Série 2',
     ])
     expect(screen.getByText('Par côté : 25 + 10 + 1,25')).toBeInTheDocument()
   })
@@ -251,17 +253,26 @@ describe('SessionScreen', () => {
     expect(within(pdc).getAllByRole('textbox', { name: 'Répétitions' })).toHaveLength(2)
   })
 
-  it('conserve la saisie libre d’un exercice optionnel', () => {
-    const onAccessoryChange = vi.fn()
-    renderSession('C', { onAccessoryChange })
-    const optional = screen.getByRole('article', { name: 'Élévations latérales' })
+  it('rend un exercice optionnel en séries, comme n’importe quel accessoire', () => {
+    // CB-69 : les élévations se notaient en texte libre, sous un genre `optional` à part.
+    // Elles sont désormais un accessoire structuré — c'est ce qui fait le compte de la
+    // séance, et ce qui permet à la file de ne pas s'arrêter sur un formulaire.
+    const onSetValidate = vi.fn()
+    renderSession('C', { onSetValidate })
+    const elevations = screen.getByRole('article', { name: 'Élévations latérales' })
 
-    fireEvent.change(within(optional).getByRole('textbox'), { target: { value: '8 kg × 12' } })
+    expect(within(elevations).queryByRole('textbox', { name: /remarque/i })).not.toBeInTheDocument()
+    const premiere = within(elevations).getByRole('article', { name: 'Série 1' })
+    expect(within(premiere).getByRole('textbox', { name: 'Poids' })).toHaveValue('8')
+    expect(within(premiere).getByRole('textbox', { name: 'Répétitions' })).toHaveValue('12')
 
-    expect(onAccessoryChange).toHaveBeenCalledWith('c-elevations', {
-      done: false,
-      note: '8 kg × 12',
-    })
+    fireEvent.click(within(premiere).getByRole('button', { name: 'Valider' }))
+
+    expect(onSetValidate).toHaveBeenCalledWith(
+      'c-elevations:accessory:0',
+      expect.objectContaining({ weight: 8, reps: 12, status: 'validated' }),
+      { seconds: 75, label: 'Récup Élévations latérales' },
+    )
   })
 
   it('transmet les notes et permet de terminer la séance', () => {

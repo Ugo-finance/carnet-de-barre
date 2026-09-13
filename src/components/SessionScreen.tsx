@@ -58,7 +58,6 @@ function workingSetsOf(sets: SetLog[]): SetLog[] {
 }
 
 function targetFor(exercise: ExerciseDef, sets: SetLog[]): { value: string; detail: string } {
-  if (exercise.kind === 'optional') return { value: 'Optionnel', detail: 'si tu as le temps' }
   if (exercise.loadKind === 'bodyweight') {
     return { value: 'Poids du corps', detail: exercise.scheme }
   }
@@ -73,44 +72,6 @@ function targetFor(exercise: ExerciseDef, sets: SetLog[]): { value: string; deta
     detail:
       reps === null || reps === undefined ? exercise.scheme : `× ${formatNumber(reps)} · cible`,
   }
-}
-
-function OptionalExercise({
-  exercise,
-  value,
-  onChange,
-}: {
-  exercise: ExerciseDef
-  value: AccessoryLog
-  onChange: (value: Pick<AccessoryLog, 'done' | 'note'>) => void
-}) {
-  return (
-    <article className="rounded-2xl border border-line bg-surface p-4" aria-label={exercise.label}>
-      <div className="flex items-start gap-3">
-        <input
-          aria-label={`${exercise.label} réalisé`}
-          className="min-h-11 min-w-11 accent-accent"
-          type="checkbox"
-          checked={value.done}
-          onChange={(event) => onChange({ done: event.target.checked, note: value.note })}
-        />
-        <div className="min-w-0 flex-1">
-          <h2 className="font-semibold">{exercise.label}</h2>
-          <p className="mt-0.5 text-sm text-muted">{exercise.scheme} · optionnel</p>
-          <label className="mt-3 block text-sm font-medium text-muted">
-            Charge, reps ou remarque
-            <input
-              className="mt-1 min-h-11 w-full rounded-xl border border-line bg-bg px-3 text-base text-fg outline-none focus:border-accent"
-              type="text"
-              value={value.note}
-              placeholder="À renseigner"
-              onChange={(event) => onChange({ done: value.done, note: event.target.value })}
-            />
-          </label>
-        </div>
-      </div>
-    </article>
-  )
 }
 
 function ExerciseCard({
@@ -196,7 +157,9 @@ export function SessionScreen({
   onSelectType,
   onSetChange,
   onSetValidate,
-  onAccessoryChange,
+  // `onAccessoryChange` reste au contrat du composant, et `SessionHome` le passe encore :
+  // le brouillon porte toujours `accessories` pour les séances déjà enregistrées. Plus
+  // rien ne l'appelle depuis CB-69, les optionnels étant des séries.
   onNotesChange,
   onTimerAdjust,
   keepAwake,
@@ -300,19 +263,6 @@ export function SessionScreen({
       <section className="grid gap-3" aria-label={`Exercices de la séance ${draft.type}`}>
         {definition.exercises.map((exercise) => {
           const sets = draft.sets.filter((set) => set.exerciseId === exercise.id)
-          if (exercise.kind === 'optional') {
-            const value = draft.accessories.find(
-              (accessory) => accessory.exerciseId === exercise.id,
-            ) ?? { exerciseId: exercise.id, done: false, note: '' }
-            return (
-              <OptionalExercise
-                key={exercise.id}
-                exercise={exercise}
-                value={value}
-                onChange={(next) => onAccessoryChange(exercise.id, next)}
-              />
-            )
-          }
 
           return (
             <ExerciseCard
