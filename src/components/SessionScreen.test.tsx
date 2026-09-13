@@ -89,7 +89,7 @@ describe('SessionScreen', () => {
   it.each([
     ['A', '75 kg', '60 kg'],
     ['B', '70 kg', '+15 kg'],
-    ['C', '92,5 kg', '20 kg/haltère'],
+    ['C', '92,5 kg', '24 kg/haltère'],
   ] as const)('affiche les cibles principales de la séance %s', (type, first, second) => {
     renderSession(type)
 
@@ -99,7 +99,7 @@ describe('SessionScreen', () => {
 
   it.each([
     ['A', 'Squat', 'a-squat:0', '2,5', 77.5],
-    ['C', 'Développé incliné haltères', 'c-di:0', '2', 22],
+    ['C', 'Développé incliné haltères', 'c-di:0', '2', 26],
   ] as const)(
     'applique le pas du matériel dans la séance %s',
     (type, exerciseLabel, setId, stepLabel, expectedWeight) => {

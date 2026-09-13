@@ -30,8 +30,9 @@ export const REST = {
  * - `perDumbbell` : 2 kg, l'écart entre deux haltères voisins du râtelier (confirmé
  *   par Ugo le 13.09.2026 — la grille de 2,5 héritée de l'ancien carnet était fausse) ;
  * - `barTotal` et `added` : 2,5 kg, le plus petit disque étant 1,25 kg par côté ;
- * - `machine` : 2,5 kg **par défaut, non vérifié**. La presse 45° est à disques, donc
- *   2,5 tient ; les poulies se règlent souvent de 5 en 5. À trancher avec Ugo (UGO-181).
+ * - `machine` : 5 kg, confirmé par le coach d'Ugo le 13.09.2026 — le saut de la presse
+ *   45° est de 5 à 10 kg de disques. La valeur était auparavant à 2,5 et explicitement
+ *   marquée non vérifiée ; elle l'est maintenant.
  * - `bodyweight` : sans objet, aucun champ de charge n'est affiché.
  */
 export const WEIGHT_STEP_BY_LOAD_KIND: Record<LoadKind, number> = {
@@ -39,7 +40,7 @@ export const WEIGHT_STEP_BY_LOAD_KIND: Record<LoadKind, number> = {
   perDumbbell: 2,
   added: 2.5,
   bodyweight: 2.5,
-  machine: 2.5,
+  machine: 5,
 }
 
 /** Le pas du stepper pour cette nature de charge. */
@@ -185,10 +186,10 @@ export const SEANCES: Record<SeanceType, SeanceDef> = {
         label: 'Élévations latérales',
         kind: 'optional',
         loadKind: 'perDumbbell',
-        scheme: '2×10–12',
+        scheme: '2×12–20',
         sets: 2,
         reps: null,
-        repsRange: [10, 12],
+        repsRange: [12, 20],
         restSeconds: REST.superset,
       },
     ],
@@ -228,10 +229,10 @@ export const SEANCES: Record<SeanceType, SeanceDef> = {
         loadKind: 'perDumbbell',
         // 22,5 venait de l'ancien carnet, qui raisonnait sur la grille de la barre.
         // Le râtelier va de 2 en 2 : cet haltère n'existe pas dans la salle d'Ugo.
-        scheme: '3×8–10 — 22 à 24 kg par haltère',
+        scheme: '3×8–12 — 22 à 24 kg par haltère',
         sets: 3,
         reps: null,
-        repsRange: [8, 10],
+        repsRange: [8, 12],
         suggestedWeight: 22,
         restSeconds: REST.superset,
         supersetGroup: 'b-ss',
@@ -241,10 +242,10 @@ export const SEANCES: Record<SeanceType, SeanceDef> = {
         label: 'Développé militaire haltères',
         kind: 'accessory',
         loadKind: 'perDumbbell',
-        scheme: '3×8–10 — 20 kg par haltère',
+        scheme: '3×8–12 — 20 kg par haltère',
         sets: 3,
         reps: null,
-        repsRange: [8, 10],
+        repsRange: [8, 12],
         suggestedWeight: 20,
         restSeconds: REST.superset,
         supersetGroup: 'b-ss',
@@ -293,11 +294,13 @@ export const SEANCES: Record<SeanceType, SeanceDef> = {
         label: 'Développé incliné haltères',
         kind: 'accessory',
         loadKind: 'perDumbbell',
-        scheme: '3×8–10 — 20 kg par haltère, noter les répétitions',
+        scheme: '3×8–12 — 24 kg par haltère, noter les répétitions',
         sets: 3,
         reps: null,
-        repsRange: [8, 10],
-        suggestedWeight: 20,
+        repsRange: [8, 12],
+        // 24 et non 20 : la table portait encore la charge d'avant. L'export du 12.09
+        // montre Ugo à 24 kg/haltère, et son coach a entériné cette cible.
+        suggestedWeight: 24,
         restSeconds: REST.accessory,
       },
       {
@@ -329,10 +332,10 @@ export const SEANCES: Record<SeanceType, SeanceDef> = {
         label: 'Élévations latérales',
         kind: 'optional',
         loadKind: 'perDumbbell',
-        scheme: '2×12–15',
+        scheme: '2×12–20',
         sets: 2,
         reps: null,
-        repsRange: [12, 15],
+        repsRange: [12, 20],
         restSeconds: REST.superset,
       },
     ],

@@ -120,6 +120,12 @@ describe('pas de charge du matériel', () => {
     expect(weightStepFor('added')).toBe(2.5)
   })
 
+  it('avance de 5 kg sur les machines', () => {
+    // La presse 45° monte par disques de 5 à 10 kg, confirmé par le coach d'Ugo le
+    // 13.09.2026. La valeur était à 2,5 et marquée « non vérifiée » ; elle l'est.
+    expect(weightStepFor('machine')).toBe(5)
+  })
+
   it('ne propose aucune charge absente du matériel', () => {
     // Le test parcourt la table entière plutôt que d'énumérer les exercices : un
     // exercice ajouté plus tard est couvert sans que personne ait à y penser. C'est
@@ -139,5 +145,60 @@ describe('pas de charge du matériel', () => {
     )
 
     expect(horsGrille).toEqual([])
+  })
+})
+
+describe('fourchettes de répétitions du coach', () => {
+  // Arbitrage du 13.09.2026. Le pas de 2 kg des haltères fait +10 % sur un haltère de
+  // 20 : une fourchette 8–10 est trop étroite pour l'absorber, on monte trop vite puis
+  // on rate. Les fourchettes sont élargies pour que la charge tienne plus longtemps.
+  const fourchette = (id: string): readonly [number, number] | undefined =>
+    findExercise(id)?.repsRange
+
+  it('élargit à 8–12 les trois exercices aux haltères qui progressent', () => {
+    expect(fourchette('c-di')).toEqual([8, 12])
+    expect(fourchette('b-rowing')).toEqual([8, 12])
+    expect(fourchette('b-dm')).toEqual([8, 12])
+  })
+
+  it('élargit à 12–20 les élévations latérales des deux séances', () => {
+    // 8 → 10 kg fait +25 % : c'est l'exercice où le saut relatif est le plus brutal.
+    expect(fourchette('a-elevations')).toEqual([12, 20])
+    expect(fourchette('c-elevations')).toEqual([12, 20])
+  })
+
+  it('laisse la presse à 10–12, ses disques étant assez fins', () => {
+    expect(fourchette('c-presse')).toEqual([10, 12])
+  })
+
+  it('ne touche pas aux exercices sur lesquels le coach ne s’est pas prononcé', () => {
+    // Curls et dips lestés gardent leur fourchette : élargir au-delà de ce qui a été
+    // demandé serait inventer du programme.
+    expect(fourchette('a-curls')).toEqual([10, 12])
+    expect(fourchette('a-dips')).toEqual([8, 10])
+  })
+
+  it('porte la cible du développé incliné à 24 kg par haltère', () => {
+    // La table portait encore 20, la charge d'avant. L'export du 12.09 montre Ugo à 24,
+    // et son coach a entériné cette cible : il y reste jusqu'à 3×12, puis 26 en 3×8.
+    expect(findExercise('c-di')?.suggestedWeight).toBe(24)
+  })
+
+  it('ne déplace la charge d’aucun autre exercice aux haltères', () => {
+    // Écrit après m'être trompé d'exercice : mon premier remplacement a posé les 24 kg
+    // sur le développé militaire, dont la charge ne bougeait pas. Un test qui n'affirme
+    // que la valeur voulue ne dit rien de celles qu'on a déplacées par accident.
+    expect(findExercise('b-dm')?.suggestedWeight).toBe(20)
+    expect(findExercise('b-rowing')?.suggestedWeight).toBe(22)
+  })
+
+  it('annonce dans le libellé la fourchette réellement appliquée', () => {
+    // Le schéma est ce qu'Ugo lit en salle : le laisser dire 8–10 pendant que le moteur
+    // vise 12 lui ferait arrêter ses séries deux répétitions trop tôt.
+    for (const id of ['c-di', 'b-rowing', 'b-dm']) {
+      expect(findExercise(id)?.scheme).toContain('8–12')
+    }
+    expect(findExercise('a-elevations')?.scheme).toContain('12–20')
+    expect(findExercise('c-elevations')?.scheme).toContain('12–20')
   })
 })
