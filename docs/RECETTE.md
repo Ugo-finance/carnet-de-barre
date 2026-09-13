@@ -65,6 +65,40 @@ Résultat et notes :
 
 > À renseigner, y compris l’absence de son ou de vibration.
 
+## Échauffement
+
+Cette partie se fait sur une séance qui porte des paliers. Elle vérifie ce que l’automatisation ne
+peut pas décider à la place du téléphone : lisibilité réelle, absence de saut visuel et gestes au
+pouce avec le clavier affiché.
+
+1. Ouvre la séance proposée et relève le nombre annoncé dans « Échauffement · [n] paliers ».
+2. Sur un exercice à la barre, contrôle la charge, les répétitions et le texte « Par côté » de
+   chaque palier.
+3. Valide le premier palier, puis ferme et relance l’application.
+
+- [ ] Le palier validé reste validé après la relance et les suivants gardent leurs valeurs.
+- [ ] Aucun chrono ne démarre après un palier ; la zone reste sur « Repos libre ».
+- [ ] La zone du chrono garde la même hauteur lorsqu’elle est inactive puis active après une série
+  de travail : le contenu sous elle ne saute pas.
+- [ ] **Sauter** est utilisable au pouce. Le résumé replié dit explicitement « sauté » et ne montre
+  pas de coche globale si toute la rampe n’a pas été réalisée.
+- [ ] Une rampe entièrement validée se replie en une ligne du type
+  « ✓ Échauffement 3/3 · 60×5 · 72,5×3 · 82,5×1 » et peut être rouverte pour correction.
+- [ ] Le palier au poids du corps des tractions affiche « PDC », sans champ de lest vide.
+- [ ] En mode pressé, tous les paliers des deux premiers exercices restent présents.
+- [ ] Avec le clavier numérique ouvert, les champs, **Sauter** et **Valider** restent accessibles,
+  sans défilement horizontal.
+
+Après la série de travail et la finalisation, exporte les données :
+
+- [ ] l’export porte `schemaVersion: 2` et conserve les séries de rôle `warmup` avec leur statut ;
+- [ ] les paliers ne figurent ni dans les lignes de résumé ni dans les tops ;
+- [ ] la cible suivante correspond uniquement au résultat de la série de travail.
+
+Résultat et notes :
+
+> À renseigner, avec le type de séance et le nombre de paliers observé.
+
 ## Mise à jour avec des données existantes
 
 Cette partie s’exécute lorsqu’un bandeau **Mise à jour disponible** apparaît après un nouveau déploiement.
@@ -104,5 +138,10 @@ Résultat et notes :
 | Export puis restauration | ☐ OK ☐ KO | |
 | Chrono au premier plan | ☐ OK ☐ KO | |
 | Chrono écran verrouillé, constat seulement | ☐ Observé | |
+| Paliers restaurés après relance | ☐ OK ☐ KO | |
+| Aucun chrono après échauffement | ☐ OK ☐ KO | |
+| Stabilité de la zone chrono | ☐ OK ☐ KO | |
+| Paliers exclus de la progression | ☐ OK ☐ KO | |
+| Export v2 avec rôles `warmup` | ☐ OK ☐ KO | |
 
 Tout KO lié à une perte de données, une double progression ou une séance impossible à finaliser bloque la recette de production.
