@@ -239,9 +239,9 @@ export interface AccessoryGroupMember {
  *
  * - monter dès qu'un seul mouvement le mérite imposerait à l'autre une charge qu'il
  *   n'a pas gagnée — c'est exactement ce qu'Ugo a écarté ;
- * - descendre dès qu'un seul bloque punirait celui qui progresse. Ugo n'a tranché que
- *   la montée ; la symétrie est **mon interprétation**, signalée comme telle, et se
- *   renverse en changeant `every` en `some`.
+ * - descendre dès qu'un seul bloque punirait celui qui progresse. Ugo a tranché ce
+ *   second point aussi, le 13.09.2026 : « non, les deux doivent bloquer ». Ce n'était
+ *   au départ que ma symétrie ; ça ne l'est plus.
  *
  * Les répétitions, elles, restent **propres à chaque exercice** : il peut faire 10 aux
  * dips et 8 aux tractions à la même charge, et doit voir ces deux chiffres-là.
