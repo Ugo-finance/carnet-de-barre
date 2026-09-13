@@ -268,11 +268,12 @@ Il ne finalise et n'abandonne jamais une séance.
 | `backoff` | `topset` | Préremplie, modifiable | Préremplies, modifiables | Non | Non par défaut | Repos principal du programme |
 | `volume` | `volume` | Préremplie, modifiable | Préremplies, modifiables | Non | Non par défaut | Repos du programme |
 | `accessory` | `accessory` | Adaptée au matériel | Oui | Non | Non par défaut | Repos du programme |
-| `accessory` | `optional`, structuré par CB-69 | Adaptée au matériel | Oui | Non | Oui | Repos du programme si validé |
+| `accessory` | `accessory` avec `optional: true`, structuré par CB-69 | Adaptée au matériel | Oui | Non | Oui | Repos du programme si validé |
 
-Le caractère optionnel vient de `ExerciseDef.kind === 'optional'`, pas de `SetRole`. CB-69 structure
-ces exercices tout en conservant cette propriété du programme ; le composant de séance la reçoit du
-sélecteur et ne la déduit ni du rôle ni de l'identifiant.
+Le caractère optionnel vient de `ExerciseDef.optional`, pas de `SetRole` ni de `kind`. CB-69 fait de
+ces exercices des accessoires structurés avec `kind: 'accessory'` et porte leur caractère facultatif
+dans cette propriété orthogonale ; le composant de séance la reçoit du sélecteur et ne la déduit ni
+du rôle ni de l'identifiant.
 
 Les boutons de pas utilisent `weightStepFor(loadKind)`. Une charge `bodyweight` affiche « PDC » et
 n'offre aucun stepper de poids. Une charge `perDumbbell` dit « kg par haltère » ; une charge machine
