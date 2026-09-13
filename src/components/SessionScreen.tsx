@@ -5,6 +5,7 @@ import type { AccessoryLog, Draft, SeanceType, SetLog } from '../domain/types'
 import { wakeLockAvailable } from '../features/session/timer'
 import { SetCard, type EditableSet } from './SetCard'
 import { TimerCard } from './TimerCard'
+import { WarmupBlock } from './WarmupBlock'
 
 const TYPES: readonly SeanceType[] = ['A', 'B', 'C']
 
@@ -127,6 +128,7 @@ function ExerciseCard({
   // Les plaques annoncées en tête sont celles de la **série de travail**. Celles de chaque
   // palier restent sur sa propre carte ; c'est la charge du jour qu'Ugo cherche ici.
   const travail = workingSetsOf(sets)
+  const warmups = sets.filter((set) => set.role === 'warmup')
   const barTarget =
     exercise.loadKind === 'barTotal' && travail[0]?.targetWeight != null
       ? describePlates(platesPerSide(travail[0].targetWeight))
@@ -151,23 +153,26 @@ function ExerciseCard({
         {barTarget ? <p className="mt-2 text-sm font-medium text-fg">{barTarget}</p> : null}
       </header>
 
+      <WarmupBlock
+        exerciseLabel={exercise.label}
+        loadKind={exercise.loadKind}
+        sets={warmups}
+        onSetChange={onSetChange}
+        onSetValidate={(setId, value) => onSetValidate(setId, value, null)}
+      />
+
       <div className="mt-4 grid gap-3">
-        {sets.map((set) => (
+        {travail.map((set) => (
           <SetCard
             key={set.id}
             label={setLabel(set)}
             value={set}
             onChange={(value) => onSetChange(set.id, value)}
             onValidate={(value) =>
-              onSetValidate(
-                set.id,
-                value,
-                // Le repos entre paliers est libre (contrat § 4) : aucun chrono n'est
-                // demandé, et celui qui court éventuellement reste intact.
-                set.role === 'warmup'
-                  ? null
-                  : { seconds: exercise.restSeconds, label: `Récup ${exercise.label}` },
-              )
+              onSetValidate(set.id, value, {
+                seconds: exercise.restSeconds,
+                label: `Récup ${exercise.label}`,
+              })
             }
             onSkip={(value) => onSetChange(set.id, value)}
             showWeight={set.loadKind !== 'bodyweight'}
@@ -204,6 +209,7 @@ export function SessionScreen({
 }: SessionScreenProps) {
   const definition = SEANCES[draft.type]
   const canKeepAwake = wakeLockAvailable()
+  const warmupCount = draft.sets.filter((set) => set.role === 'warmup').length
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col gap-4 py-4 pb-8">
@@ -218,6 +224,11 @@ export function SessionScreen({
           </time>
         </div>
         <p className="mt-1 text-sm text-muted">{definition.title}</p>
+        {warmupCount > 0 ? (
+          <p className="mt-2 text-sm font-medium text-accent-readable">
+            Échauffement · {warmupCount} {warmupCount === 1 ? 'palier' : 'paliers'}
+          </p>
+        ) : null}
 
         <nav
           className="mt-4 grid grid-cols-3 gap-1 rounded-xl border border-line bg-surface p-1"
@@ -263,14 +274,28 @@ export function SessionScreen({
         ) : null}
       </header>
 
-      {draft.timerEndsAt !== null && draft.timerLabel ? (
-        <TimerCard
-          endsAt={draft.timerEndsAt}
-          label={draft.timerLabel}
-          onAdjust={onTimerAdjust}
-          onStop={onTimerStop}
-        />
-      ) : null}
+      <section
+        className="sticky top-[max(0.5rem,env(safe-area-inset-top))] z-10 min-h-[11rem]"
+        aria-label="Chronomètre"
+      >
+        {draft.timerEndsAt !== null && draft.timerLabel ? (
+          <TimerCard
+            endsAt={draft.timerEndsAt}
+            label={draft.timerLabel}
+            onAdjust={onTimerAdjust}
+            onStop={onTimerStop}
+          />
+        ) : (
+          <aside className="flex min-h-[11rem] items-center justify-center rounded-2xl border border-line bg-surface p-3 text-center">
+            <div>
+              <p className="num text-3xl font-bold text-muted" aria-hidden="true">
+                —
+              </p>
+              <p className="mt-1 text-sm font-medium text-muted">Repos libre</p>
+            </div>
+          </aside>
+        )}
+      </section>
 
       <section className="grid gap-3" aria-label={`Exercices de la séance ${draft.type}`}>
         {definition.exercises.map((exercise) => {

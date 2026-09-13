@@ -104,14 +104,14 @@ describe('SessionScreen', () => {
     // réimplémentait `buildDraft` et ne construisait qu'une série par top set.
     expect(cards.map((card) => card.getAttribute('aria-label'))).toEqual([
       'Soulevé de terre',
-      'Échauffement 1',
-      'Échauffement 2',
-      'Échauffement 3',
+      'Palier 1',
+      'Palier 2',
+      'Palier 3',
       'Top set',
       'Backoff 1',
       'Backoff 2',
       'Développé incliné haltères',
-      'Échauffement 1',
+      'Palier 1',
       'Série 1',
       'Série 2',
       'Série 3',
@@ -176,7 +176,7 @@ describe('SessionScreen', () => {
     const onSetValidate = vi.fn()
     renderSession('A', { onSetValidate })
     const squat = screen.getByRole('article', { name: 'Squat' })
-    const palier = within(squat).getByRole('article', { name: 'Échauffement 1' })
+    const palier = within(squat).getByRole('article', { name: 'Palier 1' })
 
     fireEvent.click(within(palier).getByRole('button', { name: 'Valider' }))
 
@@ -185,6 +185,34 @@ describe('SessionScreen', () => {
       expect.objectContaining({ status: 'validated' }),
       null,
     )
+  })
+
+  it('annonce le nombre de paliers sans inventer de durée', () => {
+    renderSession('C')
+
+    expect(screen.getByText('Échauffement · 4 paliers')).toBeInTheDocument()
+    expect(screen.queryByText(/Échauffement.+min/)).not.toBeInTheDocument()
+  })
+
+  it('conserve les échauffements des deux premiers exercices en mode pressé', () => {
+    const draft = draftFor('A')
+    draft.rushed = true
+    renderSession('A', { draft })
+
+    const squat = screen.getByRole('article', { name: 'Squat' })
+    const bench = screen.getByRole('article', { name: 'Développé couché volume' })
+    expect(within(squat).getByRole('region', { name: 'Échauffement · Squat' })).toBeInTheDocument()
+    expect(
+      within(bench).getByRole('region', { name: 'Échauffement · Développé couché volume' }),
+    ).toBeInTheDocument()
+  })
+
+  it('affiche un état chrono neutre entre deux récupérations', () => {
+    renderSession('C')
+
+    const slot = screen.getByRole('region', { name: 'Chronomètre' })
+    expect(within(slot).getByText('Repos libre')).toBeInTheDocument()
+    expect(within(slot).queryByRole('timer')).not.toBeInTheDocument()
   })
 
   it('annonce la charge de travail en tête, jamais celle du palier', () => {
