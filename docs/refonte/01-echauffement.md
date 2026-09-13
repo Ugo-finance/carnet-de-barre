@@ -17,7 +17,7 @@ Paliers en % de la cible du jour, arrondis au chargeable (`WEIGHT_STEP_BY_LOAD_K
 | Tractions lestées | poids de corps ×5 → ~50 % du lest ×2 |
 | Accessoires | 1×8 à ~60 % pour le **premier exercice d'un pattern froid** uniquement (ex. incliné en séance C : 14 kg/h avant les 24) ; rien pour ce qui vient en superset après du travail lourd |
 
-Exemples aux cibles actuelles : bench 70 → 20×8, 35×5, 50×3, 60×1. Deadlift 92,5 → 60×5, 72,5×3, 82,5×1. Tractions +15 → PDC×5, +7,5×2. Sous 60 kg de cible barre, la rampe perd un palier — c'est celui à ~50 %, puis celui à ~70 %, qui s'écrasent sur la barre à vide ; le palier haut est le dernier à disparaître (valeurs vérifiées dans `00-contrat.md` § 3.2). En séance A, les tractions +10 servent elles-mêmes d'échauffement du pattern tirage.
+Exemples aux cibles actuelles : bench 70 → 20×8, 35×5, 50×3, 60×1. Deadlift 92,5 → 60×5, 72,5×3, 82,5×1. Tractions +15 → PDC×5, +7,5×2. À cible basse, la rampe perd un palier — celui à ~50 %, puis celui à ~70 %, qui s'écrasent sur la barre à vide ; le palier haut est conservé à toute cible (arbitrage d'Ugo du 13.09.2026, `00-contrat.md` § 1.4). En séance A, les tractions +10 servent elles-mêmes d'échauffement du pattern tirage.
 
 ## Règles moteur / données
 

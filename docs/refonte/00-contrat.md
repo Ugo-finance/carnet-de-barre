@@ -23,6 +23,11 @@ Ce classement a servi deux fois. Les deux fois, la règle écrite avait raison c
    sur une barre de 20 font 70 kg, pas 60.
 3. **Les optionnels deviennent des séries structurées** — curls, élévations latérales, face pulls
    et abdos. Voir CB-69.
+4. **Le palier haut est conservé à toute cible.** La phrase « sous 60 kg de cible barre, le palier
+   ~87 % saute » est **retirée**. Question posée à Ugo le 13.09.2026, les deux rampes sous les
+   yeux, à la suite d'un P1 de Codex : à 57,5 kg de cible, veut-il `20 · 30 · 40 · 50` ou
+   `20 · 30 · 40` ? Réponse : la rampe garde sa forme habituelle à toutes les cibles, le single
+   lourd compris. Voir § 3.2 pour ce que cela donne plus bas.
 
 ## 2. Arbitrages des agents
 
@@ -82,10 +87,14 @@ comportement vérifié :
 | 32,5 | 20×8 · 22,5×3 · 27,5×1 |
 | 25 | 20×8 · 22,5×1 |
 
-Aucune cible d'Ugo n'est aujourd'hui sous 60 kg à la barre : le cas est théorique, et c'est
-pourquoi il est tranché ici plutôt que remonté comme un blocage. **La phrase d'origine est
-corrigée dans `01-echauffement.md`.** Si Ugo veut qu'un single à 87 % disparaisse sous un
-seuil donné, ce sera un seuil explicite et non une conséquence — voir § 7.
+**Ce point a été remonté à Ugo plutôt que tranché par les agents**, et c'est la bonne
+leçon du lot : la première version de ce document réécrivait une phrase de son dossier au
+motif qu'aucune cible actuelle n'était concernée. Ce motif n'autorisait rien. Codex a
+maintenu son P1 jusqu'à ce que la question lui soit posée.
+
+Sa réponse, le 13.09.2026 : **la rampe garde sa forme habituelle à toutes les cibles**, le
+single lourd compris. La phrase d'origine est donc retirée de `01-echauffement.md` par
+décision, et non par correction.
 
 ### 3.3 Politiques
 
@@ -207,8 +216,5 @@ contredit d'une ligne si Ugo ou son coach le corrige.
 - **Mode pressé et échauffement** : Q4 réduit les exercices, le document d'origine évoque aussi de
   réduire les paliers. Aucune règle n'est validée : le mode pressé ne touche à aucun palier, et
   Ugo peut passer une série individuellement.
-- **Un seuil sous lequel la rampe s'arrête** : les règles ne font disparaître aucun palier haut
-  à cible basse, et produisent par exemple 20 · 22,5 pour une cible de 25 kg. C'est cohérent,
-  mais personne n'a dit que c'était voulu. Aucune cible actuelle n'est concernée.
 - **Disques de 1,25 kg en salle** : le pas `added` est à 2,5 kg, soit +25 % sur 10 kg de lest.
   Question posée au coach, sans réponse à ce jour.

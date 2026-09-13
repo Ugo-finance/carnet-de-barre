@@ -177,6 +177,11 @@ données, et renvoie au contrat pour le reste.
   hors des accessoires structurés. Q4 est inchangée : le mode pressé continue de replier les
   exercices 3 et suivants, et son périmètre ne dépend pas du genre de l'exercice.
 
+- **Le palier d'échauffement haut est conservé à toute cible.** La phrase du dossier « sous
+  60 kg de cible barre, le palier ~87 % saute » est retirée. Question posée le 13.09.2026
+  après un P1 de Codex, les deux rampes sous les yeux : à 57,5 kg de cible, `20 · 30 · 40 · 50`
+  ou `20 · 30 · 40` ? Réponse d'Ugo : la première.
+
 ### Tranché par les agents
 
 Sous la règle : *une livraison peut masquer une métrique indéfinie, elle ne peut jamais afficher
