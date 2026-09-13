@@ -68,6 +68,64 @@ async function baseAvecSeanceFaite(
   return { store, base }
 }
 
+describe('le parcours réel, d’un bout à l’autre', () => {
+  it('création, un palier validé, fermeture, reprise, finalisation', async () => {
+    // Le critère d'acceptation du ticket, joué en entier plutôt qu'en morceaux. Les
+    // autres tests de ce fichier finalisent des séances **entièrement** validées : ils ne
+    // disent donc rien du cas où Ugo s'arrête au milieu de son échauffement, ce qui est
+    // pourtant ce qui arrive quand l'écran s'éteint entre deux paliers.
+    const nom = nomDeBase()
+    const base = new CarnetDatabase(nom)
+    const store = new DexieStore(base)
+    await store.ready()
+
+    const draft = await store.openDraft('C', '2026-09-20')
+    const PALIER = 'c-deadlift:warmup:0'
+    const TOP = 'c-deadlift:top:0'
+
+    // 1. Un seul palier validé, le reste intact.
+    await store.saveDraft({
+      ...draft,
+      sets: draft.sets.map((set) =>
+        set.id === PALIER ? { ...set, status: 'validated' as const } : set,
+      ),
+    })
+    base.close()
+
+    // 2. Reprise sur une base rouverte : rien n'est réinjecté, rien n'est perdu.
+    const rouverte = new DexieStore(new CarnetDatabase(nom))
+    await rouverte.ready()
+    const repris = await rouverte.openDraft('C', '2026-09-20')
+    expect(repris.id).toBe(draft.id)
+    expect(repris.sets.find((set) => set.id === PALIER)?.status).toBe('validated')
+    expect(repris.sets.find((set) => set.id === TOP)?.status).toBe('planned')
+    expect(repris.sets.map((set) => set.id)).toEqual(draft.sets.map((set) => set.id))
+
+    // 3. La séance se termine : les deux paliers restants sont sautés, le travail est fait.
+    await rouverte.saveDraft({
+      ...repris,
+      sets: repris.sets.map((set) => {
+        if (set.role === 'warmup') {
+          return set.status === 'validated' ? set : { ...set, status: 'skipped' as const }
+        }
+        return { ...set, status: 'validated' as const }
+      }),
+    })
+    const { seance } = await rouverte.finalizeSeance(repris.id)
+
+    // 4. Le palier repris **et** le top de travail sont tous deux dans la séance finale,
+    //    chacun avec son état. Une série sautée n'est pas un échec, elle est conservée.
+    const enregistre = (id: string) => seance.sets?.find((set) => set.id === id)
+    expect(enregistre(PALIER)?.status).toBe('validated')
+    expect(enregistre(TOP)?.status).toBe('validated')
+    expect(enregistre('c-deadlift:warmup:1')?.status).toBe('skipped')
+
+    // 5. Et rien de tout cela n'a touché le résumé ni les cibles.
+    expect(seance.tops.deadlift?.w).toBe(92.5)
+    expect(seance.lines.find((ligne) => ligne.startsWith('Soulevé'))).not.toContain('60')
+  })
+})
+
 describe('une séance échauffée, écrite pour de vrai', () => {
   it('donne exactement les mêmes cibles qu’une séance sans paliers', () => {
     // Le test qui porte le lot, cette fois par le chemin qui écrit. `derive-warmup.test.ts`

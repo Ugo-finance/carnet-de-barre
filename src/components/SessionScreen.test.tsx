@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
-import { SEANCES } from '../domain/program'
-import type { Draft, SeanceType, SetLog, Targets } from '../domain/types'
+
+import { buildDraft } from '../db/draft'
+import type { Draft, SeanceType, Targets } from '../domain/types'
 import { SessionScreen } from './SessionScreen'
 
 const TARGETS: Targets = {
@@ -12,50 +13,20 @@ const TARGETS: Targets = {
   benchVol: { w: 60, inc: 2.5, reps: 8, sets: 3, fail: null },
 }
 
+/**
+ * Le brouillon **tel que l'app le construit**, et non une fixture écrite à la main.
+ *
+ * L'ancienne version réimplémentait `buildDraft` ici : elle n'a donc pas vu arriver les
+ * paliers d'échauffement de CB-56, et l'écran a pu se mettre à lire un palier là où il
+ * croyait lire la série de travail sans qu'aucun test ne bronche. Une fixture qui
+ * reproduit la production finit toujours par en diverger, et c'est précisément quand elle
+ * diverge que les tests cessent de valoir quelque chose.
+ */
 function draftFor(type: SeanceType): Draft {
-  const sets = SEANCES[type].exercises.flatMap((exercise): SetLog[] => {
-    if (exercise.kind === 'optional') return []
-    const target = exercise.lift ? TARGETS[exercise.lift] : undefined
-    const count = exercise.kind === 'topset' ? 1 : exercise.sets
-    return Array.from({ length: count }, (_, index) => ({
-      id: `${exercise.id}:${index}`,
-      exerciseId: exercise.id,
-      role:
-        exercise.kind === 'topset'
-          ? ('top' as const)
-          : exercise.kind === 'volume'
-            ? ('volume' as const)
-            : ('accessory' as const),
-      index,
-      status: 'planned' as const,
-      loadKind: exercise.loadKind,
-      weight:
-        exercise.loadKind === 'bodyweight' ? null : (target?.w ?? exercise.suggestedWeight ?? null),
-      reps: target?.reps ?? exercise.reps ?? exercise.repsRange?.[0] ?? null,
-      rpe: null,
-      targetWeight:
-        exercise.loadKind === 'bodyweight' ? null : (target?.w ?? exercise.suggestedWeight ?? null),
-      targetReps: target?.reps ?? exercise.reps ?? exercise.repsRange?.[0] ?? null,
-    }))
-  })
-
-  return {
+  return buildDraft(type, type === 'C' ? '2026-09-20' : '2026-09-22', TARGETS, {
     id: `draft-${type}`,
-    type,
-    date: type === 'C' ? '2026-09-20' : '2026-09-22',
-    sets,
-    accessories: SEANCES[type].exercises
-      .filter((exercise) => exercise.kind === 'optional')
-      .map((exercise) => ({ exerciseId: exercise.id, done: false, note: '' })),
-    notes: '',
-    rushed: false,
-    timerEndsAt: null,
-    timerLabel: null,
-    keepAwake: false,
-    baseTargets: TARGETS,
-    createdAt: 1,
-    updatedAt: 1,
-  }
+    now: 1,
+  })
 }
 
 function renderSession(
@@ -98,19 +69,23 @@ describe('SessionScreen', () => {
   })
 
   it.each([
-    ['A', 'Squat', 'a-squat:0', '2,5', 77.5],
-    ['C', 'Développé incliné haltères', 'c-di:0', '2', 26],
+    ['A', 'Squat', 'Top set', 'a-squat:top:0', '2,5', 77.5],
+    ['C', 'Développé incliné haltères', 'Série 1', 'c-di:accessory:0', '2', 26],
   ] as const)(
     'applique le pas du matériel dans la séance %s',
-    (type, exerciseLabel, setId, stepLabel, expectedWeight) => {
+    (type, exerciseLabel, setLabel, setId, stepLabel, expectedWeight) => {
       const onSetChange = vi.fn()
       renderSession(type, { onSetChange })
       const exercise = screen.getByRole('article', { name: exerciseLabel })
+      // La carte est nommée, et non prise au rang : depuis CB-56 la première carte d'un
+      // exercice est son palier d'échauffement, et « la première » réglait donc le pas
+      // sur une charge que ce test ne visait pas.
+      const serie = within(exercise).getByRole('article', { name: setLabel })
 
       fireEvent.click(
-        within(exercise).getAllByRole('button', {
+        within(serie).getByRole('button', {
           name: `Augmenter Poids de ${stepLabel}`,
-        })[0],
+        }),
       )
 
       expect(onSetChange).toHaveBeenCalledWith(
@@ -124,10 +99,19 @@ describe('SessionScreen', () => {
     renderSession('C')
     const cards = screen.getAllByRole('article')
 
+    // La séance C telle qu'Ugo la voit réellement. L'ancienne attente décrivait une
+    // séance qui n'a jamais existé : ni paliers, ni backoffs, parce que la fixture
+    // réimplémentait `buildDraft` et ne construisait qu'une série par top set.
     expect(cards.map((card) => card.getAttribute('aria-label'))).toEqual([
       'Soulevé de terre',
+      'Échauffement 1',
+      'Échauffement 2',
+      'Échauffement 3',
       'Top set',
+      'Backoff 1',
+      'Backoff 2',
       'Développé incliné haltères',
+      'Échauffement 1',
       'Série 1',
       'Série 2',
       'Série 3',
@@ -171,25 +155,61 @@ describe('SessionScreen', () => {
     const onSetValidate = vi.fn()
     renderSession('A', { onSetValidate })
     const squat = screen.getByRole('article', { name: 'Squat' })
+    const topSet = within(squat).getByRole('article', { name: 'Top set' })
 
-    fireEvent.click(within(squat).getByRole('button', { name: 'Valider' }))
+    fireEvent.click(within(topSet).getByRole('button', { name: 'Valider' }))
 
     expect(onSetValidate).toHaveBeenCalledWith(
-      'a-squat:0',
+      'a-squat:top:0',
       expect.objectContaining({ weight: 75, reps: 4, status: 'validated' }),
       { seconds: 150, label: 'Récup Squat' },
     )
+  })
+
+  it('ne demande aucun chrono en validant un palier d’échauffement', () => {
+    // P1 de la contre-revue sur CB-56, et contrat d'interaction § 4 : un palier ne crée,
+    // ne remplace et n'efface jamais une échéance. Le `null` transmis ici est ce qui
+    // permet à `validateSet` de ne pas y toucher.
+    //
+    // Le cas réel : en séance A, la carte qui suit la dernière série de développé volume
+    // est un palier de tractions, et Ugo la valide pendant ses 150 s de récupération.
+    const onSetValidate = vi.fn()
+    renderSession('A', { onSetValidate })
+    const squat = screen.getByRole('article', { name: 'Squat' })
+    const palier = within(squat).getByRole('article', { name: 'Échauffement 1' })
+
+    fireEvent.click(within(palier).getByRole('button', { name: 'Valider' }))
+
+    expect(onSetValidate).toHaveBeenCalledWith(
+      'a-squat:warmup:0',
+      expect.objectContaining({ status: 'validated' }),
+      null,
+    )
+  })
+
+  it('annonce la charge de travail en tête, jamais celle du palier', () => {
+    // P1 de la contre-revue : l'en-tête et les plaques lisaient `sets[0]`, devenu le
+    // palier. Le soulevé de terre annonçait 60 kg et les plaques de 60 au lieu de 92,5.
+    renderSession('C')
+    const deadlift = screen.getByRole('article', { name: 'Soulevé de terre' })
+
+    expect(within(deadlift).getByText('92,5 kg')).toBeInTheDocument()
+    expect(within(deadlift).getByText('Par côté : 25 + 10 + 1,25')).toBeInTheDocument()
+
+    const incline = screen.getByRole('article', { name: 'Développé incliné haltères' })
+    expect(within(incline).getByText('24 kg/haltère')).toBeInTheDocument()
   })
 
   it('demande 75 secondes de récupération pour un exercice en superset', () => {
     const onSetValidate = vi.fn()
     renderSession('A', { onSetValidate })
     const tractions = screen.getByRole('article', { name: 'Tractions lestées' })
+    const premiere = within(tractions).getByRole('article', { name: 'Série 1' })
 
-    fireEvent.click(within(tractions).getAllByRole('button', { name: 'Valider' })[0])
+    fireEvent.click(within(premiere).getByRole('button', { name: 'Valider' }))
 
     expect(onSetValidate).toHaveBeenCalledWith(
-      'a-tractions-lestees:0',
+      'a-tractions-lestees:accessory:0',
       expect.objectContaining({ status: 'validated' }),
       { seconds: 75, label: 'Récup Tractions lestées' },
     )

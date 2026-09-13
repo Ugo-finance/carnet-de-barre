@@ -24,7 +24,8 @@ type SessionScreenProps = {
   onSetValidate: (
     setId: string,
     value: EditableSet,
-    timer: { seconds: number; label: string },
+    /** `null` pour un palier d'échauffement : le repos en cours n'est pas touché. */
+    timer: { seconds: number; label: string } | null,
   ) => void
   onAccessoryChange: (exerciseId: string, value: Pick<AccessoryLog, 'done' | 'note'>) => void
   onNotesChange: (notes: string) => void
@@ -43,16 +44,29 @@ function setLabel(set: SetLog): string {
   return set.role === 'top' ? base : `${base} ${set.index + 1}`
 }
 
+/**
+ * Les séries de travail d'un exercice, paliers d'échauffement exclus — CB-56.
+ *
+ * Tout ce qui **décrit** l'exercice se lit ici, et jamais dans `sets[0]` : depuis que le
+ * brouillon porte des paliers, la première série d'un exercice est son échauffement. Sans
+ * cette distinction, l'en-tête du soulevé de terre annonce 60 kg au lieu de 92,5, ses
+ * plaques sont celles du palier, et l'incliné affiche 14 au lieu de 24.
+ */
+function workingSetsOf(sets: SetLog[]): SetLog[] {
+  return sets.filter((set) => set.role !== 'warmup')
+}
+
 function targetFor(exercise: ExerciseDef, sets: SetLog[]): { value: string; detail: string } {
   if (exercise.kind === 'optional') return { value: 'Optionnel', detail: 'si tu as le temps' }
   if (exercise.loadKind === 'bodyweight') {
     return { value: 'Poids du corps', detail: exercise.scheme }
   }
 
-  const target = sets[0]?.targetWeight ?? null
+  const travail = workingSetsOf(sets)
+  const target = travail[0]?.targetWeight ?? null
   if (target === null) return { value: 'À renseigner', detail: exercise.scheme }
 
-  const reps = sets[0]?.targetReps
+  const reps = travail[0]?.targetReps
   return {
     value: formatLoad(target, exercise.loadKind),
     detail:
@@ -110,9 +124,12 @@ function ExerciseCard({
   onSetValidate: SessionScreenProps['onSetValidate']
 }) {
   const target = targetFor(exercise, sets)
+  // Les plaques annoncées en tête sont celles de la **série de travail**. Celles de chaque
+  // palier restent sur sa propre carte ; c'est la charge du jour qu'Ugo cherche ici.
+  const travail = workingSetsOf(sets)
   const barTarget =
-    exercise.loadKind === 'barTotal' && sets[0]?.targetWeight != null
-      ? describePlates(platesPerSide(sets[0].targetWeight))
+    exercise.loadKind === 'barTotal' && travail[0]?.targetWeight != null
+      ? describePlates(platesPerSide(travail[0].targetWeight))
       : null
 
   return (
@@ -142,14 +159,24 @@ function ExerciseCard({
             value={set}
             onChange={(value) => onSetChange(set.id, value)}
             onValidate={(value) =>
-              onSetValidate(set.id, value, {
-                seconds: exercise.restSeconds,
-                label: `Récup ${exercise.label}`,
-              })
+              onSetValidate(
+                set.id,
+                value,
+                // Le repos entre paliers est libre (contrat § 4) : aucun chrono n'est
+                // demandé, et celui qui court éventuellement reste intact.
+                set.role === 'warmup'
+                  ? null
+                  : { seconds: exercise.restSeconds, label: `Récup ${exercise.label}` },
+              )
             }
             onSkip={(value) => onSetChange(set.id, value)}
             showWeight={set.loadKind !== 'bodyweight'}
-            showRpe={set.role === 'top' || (set.role === 'volume' && set.index === sets.length - 1)}
+            showRpe={
+              set.role === 'top' ||
+              // La dernière série **de travail**, et non la dernière du tableau : les
+              // paliers gonflaient le total et faisaient disparaître la saisie du RPE.
+              (set.role === 'volume' && set.index === travail.length - 1)
+            }
             weightStep={weightStepFor(exercise.loadKind)}
           />
         ))}

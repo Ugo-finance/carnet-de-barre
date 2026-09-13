@@ -144,21 +144,40 @@ describe('la séance de ce soir, de bout en bout', () => {
     await store.ready()
 
     const draft = await store.openDraft('C', todayInZurich(SAMEDI_SOIR))
+    // Les séries sont désignées par leur **identifiant**, jamais par leur rang. Ce test
+    // validait `sets[0]` en croyant tenir le top set ; depuis CB-56, `sets[0]` est le
+    // premier palier d'échauffement du soulevé de terre. L'assertion restait verte et
+    // avait changé de sens — la forme d'erreur la plus coûteuse, puisque rien ne la
+    // signale.
+    const PALIER = 'c-deadlift:warmup:0'
+    const TOP = 'c-deadlift:top:0'
     const moitie = {
       ...draft,
-      sets: draft.sets.map((set, index) =>
-        index === 0 ? { ...set, status: 'validated' as const, weight: 95, reps: 3, rpe: 8 } : set,
-      ),
+      sets: draft.sets.map((set) => {
+        if (set.id === PALIER) return { ...set, status: 'validated' as const }
+        if (set.id === TOP) {
+          return { ...set, status: 'validated' as const, weight: 95, reps: 3, rpe: 8 }
+        }
+        return set
+      }),
     }
     await store.saveDraft(moitie)
     base.close()
 
     const rouvert = new DexieStore(new CarnetDatabase(base.name))
     const repris = await rouvert.loadDraft()
+    const serie = (id: string) => repris?.sets.find((set) => set.id === id)
 
     expect(repris?.id).toBe(draft.id)
     expect(repris?.date).toBe('2026-09-12')
-    expect(repris?.sets[0].status).toBe('validated')
-    expect(repris?.sets[0].weight).toBe(95)
+    // Le palier repris **et** le top de travail, chacun dans son état.
+    expect(serie(PALIER)?.status).toBe('validated')
+    expect(serie(PALIER)?.weight).toBe(60)
+    expect(serie(TOP)?.status).toBe('validated')
+    expect(serie(TOP)?.weight).toBe(95)
+    // Et la séance reprise est bien celle qu'Ugo avait sous les yeux : trois paliers de
+    // soulevé, dont deux encore à faire.
+    const paliers = (repris?.sets ?? []).filter((set) => set.role === 'warmup')
+    expect(paliers.filter((set) => set.status === 'planned')).toHaveLength(paliers.length - 1)
   })
 })
