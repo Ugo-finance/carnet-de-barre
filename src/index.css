@@ -49,8 +49,11 @@
   --color-fg: #f2efe8;
   --color-muted: #9a9388;
   --color-faint: #6b655b;
+  /* Décor et grand texte, jamais petit texte ni fond de bouton. */
   --color-accent: #e23b30;
+  /* Fond d’action avec texte blanc. */
   --color-accent-action: #d9342b;
+  /* Petit texte sur le fond sombre. */
   --color-accent-readable: #e54a40;
   --color-ok: #3fa65b;
   --color-warn: #e9b62d;
