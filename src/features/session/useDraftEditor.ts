@@ -155,9 +155,6 @@ export function useDraftEditor(store: DraftPort, initialDraft?: Draft) {
 
   const updateKeepAwake = useCallback(
     (keepAwake: boolean) => {
-      // Le contrat `Draft.keepAwake` est livré séparément par UGO-192, dans les
-      // fichiers domaine appartenant à Claude. L'objet étendu reste assignable à
-      // Draft et Dexie le conserve déjà sans transformation.
       commit((current) => ({ ...current, keepAwake }))
     },
     [commit],

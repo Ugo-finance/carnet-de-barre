@@ -54,8 +54,7 @@ function SessionEditor({
   const [result, setResult] = useState<FinalizeResult>()
   const [confirmFinish, setConfirmFinish] = useState(false)
   const finalizingRef = useRef(false)
-  const keepAwake =
-    (editor.draft as (Draft & { keepAwake?: boolean }) | undefined)?.keepAwake ?? false
+  const keepAwake = editor.draft?.keepAwake ?? false
   useWakeLock(keepAwake, Boolean(editor.draft) && !result)
 
   if (editor.loadError) {
