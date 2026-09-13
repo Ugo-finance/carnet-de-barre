@@ -18,32 +18,77 @@ MARQUE="<!-- $AUTRE -->"
 vu() { grep -qxF "$1" "$STATE"; }
 marquer() { echo "$1" >> "$STATE"; }
 horodate() { date '+%d.%m.%Y %H:%M:%S'; }
-api() { gh api --paginate "$@" 2>>"$STATE_DIR/veille-$ME.err" || { echo "$(horodate) erreur API sur $1"; return 1; }; }
-# Les listes de PR passent par le meme journal : une panne ici rendrait la veille
-# faussement calme (P2 de la contre-revue Codex sur #1).
-prs() { gh pr list --repo "$REPO" --state open "$@" 2>>"$STATE_DIR/veille-$ME.err" || { echo "$(horodate) erreur gh pr list"; return 1; }; }
+
+# Une panne ne doit jamais ressembler à du calme, ni à de l'activité.
+#
+# Le 13.09 au matin, une coupure reseau a fait ecrire le message d'erreur *dans le
+# flux de sortie* : il a ete lu comme une cle d'evenement, inscrit dans l'etat, et
+# sept notifications vides sont parties. Pire, la cle etant desormais « vue », toute
+# panne suivante serait devenue silencieuse.
+#
+# Les appels n'ecrivent donc plus rien sur la sortie standard en cas d'echec : ils
+# rendent un code non nul, et l'appelant emet une alarme *jamais inscrite dans
+# l'etat*, donc repetee a chaque tour tant que la panne dure.
+ALARME=0
+
+api() { gh api --paginate "$@" 2>>"$STATE_DIR/veille-$ME.err"; }
+prs() { gh pr list --repo "$REPO" --state open "$@" 2>>"$STATE_DIR/veille-$ME.err"; }
+
+degrade() {
+  echo "$(horodate) VEILLE DEGRADEE — $1 injoignable. Verifier veille-$ME.err ; ne pas se fier au silence."
+  ALARME=1
+}
+
+# Lit une source, puis signale les nouveautes. Le `<<<` evite le sous-shell d'un
+# pipe : sans lui, un `return` ou un compteur ne remonterait pas jusqu'ici.
+signaler() {
+  etiquette="$1"; source_nom="$2"; sortie="$3"
+  while IFS=$'\t' read -r k msg; do
+    # Une cle vide vient forcement d'une anomalie, jamais d'un evenement reel :
+    # l'inscrire rendrait cette anomalie silencieuse pour toujours.
+    [ -z "$k" ] && continue
+    vu "$k" || { marquer "$k"; echo "$(horodate) $etiquette $msg"; }
+  done <<< "$sortie"
+  unset source_nom
+}
 
 echo "$(horodate) veille $ME armée sur $REPO — signale le marqueur $MARQUE (état : $STATE)"
 
 while true; do
-  # 1. PR ouvertes : nouvelle PR ou nouvelle tête (SHA)
-  prs --json number,title,headRefName,headRefOid \
-    --jq '.[] | "pr\(.number)@\(.headRefOid)\t#\(.number) \(.title) [\(.headRefName)] tête \(.headRefOid[0:10])"' \
-  | while IFS=$'\t' read -r k msg; do vu "$k" || { marquer "$k"; echo "$(horodate) PR $msg"; }; done
+  ALARME=0
 
-  for n in $(prs --json number --jq '.[].number'); do
-    # 2. Revues soumises par l'autre agent
-    api "repos/$REPO/pulls/$n/reviews" --jq '.[] | select((.body // "") | contains("'"$MARQUE"'")) | "r\(.id)\t#'"$n"' revue \(.state) sur \(.commit_id[0:10])"' \
-    | while IFS=$'\t' read -r k msg; do vu "$k" || { marquer "$k"; echo "$(horodate) REVUE $msg"; }; done
-    # 3. Commentaires de diff de l'autre agent
-    api "repos/$REPO/pulls/$n/comments" --jq '.[] | select((.body // "") | contains("'"$MARQUE"'")) | "d\(.id)@\(.updated_at)\t#'"$n"' \(.path):\(.line // .original_line // "?") — \(.body | split("\n")[0] | .[0:100])"' \
-    | while IFS=$'\t' read -r k msg; do vu "$k" || { marquer "$k"; echo "$(horodate) DIFF $msg"; }; done
-  done
+  # 1. PR ouvertes : nouvelle PR ou nouvelle tête (SHA)
+  if liste=$(prs --json number,title,headRefName,headRefOid \
+    --jq '.[] | "pr\(.number)@\(.headRefOid)\t#\(.number) \(.title) [\(.headRefName)] tête \(.headRefOid[0:10])"'); then
+    signaler "PR" "liste des PR" "$liste"
+  else
+    degrade "la liste des PR"
+  fi
+
+  if numeros=$(prs --json number --jq '.[].number'); then
+    for n in $numeros; do
+      # 2. Revues soumises par l'autre agent
+      if revues=$(api "repos/$REPO/pulls/$n/reviews" --jq '.[] | select((.body // "") | contains("'"$MARQUE"'")) | "r\(.id)\t#'"$n"' revue \(.state) sur \(.commit_id[0:10])"'); then
+        signaler "REVUE" "revues de #$n" "$revues"
+      else
+        degrade "les revues de #$n"
+      fi
+      # 3. Commentaires de diff de l'autre agent
+      if diffs=$(api "repos/$REPO/pulls/$n/comments" --jq '.[] | select((.body // "") | contains("'"$MARQUE"'")) | "d\(.id)@\(.updated_at)\t#'"$n"' \(.path):\(.line // .original_line // "?") — \(.body | split("\n")[0] | .[0:100])"'); then
+        signaler "DIFF" "commentaires de diff de #$n" "$diffs"
+      else
+        degrade "les commentaires de diff de #$n"
+      fi
+    done
+  fi
 
   # 4. Commentaires de conversation (PR et issues) de l'autre agent, y compris édités
-  api "repos/$REPO/issues/comments?per_page=100&sort=updated&direction=desc" \
-    --jq '.[] | select((.body // "") | contains("'"$MARQUE"'")) | "c\(.id)@\(.updated_at)\t\(.issue_url | split("/") | last | "#" + .) — \(.body | split("\n")[0] | .[0:110])"' \
-  | while IFS=$'\t' read -r k msg; do vu "$k" || { marquer "$k"; echo "$(horodate) COMMENTAIRE $msg"; }; done
+  if commentaires=$(api "repos/$REPO/issues/comments?per_page=100&sort=updated&direction=desc" \
+    --jq '.[] | select((.body // "") | contains("'"$MARQUE"'")) | "c\(.id)@\(.updated_at)\t\(.issue_url | split("/") | last | "#" + .) — \(.body | split("\n")[0] | .[0:110])"'); then
+    signaler "COMMENTAIRE" "commentaires" "$commentaires"
+  else
+    degrade "les commentaires"
+  fi
 
   sleep "$INTERVALLE"
 done
