@@ -92,8 +92,31 @@ describe('SessionHome', () => {
     render(<SessionHome store={store} now={SUNDAY} />)
 
     expect(await screen.findByRole('heading', { name: 'Séance A' })).toBeInTheDocument()
-    expect(screen.getByText("Aujourd'hui · hors rotation")).toBeInTheDocument()
+    // Ce n'est pas une sortie de route : c'est la séance suivante, entamée en avance.
+    expect(screen.getByText("Aujourd'hui · en avance")).toBeInTheDocument()
     expect(store.openDraft).toHaveBeenCalledWith('A', '2026-09-20')
+  })
+
+  it('ne repropose pas le dimanche une séance C faite la veille au soir', async () => {
+    // Le cas réel d'Ugo, 12–13.09.2026 : entraîné samedi soir au lieu du dimanche,
+    // l'app lui reproposait C le lendemain. « C'est stupide, la prochaine doit être
+    // mardi. » C'est ce test qui tient sa réponse.
+    const store = fakeStore({ seances: [saved('C', '2026-09-19')] })
+    render(<SessionHome store={store} now={SUNDAY} />)
+
+    expect(await screen.findByRole('heading', { name: 'Séance A' })).toBeInTheDocument()
+    expect(store.openDraft).toHaveBeenCalledWith('A', '2026-09-20')
+    expect(screen.queryByRole('heading', { name: 'Séance C' })).not.toBeInTheDocument()
+  })
+
+  it('propose quand même le C du dimanche si c’est un A qui a été fait la veille', async () => {
+    // S'entraîner en avance sert son créneau, ça ne décale jamais la rotation :
+    // un A fait samedi ne dispense pas du C prévu dimanche.
+    const store = fakeStore({ seances: [saved('A', '2026-09-19')] })
+    render(<SessionHome store={store} now={SUNDAY} />)
+
+    expect(await screen.findByRole('heading', { name: 'Séance C' })).toBeInTheDocument()
+    expect(screen.getByText("Aujourd'hui")).toBeInTheDocument()
   })
 
   it('reprend un brouillon existant avant la proposition du calendrier', async () => {
@@ -197,6 +220,23 @@ describe('SessionHome', () => {
     expect(screen.getByText('22.09.2026')).toBeInTheDocument()
     expect(store.saveDraft).toHaveBeenCalledWith(expect.objectContaining({ notes: 'Solide' }))
     expect(store.finalizeSeance).toHaveBeenCalledWith('draft-C-2026-09-20')
+  })
+
+  it('propose mardi après avoir fini C un samedi, jour creux', async () => {
+    // Le P1 de Codex sur CB-44, dans le parcours complet. Ugo finit sa séance C le
+    // samedi 12.09 : samedi n'est pas un jour de rotation, et la première version
+    // lui répondait « Prochaine séance · C » le lendemain — celle qu'il venait de
+    // terminer. Ce test échoue dès que le calcul rejuge le jour courant au lieu de
+    // chercher le premier créneau non servi.
+    const SAMEDI = new Date('2026-09-12T16:00:00Z')
+    const store = fakeStore({ initial: draftFor('C', '2026-09-12') })
+    render(<SessionHome store={store} now={SAMEDI} />)
+    await screen.findByRole('heading', { name: 'Séance C' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Terminer la séance' }))
+
+    expect(await screen.findByRole('heading', { name: 'Prochaine séance · A' })).toBeInTheDocument()
+    expect(screen.getByText('15.09.2026')).toBeInTheDocument()
   })
 
   it('ignore un deuxième tap pendant la finalisation', async () => {

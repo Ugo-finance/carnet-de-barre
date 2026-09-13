@@ -4,7 +4,7 @@ import type { CarnetStore, FinalizeResult } from '../../db/contracts'
 import {
   currentSession,
   describeWhen,
-  isScheduledSessionDone,
+  type SeanceFaite,
   todayInZurich,
   type UpcomingSession,
 } from '../../domain/schedule'
@@ -22,6 +22,13 @@ type ReadyState = {
   draft: Draft
   suggestion: UpcomingSession
   today: string
+  /**
+   * L'historique réduit à ce dont la rotation a besoin. Il est chargé une fois au
+   * démarrage et sert aux deux endroits qui décident de la séance suivante : l'ouverture
+   * de l'écran et le récapitulatif de fin. Les faire diverger donnerait deux réponses
+   * différentes à la même question dans la même minute.
+   */
+  seances: SeanceFaite[]
 }
 
 function messageFor(error: unknown): string {
@@ -31,7 +38,13 @@ function messageFor(error: unknown): string {
 function whenLabel(draft: Draft, suggestion: UpcomingSession, today: string): string {
   if (draft.type === suggestion.type && draft.date === suggestion.scheduledDate)
     return describeWhen(suggestion)
-  return draft.date === today ? "Aujourd'hui · hors rotation" : 'Séance à reprendre'
+  if (draft.date !== today) return 'Séance à reprendre'
+  // Depuis CB-44, l'app propose le créneau suivant dès que celui du jour est servi :
+  // faire mardi un dimanche est devenu le parcours normal, pas une sortie de route.
+  // Le confondre avec « hors rotation » — un type choisi à la main — mentirait sur
+  // ce qu'Ugo est en train de faire.
+  if (draft.type === suggestion.type) return "Aujourd'hui · en avance"
+  return "Aujourd'hui · hors rotation"
 }
 
 function SessionEditor({
@@ -65,10 +78,11 @@ function SessionEditor({
   const draft = editor.draft
 
   if (result) {
-    const scheduledDone =
-      result.seance.date === state.today &&
-      isScheduledSessionDone(state.today, [result.seance.type])
-    return <SessionSummary result={result} next={currentSession(now, scheduledDone)} />
+    // La séance qu'on vient d'enregistrer compte, sans attendre un rechargement.
+    // `currentSession` reçoit l'historique entier : c'est lui qui décide quel créneau
+    // est servi, y compris un jour creux où aucune séance n'est prévue.
+    const apres = [...state.seances, { date: result.seance.date, type: result.seance.type }]
+    return <SessionSummary result={result} next={currentSession(now, apres)} />
   }
 
   const replace = async () => {
@@ -244,12 +258,13 @@ export function SessionHome({ store, now = new Date() }: { store: SessionStore; 
         storeValue.current.listSeances(),
       ])
       const today = todayInZurich(nowValue.current)
-      const typesToday = seances
-        .filter((seance) => seance.date === today)
-        .map((seance) => seance.type)
-      const suggestion = currentSession(nowValue.current, isScheduledSessionDone(today, typesToday))
+      const faites: SeanceFaite[] = seances.map((seance) => ({
+        date: seance.date,
+        type: seance.type,
+      }))
+      const suggestion = currentSession(nowValue.current, faites)
       const draft = existing ?? (await storeValue.current.openDraft(suggestion.type, today))
-      return { draft, suggestion, today }
+      return { draft, suggestion, today, seances: faites }
     })()
 
     void boot.current.then(

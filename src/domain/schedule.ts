@@ -64,16 +64,54 @@ export function sessionTypeFor(isoDate: string): SeanceType | null {
 }
 
 /**
- * `true` si la séance prévue par la rotation ce jour-là figure parmi les types déjà
- * enregistrés aujourd'hui. C'est ce que `currentSession` attend, et rien d'autre :
- * une séance hors rotation ne compte pas.
+ * Jour de rotation précédant cette date, en remontant jusqu'à sept jours.
+ *
+ * Sert à délimiter le créneau courant : ce qui a été fait depuis ce jour-là sert la
+ * séance d'aujourd'hui, ce qui est antérieur appartient au créneau d'avant.
  */
-export function isScheduledSessionDone(
-  isoDate: string,
-  typesLoggedToday: readonly SeanceType[],
-): boolean {
+export function previousScheduledDay(isoDate: string): string {
+  for (let offset = 1; offset <= 7; offset += 1) {
+    const date = addDays(isoDate, -offset)
+    if (sessionTypeFor(date)) return date
+  }
+  // Inatteignable : la rotation couvre trois jours sur sept.
+  return addDays(isoDate, -7)
+}
+
+/** Ce qu'il faut savoir d'une séance enregistrée pour décider de la suivante. */
+export interface SeanceFaite {
+  date: string
+  type: SeanceType
+}
+
+/**
+ * `true` si la séance prévue ce jour-là a **déjà été faite dans son créneau**.
+ *
+ * Le créneau va du jour de rotation précédent (exclu) à la date examinée (incluse).
+ * Ugo s'entraîne quand il peut : un C fait le samedi soir sert le C prévu le dimanche,
+ * et l'app doit alors proposer mardi. Ne regarder que le jour même — ce que faisait
+ * cette fonction — lui reproposait le lendemain une séance qu'il venait de faire.
+ *
+ * Deux choix délibérés dans cette fenêtre.
+ *
+ * **Le type doit correspondre.** Une séance hors rotation — un A lancé à la main un
+ * dimanche — ne fait pas disparaître le C prévu ce dimanche : ce sont deux choses
+ * différentes, et les confondre ferait sauter une séance du programme. Faire une
+ * séance en avance ne décale donc jamais la rotation, elle sert seulement son créneau.
+ *
+ * **La borne basse est exclusive.** Un C fait le jour même du créneau précédent ne sert
+ * pas celui-ci. Dans le doute, mieux vaut proposer une séance déjà faite — qu'Ugo
+ * écarte d'un tap sur le sélecteur — que d'en masquer une qui ne l'est pas.
+ */
+export function isScheduledSessionDone(isoDate: string, seances: readonly SeanceFaite[]): boolean {
   const prevu = sessionTypeFor(isoDate)
-  return prevu != null && typesLoggedToday.includes(prevu)
+  if (prevu == null) return false
+
+  const depuis = previousScheduledDay(isoDate)
+  // Les dates civiles se comparent comme du texte : `AAAA-MM-JJ` est ordonné.
+  return seances.some(
+    (seance) => seance.type === prevu && seance.date > depuis && seance.date <= isoDate,
+  )
 }
 
 export interface UpcomingSession {
@@ -95,37 +133,48 @@ export interface UpcomingSession {
 }
 
 /**
- * Ce que l'écran d'accueil doit proposer.
+ * Ce que l'écran d'accueil doit proposer : **le premier créneau non servi**.
  *
- * Règle D7 : la séance **prévue ce jour-là** reste proposée tant qu'elle n'est pas
- * terminée ; une fois terminée, on montre la suivante.
+ * Règle D7 : la séance prévue reste proposée tant qu'elle n'est pas faite ; une fois
+ * faite, on montre la suivante.
  *
- * `scheduledSessionDone` ne vaut `true` que si c'est bien la séance **de la rotation**
- * qui a été enregistrée aujourd'hui. Une séance hors rotation — un A lancé à la main
- * un dimanche — ne doit pas faire disparaître le C prévu ce dimanche : ce sont deux
- * choses différentes, et confondre les deux ferait sauter une séance du programme.
+ * La recherche part d'aujourd'hui et avance jour par jour, en demandant pour **chaque
+ * créneau candidat** s'il est déjà servi — et non en jugeant le seul jour courant.
+ *
+ * La distinction n'est pas théorique, et une première version l'a manquée. Le 12.09,
+ * Ugo finit sa séance C un **samedi**, qui n'est pas un jour de rotation : juger le
+ * jour courant n'y trouve aucune séance prévue, donc rien à servir, et l'écran
+ * proposait le C du lendemain — celui qu'il venait de faire. Interroger les créneaux
+ * candidats trouve au contraire que le C du dimanche est servi par la séance de la
+ * veille, et passe au A du mardi.
+ *
+ * Les séances **manquées** ne rattrapent pas : la recherche ne regarde jamais en
+ * arrière. Sauter un jeudi ne fait pas réapparaître B le dimanche, où C est prévu.
  *
  * Le sélecteur A/B/C reste disponible en permanence : ceci est une proposition, pas
  * une contrainte.
  */
 export function currentSession(
   now: Date = new Date(),
-  scheduledSessionDone = false,
+  seances: readonly SeanceFaite[] = [],
 ): UpcomingSession {
   const today = todayInZurich(now)
-  const todayType = sessionTypeFor(today)
 
-  if (todayType && !scheduledSessionDone) {
-    return { type: todayType, scheduledDate: today, inDays: 0, isToday: true }
+  for (let offset = 0; offset <= 7; offset += 1) {
+    const date = addDays(today, offset)
+    const type = sessionTypeFor(date)
+    if (type == null) continue
+    if (isScheduledSessionDone(date, seances)) continue
+    return { type, scheduledDate: date, inDays: offset, isToday: offset === 0 }
   }
 
+  // Atteignable seulement si les trois créneaux de la semaine sont servis : on rend
+  // alors le prochain du calendrier, qu'Ugo refera s'il le veut.
   for (let offset = 1; offset <= 7; offset += 1) {
     const date = addDays(today, offset)
     const type = sessionTypeFor(date)
     if (type) return { type, scheduledDate: date, inDays: offset, isToday: false }
   }
-
-  // Inatteignable : la rotation couvre trois jours sur sept.
   return { type: 'A', scheduledDate: addDays(today, 1), inDays: 1, isToday: false }
 }
 
