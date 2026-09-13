@@ -8,9 +8,13 @@
  * - `applyProgression` fait passer les réalisations dans le moteur et rend les
  *   nouvelles cibles avec les événements à afficher.
  *
- * Une seule règle gouverne les deux : **seules les séries `validated` comptent**. Une
- * série restée pré-remplie ou explicitement sautée n'entre ni dans le résumé, ni dans
- * la progression. C'est ce qui empêche une valeur suggérée de devenir une performance.
+ * Deux règles gouvernent les deux, et une seule fonction les porte, `workingSets` :
+ *
+ * - **seules les séries `validated` comptent.** Une série restée pré-remplie ou
+ *   explicitement sautée n'entre ni dans le résumé, ni dans la progression. C'est ce qui
+ *   empêche une valeur suggérée de devenir une performance ;
+ * - **les paliers d'échauffement ne comptent pas** (CB-55). Ils ont bien été faits, et ils
+ *   restent dans `sets` à l'export ; ils ne sont simplement pas des performances.
  */
 
 import { LIFTS, findExercise } from '../domain/program.ts'
@@ -46,6 +50,28 @@ export function validatedSets(porteur: { sets: readonly SetLog[] }): SetLog[] {
 }
 
 /**
+ * Les séries **de travail** réalisées : validées, paliers d'échauffement exclus — CB-55.
+ *
+ * Un palier est une montée en charge, pas une performance. Le laisser passer coûterait
+ * trois choses à la fois, et c'est pourquoi l'exclusion vit ici plutôt que recopiée chez
+ * chaque lecteur :
+ *
+ * - le résumé annoncerait « Squat : 20×8 | 37,5×5 | 52,5×3 | 65×1 | 75×4 @8 | … » ;
+ * - le top set du développé volume est **la plus légère** des séries validées, puisque la
+ *   progression exige que les trois tiennent la charge : un palier à 20 kg deviendrait le
+ *   record de la séance, et la cible tomberait à 20 ;
+ * - la progression lirait ces charges comme des tentatives.
+ *
+ * `validatedSets` reste volontairement fidèle à son nom et rend tout ce qui a été validé,
+ * échauffement compris : c'est ce dont l'export a besoin pour reproduire la séance telle
+ * qu'elle a eu lieu. La différence entre « a été fait » et « compte » est donc nommée,
+ * jamais implicite.
+ */
+export function workingSets(porteur: { sets: readonly SetLog[] }): SetLog[] {
+  return validatedSets(porteur).filter((set) => set.role !== 'warmup')
+}
+
+/**
  * Les séries portant une charge exploitable. C'est ce sous-ensemble qui alimente les
  * tops et la progression : on ne peut pas comparer des charges là où il n'y en a pas.
  */
@@ -57,7 +83,7 @@ function asAttempt(set: SetLog): Attempt {
   return { weight: set.weight, reps: set.reps, rpe: set.rpe }
 }
 
-/** Regroupe les séries validées par exercice, en gardant l'ordre du programme. */
+/** Regroupe les séries par exercice, en gardant l'ordre du programme. */
 function groupByExercise(sets: SetLog[]): Map<string, SetLog[]> {
   const groups = new Map<string, SetLog[]>()
   for (const set of sets) {
@@ -131,9 +157,9 @@ export interface DerivedSeance {
   tops: Partial<Record<LiftKey, TopRecord>>
 }
 
-/** Fabrique le résumé lisible et les tops, à partir des seules séries validées. */
+/** Fabrique le résumé lisible et les tops, à partir des seules séries de travail. */
 export function deriveSeance(porteur: PorteurDeSeries): DerivedSeance {
-  const groups = groupByExercise(validatedSets(porteur))
+  const groups = groupByExercise(workingSets(porteur))
   const lines: string[] = []
   const tops: Partial<Record<LiftKey, TopRecord>> = {}
 
@@ -191,7 +217,7 @@ export function targetsDiverged(base: Targets, current: Targets): boolean {
  * l'ouverture du brouillon.
  */
 export function applyProgression(draft: Draft, current: Targets): ProgressionResult {
-  const groups = groupByExercise(loadedSets(validatedSets(draft)))
+  const groups = groupByExercise(loadedSets(workingSets(draft)))
   let targets = structuredClone(current)
   const events: ProgressionEvent[] = []
 

@@ -27,8 +27,17 @@ export type LoadKind =
   /** Charge lue sur la machine (presse 45°). */
   | 'machine'
 
-/** Rôle d'une série dans son exercice. */
-export type SetRole = 'top' | 'backoff' | 'volume' | 'accessory'
+/**
+ * Rôle d'une série dans son exercice.
+ *
+ * `warmup` est à part : c'est le seul rôle **exclu du résumé et de la progression**.
+ * Un palier d'échauffement est une montée en charge, pas une performance ; le compter
+ * ferait redescendre une cible parce qu'Ugo s'est échauffé. Il reste en revanche dans
+ * `sets` à l'export, avec son rôle : une séance doit se reproduire telle qu'elle a eu
+ * lieu. Voir `workingSets` dans `src/db/derive.ts`, qui est le point unique où la
+ * distinction s'applique.
+ */
+export type SetRole = 'top' | 'backoff' | 'volume' | 'accessory' | 'warmup'
 
 /**
  * État d'une série. Une valeur pré-remplie ne prouve jamais une réalisation :

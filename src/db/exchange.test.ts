@@ -34,7 +34,10 @@ describe('export', () => {
 
   it('porte la version du format, les cibles et les douze séances', async () => {
     const file = await buildExport(store)
-    expect(file.schemaVersion).toBe(1)
+    // Le nombre est écrit en clair, et non repris de `SCHEMA_VERSION` : une assertion sur
+    // la constante se contenterait d'elle-même. Ce test doit tomber à chaque incrément,
+    // pour qu'aucun ne passe sans qu'on l'ait voulu. Passé à 2 en CB-55, rôle `warmup`.
+    expect(file.schemaVersion).toBe(2)
     expect(file.seances).toHaveLength(12)
     expect(file.targets.squat.w).toBe(75)
   })

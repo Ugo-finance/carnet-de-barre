@@ -42,7 +42,12 @@ describe('export', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Copier mes séances' }))
 
     await waitFor(() => expect(writeText).toHaveBeenCalledOnce())
-    expect(writeText.mock.calls[0][0]).toContain('"schemaVersion": 1')
+    expect(writeText.mock.calls[0][0]).toContain(
+      // Nombre en clair, jamais repris de `SCHEMA_VERSION` : une assertion sur la
+      // constante se contenterait d'elle-même et laisserait passer tout incrément.
+      // Passé à 2 en CB-55, pour le rôle de série `warmup`.
+      '"schemaVersion": 2',
+    )
     expect(await screen.findByText(/12 séances copiées/)).toBeInTheDocument()
   })
 
