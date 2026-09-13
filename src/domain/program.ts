@@ -83,8 +83,6 @@ export type ExerciseKind =
   | 'volume'
   /** Accessoire structuré : charge et répétitions saisies, pas de progression automatique. */
   | 'accessory'
-  /** Accessoire facultatif, saisie en texte libre. */
-  | 'optional'
 
 export interface ExerciseDef {
   id: string
@@ -101,6 +99,22 @@ export interface ExerciseDef {
    * entrée, y compris celles qu'on ajoutera. Valeurs et motifs : `docs/refonte/00-contrat.md`.
    */
   warmup: WarmupPolicy
+  /**
+   * L'exercice peut être sauté sans que la séance soit incomplète — CB-69.
+   *
+   * Curls, élévations, face pulls et abdos se notaient en texte libre, sous un genre
+   * `'optional'` à part. Ils sont depuis des accessoires structurés comme les autres :
+   * même charge, mêmes répétitions, même place dans la file. Seul leur caractère
+   * facultatif les distingue, et il se déclare **ici** plutôt que dans `kind`.
+   *
+   * Le motif : `kind` répond à « comment cet exercice se fait » et pilote
+   * `setsForExercise`. Lui faire porter en plus « est-ce obligatoire » obligerait chaque
+   * aiguillage sur `kind` à traiter deux questions à la fois, et le premier oublié
+   * fabriquerait un exercice structuré que le moteur ignore, en silence. Même
+   * raisonnement que `repsAfterRise` et `loadGroup` : une dimension orthogonale se
+   * déclare à part.
+   */
+  optional?: boolean
   /** Présent si l'exercice est piloté par le moteur de progression. */
   lift?: LiftKey
   /** Nombre de séries hors top set. */
@@ -222,24 +236,28 @@ export const SEANCES: Record<SeanceType, SeanceDef> = {
         id: 'a-curls',
         warmup: 'aucun',
         label: 'Curls',
-        kind: 'optional',
+        kind: 'accessory',
+        optional: true,
         loadKind: 'perDumbbell',
         scheme: '2×10–12',
         sets: 2,
         reps: null,
         repsRange: [10, 12],
+        suggestedWeight: 12,
         restSeconds: REST.superset,
       },
       {
         id: 'a-elevations',
         warmup: 'aucun',
         label: 'Élévations latérales',
-        kind: 'optional',
+        kind: 'accessory',
+        optional: true,
         loadKind: 'perDumbbell',
         scheme: '2×12–20',
         sets: 2,
         reps: null,
         repsRange: [12, 20],
+        suggestedWeight: 8,
         restSeconds: REST.superset,
       },
     ],
@@ -308,18 +326,21 @@ export const SEANCES: Record<SeanceType, SeanceDef> = {
         id: 'b-face-pulls',
         warmup: 'aucun',
         label: 'Face pulls',
-        kind: 'optional',
+        kind: 'accessory',
+        optional: true,
         loadKind: 'machine',
         scheme: '2×15',
         sets: 2,
         reps: 15,
+        suggestedWeight: 25,
         restSeconds: REST.superset,
       },
       {
         id: 'b-abdos',
         warmup: 'aucun',
         label: 'Abdos roulette',
-        kind: 'optional',
+        kind: 'accessory',
+        optional: true,
         loadKind: 'bodyweight',
         scheme: '2×10',
         sets: 2,
@@ -391,12 +412,14 @@ export const SEANCES: Record<SeanceType, SeanceDef> = {
         id: 'c-elevations',
         warmup: 'aucun',
         label: 'Élévations latérales',
-        kind: 'optional',
+        kind: 'accessory',
+        optional: true,
         loadKind: 'perDumbbell',
         scheme: '2×12–20',
         sets: 2,
         reps: null,
         repsRange: [12, 20],
+        suggestedWeight: 8,
         restSeconds: REST.superset,
       },
     ],

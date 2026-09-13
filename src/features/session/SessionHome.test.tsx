@@ -1,6 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { FinalizeResult } from '../../db/contracts'
-import { SEANCES } from '../../domain/program'
 import type { Draft, Seance, SeanceType, Targets } from '../../domain/types'
 import { SessionHome, type SessionStore } from './SessionHome'
 
@@ -19,9 +18,7 @@ function draftFor(type: SeanceType, date: string): Draft {
     type,
     date,
     sets: [],
-    accessories: SEANCES[type].exercises
-      .filter((exercise) => exercise.kind === 'optional')
-      .map((exercise) => ({ exerciseId: exercise.id, done: false, note: '' })),
+    accessories: [],
     notes: '',
     rushed: false,
     timerEndsAt: null,
