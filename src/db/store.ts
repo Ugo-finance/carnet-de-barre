@@ -161,7 +161,11 @@ export class DexieStore implements DraftStore {
     if (existing) return existing
 
     const targets = await this.getTargets()
-    const draft = buildDraft(type, date, targets, { id: crypto.randomUUID() })
+    // L'historique entre ici : c'est lui qui décide de la charge des accessoires.
+    // Sans lui, l'app reproposerait indéfiniment la valeur de la table — le défaut
+    // qu'Ugo a vu en salle le 12.09.
+    const seances = await this.listSeances()
+    const draft = buildDraft(type, date, targets, { id: crypto.randomUUID(), seances })
     await this.database.transaction('rw', this.database.drafts, async () => {
       await this.database.drafts.clear()
       await this.database.drafts.put(draft)
@@ -254,6 +258,10 @@ export class DexieStore implements DraftStore {
       // sans que rien ne dise pourquoi — exactement la question à laquelle ce
       // journal existe pour répondre.
       this.database.meta,
+      // `seances` depuis CB-45 : la reconstruction du brouillon rejoue la progression
+      // des accessoires, qui lit l'historique. Une table hors portée fait lever Dexie
+      // — le test du raccord l'a levé dès le premier essai.
+      this.database.seances,
       async () => {
         // L'invariant vit ici, au point d'écriture, et pas seulement dans l'écran :
         // déplacer une cible pendant une séance rendrait le brouillon impossible à
@@ -294,8 +302,16 @@ export class DexieStore implements DraftStore {
           // un identifiant neuf ferait diverger sa copie sans qu'il s'en aperçoive.
           // Il reste à l'interface à se remonter pour relire celui-ci — c'est écrit
           // dans le parcours d'acceptation du ticket.
+          // Les séances se lisent **dans cette transaction**, pas via `listSeances()`
+          // qui en ouvrirait une seconde. Sans elles, ajuster une cible effacerait les
+          // charges d'accessoires calculées et ramènerait Ugo aux valeurs de la table :
+          // le défaut du « 20 kg par haltère », revenu par la porte de derrière.
+          const historique = await this.database.seances.toArray()
           await this.database.drafts.put({
-            ...buildDraft(existant.type, existant.date, targets, { id: existant.id }),
+            ...buildDraft(existant.type, existant.date, targets, {
+              id: existant.id,
+              seances: historique,
+            }),
             // La préférence d'écran n'est pas une donnée de séance : la reconstruction
             // remet les charges à jour, elle n'a aucune raison de rallumer ou d'éteindre
             // l'écran d'Ugo à son insu.

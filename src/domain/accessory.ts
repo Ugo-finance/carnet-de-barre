@@ -51,8 +51,15 @@ export type AccessoryOutcome =
 
 export interface AccessoryPlan {
   weight: number | null
-  /** Répétitions à pré-remplir, une par série, dans l'ordre. */
-  reps: number[]
+  /**
+   * Répétitions à pré-remplir, une par série, dans l'ordre.
+   *
+   * `null` quand il n'y a rien à proposer — les tractions au poids du corps se notent
+   * « maximum moins deux », un nombre que personne ne peut deviner à l'avance. Une
+   * première version rendait `0` ici, ce qui fabriquait une performance nulle là où il
+   * n'y avait qu'une absence : le parcours bout en bout l'a fait tomber à l'export.
+   */
+  reps: (number | null)[]
   outcome: AccessoryOutcome
 }
 
@@ -73,7 +80,7 @@ function seanceComplete(performance: AccessoryPerformance, series: number): bool
   return performance.reps.length >= series && performance.reps.every((reps) => reps != null)
 }
 
-function repeat(value: number, count: number): number[] {
+function repeat(value: number | null, count: number): (number | null)[] {
   return Array.from({ length: count }, () => value)
 }
 
@@ -136,8 +143,9 @@ export function planAccessory(
   // Sans fourchette, il n'existe pas de « haut » à atteindre : rien ne peut décider
   // d'une montée, et inventer un seuil reviendrait à écrire du programme.
   if (!range) {
-    const reps = exercise.reps ?? 0
-    return { weight: depart, reps: repeat(reps, exercise.sets), outcome: 'depart' }
+    // `exercise.reps` peut valoir `null` — les tractions au poids du corps se notent
+    // « maximum moins deux ». On propage l'absence plutôt que d'inventer un zéro.
+    return { weight: depart, reps: repeat(exercise.reps ?? null, exercise.sets), outcome: 'depart' }
   }
 
   const [bas, haut] = range

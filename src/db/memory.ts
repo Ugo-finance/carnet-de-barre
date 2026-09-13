@@ -88,7 +88,10 @@ export class MemoryStore implements DraftStore {
    */
   async openDraft(type: SeanceType, date: string): Promise<Draft> {
     if (this.draft) return structuredClone(this.draft)
-    const draft = buildDraft(type, date, await this.getTargets(), { id: crypto.randomUUID() })
+    const draft = buildDraft(type, date, await this.getTargets(), {
+      id: crypto.randomUUID(),
+      seances: this.seances,
+    })
     this.draft = draft
     return structuredClone(draft)
   }
