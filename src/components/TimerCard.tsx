@@ -1,11 +1,6 @@
 import { useCallback } from 'react'
 import { formatDuration } from '../domain/format'
-import {
-  notifyTimerDone,
-  useRecoveryTimer,
-  useWakeLock,
-  wakeLockAvailable,
-} from '../features/session/timer'
+import { notifyTimerDone, useRecoveryTimer, wakeLockAvailable } from '../features/session/timer'
 
 type TimerCardProps = {
   endsAt: number
@@ -27,7 +22,6 @@ export function TimerCard({
   const notify = useCallback(() => notifyTimerDone(), [])
   const remaining = useRecoveryTimer(endsAt, notify)
   const available = wakeLockAvailable()
-  useWakeLock(keepAwake, remaining > 0)
 
   return (
     <aside className="sticky top-[max(0.5rem,env(safe-area-inset-top))] z-10 rounded-2xl border border-accent/60 bg-surface p-3 shadow-xl">
