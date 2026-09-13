@@ -112,7 +112,7 @@ export function SetCard({
           </button>
           <button
             type="button"
-            className="min-h-11 rounded-xl bg-accent px-4 font-semibold text-bg"
+            className="min-h-11 rounded-xl bg-accent-action px-4 font-semibold text-white"
             onClick={validate}
           >
             Valider

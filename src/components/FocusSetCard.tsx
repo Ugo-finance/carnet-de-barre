@@ -1,0 +1,94 @@
+import type { ReactNode } from 'react'
+import { BarbellLoad } from './BarbellLoad'
+import { Button } from './Button'
+
+export type FocusRole = 'warmup' | 'top' | 'backoff' | 'volume' | 'accessory' | 'optional'
+
+const ROLE_LABEL: Record<FocusRole, string> = {
+  warmup: 'Échauffement',
+  top: 'Top set',
+  backoff: 'Backoff',
+  volume: 'Volume',
+  accessory: 'Accessoire',
+  optional: 'Optionnel',
+}
+
+const ROLE_TONE: Record<FocusRole, string> = {
+  warmup: 'text-warn',
+  top: 'text-accent-readable',
+  backoff: 'text-muted',
+  volume: 'text-ok',
+  accessory: 'text-ok',
+  optional: 'text-muted',
+}
+
+type FocusSetCardProps = {
+  role: FocusRole
+  exercise: string
+  seriesLabel: string
+  load: string
+  unit?: string
+  loadDetail?: string
+  barbellTotal?: number
+  supersetPartner?: string
+  children?: ReactNode
+  primaryLabel?: string
+  onPrimary?: () => void
+  onSkip?: () => void
+}
+
+/** Cadre de la série courante ; les lots métier lui fourniront les éditeurs adaptés au rôle. */
+export function FocusSetCard({
+  role,
+  exercise,
+  seriesLabel,
+  load,
+  unit,
+  loadDetail,
+  barbellTotal,
+  supersetPartner,
+  children,
+  primaryLabel = 'Valider la série',
+  onPrimary,
+  onSkip,
+}: FocusSetCardProps) {
+  return (
+    <article className="motion-enter rounded-2xl border border-[#4a4131] bg-surface p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <span
+          className={`rounded-md border border-line bg-surface-2 px-2 py-1 text-[0.6875rem] font-bold uppercase tracking-[0.14em] ${ROLE_TONE[role]}`}
+        >
+          {ROLE_LABEL[role]}
+        </span>
+        {supersetPartner ? (
+          <span className="rounded-md border border-focus/50 px-2 py-1 text-[0.6875rem] font-semibold tracking-wide text-focus">
+            SS · {supersetPartner}
+          </span>
+        ) : null}
+      </div>
+
+      <h2 className="mt-3 text-xl font-bold">{exercise}</h2>
+      <p className="num mt-0.5 text-xs text-muted">{seriesLabel}</p>
+
+      <p className="mt-5 flex items-baseline gap-2">
+        <span className="num text-[3.375rem] font-bold leading-none tracking-tight">{load}</span>
+        {unit ? <span className="num text-sm text-muted">{unit}</span> : null}
+      </p>
+      {loadDetail ? <p className="num mt-1 min-h-5 text-xs text-muted">{loadDetail}</p> : null}
+      {barbellTotal !== undefined ? <BarbellLoad total={barbellTotal} className="mt-2" /> : null}
+
+      {children ? <div className="mt-4">{children}</div> : null}
+
+      {onSkip ? (
+        <Button variant="ghost" className="mt-4 w-full border-dashed text-muted" onClick={onSkip}>
+          Sauter — optionnel
+        </Button>
+      ) : null}
+      {onPrimary ? (
+        <Button variant="secondary" className="mt-3 w-full bg-fg text-bg" onClick={onPrimary}>
+          {primaryLabel}
+        </Button>
+      ) : null}
+    </article>
+  )
+}
