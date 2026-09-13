@@ -224,6 +224,21 @@ describe('ajustement manuel sur une vraie base', () => {
     expect(await store.listSeances()).toHaveLength(14)
   })
 
+  it('ne rallume ni n’éteint l’écran en reconstruisant le brouillon', async () => {
+    // La reconstruction remet les charges à jour. La préférence d'écran n'est pas une
+    // donnée de séance : la voir sauter au moment où Ugo ajuste une cible lui
+    // éteindrait l'écran en pleine salle sans qu'il ait rien demandé.
+    const { store } = await magasinPret()
+    const vierge = await store.openDraft('A', '2026-09-15')
+    await store.saveDraft({ ...vierge, keepAwake: true })
+
+    await store.adjustTarget('squat', { w: 80 })
+
+    const reconstruit = await store.loadDraft()
+    expect(reconstruit?.keepAwake).toBe(true)
+    expect(reconstruit?.baseTargets.squat.w).toBe(80)
+  })
+
   it('ne reconstruit rien quand il n’y a pas de brouillon du tout', async () => {
     const { store } = await magasinPret()
     await store.adjustTarget('squat', { w: 80 })

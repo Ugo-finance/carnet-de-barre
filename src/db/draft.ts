@@ -118,10 +118,32 @@ export function buildDraft(
     rushed: false,
     timerEndsAt: null,
     timerLabel: null,
+    keepAwake: false,
     baseTargets: structuredClone(targets),
     createdAt: now,
     updatedAt: now,
   }
+}
+
+/**
+ * Un brouillon tel qu'il a pu être **écrit par une version antérieure** de l'app.
+ *
+ * Les brouillons ne passent par aucun schéma : ils sont relus tels qu'écrits. Un champ
+ * ajouté est donc absent de toute ligne déjà en base, y compris celle d'une séance
+ * ouverte au moment de la mise à jour.
+ */
+export type StoredDraft = Omit<Draft, 'keepAwake'> & Partial<Pick<Draft, 'keepAwake'>>
+
+/**
+ * Complète une ligne relue avec les champs apparus depuis qu'elle a été écrite.
+ *
+ * Le défaut est appliqué **au point de lecture**, une fois, plutôt que déclaré optionnel
+ * dans le contrat : sinon chaque lecteur devrait penser à l'absence, et le premier qui
+ * l'oublierait traiterait `undefined` comme une valeur. Après cette fonction, le type
+ * `Draft` dit la vérité pour tout le monde en aval.
+ */
+export function hydrateDraft(row: StoredDraft): Draft {
+  return { ...row, keepAwake: row.keepAwake ?? false }
 }
 
 /**

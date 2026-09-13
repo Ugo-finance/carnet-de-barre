@@ -33,6 +33,7 @@ function draftFor(targets: Targets, overrides: Partial<Draft> = {}): Draft {
     rushed: false,
     timerEndsAt: null,
     timerLabel: null,
+    keepAwake: false,
     baseTargets: targets,
     createdAt: now,
     updatedAt: now,
@@ -138,6 +139,24 @@ describe('DexieStore respecte le même contrat que MemoryStore', () => {
     const echeance = Date.now() + 150_000
     await store.saveDraft(draftFor(targets, { timerEndsAt: echeance }))
     expect((await store.loadDraft())?.timerEndsAt).toBe(echeance)
+  })
+
+  it('conserve la préférence d’écran allumé à travers un aller-retour en base', async () => {
+    const targets = await store.getTargets()
+    await store.saveDraft(draftFor(targets, { keepAwake: true }))
+    expect((await store.loadDraft())?.keepAwake).toBe(true)
+  })
+
+  it('relit un brouillon écrit avant l’existence du champ, écran éteint', async () => {
+    // Écrit directement dans la table, sans le champ : c'est exactement la ligne que
+    // laisse une version antérieure quand la PWA se met à jour séance ouverte.
+    const targets = await store.getTargets()
+    const { keepAwake: _absent, ...ancien } = draftFor(targets, { notes: 'avant la maj' })
+    await database.drafts.put(ancien)
+
+    const relu = await store.loadDraft()
+    expect(relu?.notes).toBe('avant la maj')
+    expect(relu?.keepAwake).toBe(false)
   })
 
   it('survit à une réouverture de la base, comme au redémarrage de l’app', async () => {
