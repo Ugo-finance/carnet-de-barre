@@ -36,7 +36,7 @@ export function SessionSummary({
       </section>
 
       <section className="rounded-2xl border border-line bg-surface p-4">
-        <p className="text-sm font-medium text-accent">{describeWhen(next)}</p>
+        <p className="text-sm font-medium text-accent-readable">{describeWhen(next)}</p>
         <h2 className="text-lg font-bold">Prochaine séance · {next.type}</h2>
         <p className="mt-1 text-sm text-muted">{formatDate(next.scheduledDate)}</p>
         <ul className="mt-3 grid gap-2">

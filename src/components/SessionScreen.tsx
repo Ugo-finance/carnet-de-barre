@@ -230,7 +230,7 @@ export function SessionScreen({
                 key={type}
                 type="button"
                 className={`min-h-11 rounded-lg px-3 font-semibold ${
-                  selected ? 'bg-accent text-white' : 'text-muted'
+                  selected ? 'bg-accent-action text-white' : 'text-muted'
                 }`}
                 aria-pressed={selected}
                 onClick={() => onSelectType(type)}
@@ -320,7 +320,7 @@ export function SessionScreen({
 
         <button
           type="button"
-          className="min-h-12 rounded-xl bg-accent px-4 font-bold text-white disabled:opacity-50"
+          className="min-h-12 rounded-xl bg-accent-action px-4 font-bold text-white disabled:opacity-50"
           onClick={onFinish}
           disabled={finishing}
         >

@@ -50,6 +50,7 @@
   --color-muted: #9a9388;
   --color-faint: #6b655b;
   --color-accent: #e23b30;
+  --color-accent-action: #d9342b;
   --color-accent-readable: #e54a40;
   --color-ok: #3fa65b;
   --color-warn: #e9b62d;
@@ -88,13 +89,6 @@ body {
   padding-block: env(safe-area-inset-top) env(safe-area-inset-bottom);
   padding-inline: max(16px, env(safe-area-inset-left)) max(16px, env(safe-area-inset-right));
   min-height: 100dvh;
-}
-
-button,
-input,
-textarea,
-select {
-  font: inherit;
 }
 
 button,

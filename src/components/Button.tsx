@@ -3,7 +3,7 @@ import type { ButtonHTMLAttributes } from 'react'
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
 
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {
-  primary: 'border-transparent bg-accent text-white',
+  primary: 'border-transparent bg-accent-action text-white',
   secondary: 'border-line bg-surface-2 text-fg',
   ghost: 'border-line bg-transparent text-muted',
   danger: 'border-bad/60 bg-transparent text-bad',
