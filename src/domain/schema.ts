@@ -144,6 +144,8 @@ export const seanceSchema = z
     legacy: z.boolean().optional(),
     sets: z.array(setLogSchema).optional(),
     accessories: z.array(accessoryLogSchema).optional(),
+    startedAt: z.number().int().positive().optional(),
+    completedAt: z.number().int().positive().optional(),
     ts: z.number().int().positive().optional(),
   })
   .strict()

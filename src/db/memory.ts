@@ -27,7 +27,7 @@ import { applyTargetPatch, type TargetPatch } from './targets.ts'
 import { StoreError, type FinalizeResult, type ImportPreview } from './contracts.ts'
 import { seanceSchema } from '../domain/schema.ts'
 import { loadSeed } from './seed.ts'
-import { buildDraft, isBlankDraft } from './draft.ts'
+import { buildDraft, isDraftActive } from './draft.ts'
 import { applyProgression, draftToSeance, targetsDiverged } from './derive.ts'
 import { buildExport, describeImport, validateImport } from './exchange.ts'
 import type { DraftStore } from './store.ts'
@@ -143,7 +143,7 @@ export class MemoryStore implements DraftStore {
     // Même invariant que l'adaptateur Dexie, reconstruction comprise. Deux
     // implémentations du même contrat qui répondent différemment sont un piège pour
     // le prochain test écrit contre la mauvaise.
-    if (this.draft && !isBlankDraft(this.draft)) {
+    if (this.draft && isDraftActive(this.draft)) {
       throw new StoreError(
         'draft-in-progress',
         'Une séance est en cours. Termine-la avant d’ajuster une cible.',

@@ -32,7 +32,7 @@ import {
   db as defaultDb,
   ensureSeeded,
 } from './database.ts'
-import { buildDraft, hydrateDraft, isBlankDraft } from './draft.ts'
+import { buildDraft, hydrateDraft, isDraftActive } from './draft.ts'
 import { applyProgression, draftToSeance, targetsDiverged } from './derive.ts'
 import { applyTargetPatch, type TargetPatch } from './targets.ts'
 import { seanceSchema } from '../domain/schema.ts'
@@ -275,7 +275,7 @@ export class DexieStore implements DraftStore {
         // cibles, dans cette même transaction : il ne portait aucune information.
         const stockeExistant = await this.database.drafts.toCollection().first()
         const existant = stockeExistant ? hydrateDraft(stockeExistant) : undefined
-        if (existant && !isBlankDraft(existant)) {
+        if (existant && isDraftActive(existant)) {
           throw new StoreError(
             'draft-in-progress',
             'Une séance est en cours. Termine-la avant d’ajuster une cible.',

@@ -266,6 +266,10 @@ export function draftToSeance(draft: Draft, now = Date.now()): Seance {
     accessories: draft.accessories.filter(
       (accessory) => accessory.done || accessory.note.trim() !== '',
     ),
+    // Le démarrage n'est reporté que s'il a eu lieu — CB-62. Une séance finalisée
+    // depuis un brouillon jamais démarré n'a pas de durée, et zéro serait un mensonge.
+    ...(draft.startedAt === null ? {} : { startedAt: draft.startedAt }),
+    completedAt: now,
     ts: now,
   }
 }
