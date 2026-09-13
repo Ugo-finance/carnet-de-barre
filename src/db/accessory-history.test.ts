@@ -9,13 +9,20 @@
 import { describe, expect, it } from 'vitest'
 import { accessoryHistory, accessoryPlans } from './accessory-history.ts'
 import { SEANCES } from '../domain/program.ts'
+import { exportFileSchema } from '../domain/schema.ts'
 import type { Seance, SetLog } from '../domain/types.ts'
 
 function set(exerciseId: string, index: number, over: Partial<SetLog> = {}): SetLog {
+  const role = over.role ?? 'accessory'
   return {
-    id: `${exerciseId}:accessory:${index}`,
+    // L'identifiant suit le rôle, comme `setId` en production. P3 de Codex : construit
+    // sur « accessory » en dur, un palier portait le même identifiant que la première
+    // série de travail, et le scénario n'aurait donc pas pu venir d'un export v2 — le
+    // schéma refuse les identifiants de série en double au sein d'une séance. Le test
+    // prétendait représenter ce cas ; il le représente maintenant vraiment.
+    id: `${exerciseId}:${role}:${index}`,
     exerciseId,
-    role: 'accessory',
+    role,
     index,
     status: 'validated',
     loadKind: 'perDumbbell',
@@ -26,6 +33,16 @@ function set(exerciseId: string, index: number, over: Partial<SetLog> = {}): Set
     targetReps: 8,
     ...over,
   }
+}
+
+/** Les cibles n'ont aucun rôle ici : elles rendent seulement le fichier valide. */
+const CIBLES_MINIMALES = {
+  updatedAt: '2026-09-12',
+  squat: { w: 75, inc: 2.5, reps: 4, fail: null },
+  bench: { w: 70, inc: 2.5, reps: 4, fail: null },
+  deadlift: { w: 92.5, inc: 5, reps: 3, fail: null },
+  tractions: { w: 15, inc: 2.5, reps: 4, fail: null },
+  benchVol: { w: 60, inc: 2.5, reps: 8, sets: 3, fail: null },
 }
 
 function seance(date: string, sets: SetLog[] | undefined, ts?: number): Seance {
@@ -89,6 +106,18 @@ describe('ce qui ne doit pas entrer dans l’historique', () => {
     expect(historique).toHaveLength(1)
     expect(historique[0].weight).toBe(24)
     expect(historique[0].reps).toEqual([12, 11, 10])
+
+    // Et le scénario est **réellement importable** : le commentaire ci-dessus l'annonce,
+    // donc le test doit l'établir plutôt que le laisser croire.
+    //
+    // Le contrôle passe par `exportFileSchema` et non par `seanceSchema` : l'unicité des
+    // identifiants de série vit dans le `superRefine` du **fichier**, pas dans celui de la
+    // séance. Écrite au mauvais niveau, l'assertion restait verte même avec deux séries
+    // homonymes — une assertion creuse de plus, attrapée en la cassant.
+    expect(
+      exportFileSchema.safeParse({ schemaVersion: 2, targets: CIBLES_MINIMALES, seances: [s] })
+        .success,
+    ).toBe(true)
   })
 
   it('ne garde rien quand l’exercice n’a que son palier', () => {
