@@ -107,6 +107,21 @@ describe('la suite des paliers', () => {
     }
   })
 
+  it('garde le palier haut à cible basse, et perd celui du bas', () => {
+    // P1 de Codex sur #41 et #42. J'avais écrit que « sous 60 kg de cible barre, le palier
+    // ~87 % saute » découlait des règles de suite. C'est faux : à 57,5 kg, 87 % vaut 50,025
+    // et s'arrondit à 50, strictement sous la charge de travail — il reste. C'est le palier
+    // à 50 % qui s'écrase le premier sur la barre à vide, puis celui à 70 %.
+    //
+    // Les valeurs viennent d'un sondage du moteur sur toute la plage basse, pas d'un second
+    // raisonnement : c'est le premier qui avait tort.
+    expect(charges(warmupPlan('barreComplet', 'barTotal', 57.5))).toEqual([20, 30, 40, 50])
+    expect(charges(warmupPlan('barreComplet', 'barTotal', 50))).toEqual([20, 25, 35, 42.5])
+    expect(charges(warmupPlan('barreComplet', 'barTotal', 40))).toEqual([20, 27.5, 35])
+    expect(charges(warmupPlan('barreComplet', 'barTotal', 32.5))).toEqual([20, 22.5, 27.5])
+    expect(charges(warmupPlan('barreComplet', 'barTotal', 25))).toEqual([20, 22.5])
+  })
+
   it('perd un palier plutôt que d’en répéter un à cible basse', () => {
     // À 30 kg, la moitié et les 70 % arrondissent tous deux sous la barre et s'y écrasent :
     // ils disparaissent au lieu de proposer trois fois « barre seule ».
