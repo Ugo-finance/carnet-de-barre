@@ -156,3 +156,53 @@ Ugo a demandé d'avancer sans arbitrage point par point. Les propositions de Cod
 - **Dépendances directes de M0** : react, react-dom, dexie, zod, tailwindcss + @tailwindcss/vite, vite, @vitejs/plugin-react, vite-plugin-pwa, typescript, vitest, @testing-library/react + jsdom, oxlint (linter fourni par le scaffold Vite, remplace ESLint), prettier, @playwright/test. Toute autre dépendance remonte à Ugo.
 - **Séquence** : 12–13.09 M0 + CB-10 (contrats) + squelette PWA · 13–15.09 CB-11/12/30 ∥ CB-20/21/22 · 15–16.09 CB-31 + CB-23 + CB-40 · 17–18.09 CB-42 et recette téléphone · 19.09 marge · 20.09 16h séance C réelle.
 - **Reportable si le délai se tend** : CB-13 (e1RM), graphiques, finitions. Non reportable : brouillon, export, cibles fiables, mode pressé, ajustement manuel.
+
+## 8. Arbitrages du 13.09.2026 — refonte UX et échauffement
+
+Deux chantiers ouverts par Ugo le 13.09.2026 : l'échauffement entre dans l'application, puis
+l'interface est refondue autour d'une séance en focus. Le dossier de conception qu'il a validé est
+entré dans le dépôt sous `docs/refonte/`, et `docs/refonte/00-contrat.md` fige les chiffres avant
+le code. Les tickets vont de CB-53 à CB-69.
+
+**Ce document ne redit pas le contrat** : il consigne les décisions qui touchent D1–D10 ou les
+données, et renvoie au contrat pour le reste.
+
+### Tranché par Ugo
+
+- **Soulevé de terre** : palier haut à 82,5 kg, pas 85. Plancher à 60 kg avec 20 kg par côté, la
+  contrainte étant la hauteur de départ de la barre et non le poids des disques.
+- **Les optionnels deviennent des séries structurées** (CB-69). Curls, élévations, face pulls et
+  abdos entrent dans `sets` avec charge et répétitions. C'est la condition de la séance en focus :
+  sans eux, la file s'interrompt avant la fin. **Révise Q4** — le mode pressé continue de replier
+  les exercices 3 et suivants, mais il n'y a plus d'exercice en texte libre à traiter à part.
+
+### Tranché par les agents
+
+Sous la règle : *une livraison peut masquer une métrique indéfinie, elle ne peut jamais afficher
+une donnée de démonstration comme une donnée réelle.*
+
+- **e1RM, tonnage, carte record, bloc de huit semaines et flèches de tendance ne sont pas rendus.**
+  Aucune donnée du dépôt ne permet de les calculer, et la maquette les qualifie elle-même
+  d'illustratifs. CB-13 reste ouvert pour leur formule.
+- **Polices embarquées en WOFF2**, aucun appel à Google Fonts. **Confirme D10** : l'usage hors
+  ligne est l'usage en salle.
+- **Chrono** : la formulation de la maquette est ramenée à ce que Q3 garantit déjà. Aucune promesse
+  d'alarme écran verrouillé.
+- **Sélecteur A/B/C** conservé avant démarrage, masqué en séance avec une sortie explicite.
+  **Confirme D7**.
+
+### Nouvelles données
+
+- **Rôle de série `warmup`** et `schemaVersion` 2, additif (CB-55). Les paliers sont présents dans
+  l'export et exclus de `tops`, des `lines`, de la progression, des échecs et des records.
+- **`startedAt` et `completedAt`** (CB-62). Le brouillon est aujourd'hui créé au simple affichage
+  de l'accueil : son `createdAt` ne mesure pas la séance. `startedAt` est posé au clic « Démarrer ».
+- **Préférences locales versionnées** : vibration, son du chrono, écran allumé, mode pressé par
+  défaut (CB-62).
+
+### Reste à trancher
+
+- Formule de la durée estimée annoncée sur l'accueil — omise tant qu'elle n'existe pas.
+- Effet du mode pressé sur les paliers d'échauffement — aucun, faute de règle validée.
+- Présence de disques de 1,25 kg en salle : le pas `added` à 2,5 kg fait +25 % sur 10 kg de lest.
+  Question ouverte auprès du coach d'Ugo.
