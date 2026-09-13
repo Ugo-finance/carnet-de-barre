@@ -42,10 +42,8 @@ Ce classement a servi deux fois. Les deux fois, la règle écrite avait raison c
    Les abdos roulette restent en dehors, et c'est délibéré : au poids du corps il n'y a aucune
    charge à faire monter, et la double progression déplace une charge, pas des répétitions.
 
-   **Une question reste ouverte**, notée ici pour ne pas se perdre : `machine` vaut 5 kg parce
-   que le coach l'a confirmé pour les **disques de la presse 45°**. Une colonne de poulie n'est
-   pas le même matériel, et 25 → 30 fait +20 % sur un mouvement d'arrière d'épaule. Si la
-   colonne de la salle avance de 2,5 en 2,5, `loadKind` doit distinguer les deux.
+   Le pas de la colonne reste celui des machines, 5 kg. Question posée à Ugo, réponse du
+   13.09.2026 : c'est un détail, il corrigera à la main le jour où ça le gênera.
 
 ## 2. Arbitrages des agents
 
