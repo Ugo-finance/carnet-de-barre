@@ -329,9 +329,17 @@ export const SEANCES: Record<SeanceType, SeanceDef> = {
         kind: 'accessory',
         optional: true,
         loadKind: 'machine',
-        scheme: '2×15',
+        scheme: '2×12–15',
         sets: 2,
-        reps: 15,
+        reps: null,
+        // Arbitrage d'Ugo du 13.09.2026, en réponse à la question posée. La maquette les
+        // annonçait « hors moteur (poulie) » : à 2×15 fermes, sans fourchette, rien ne
+        // pouvait déclencher une montée et la proposition serait restée à 25 kg même
+        // après une séance à 30 — la forme exacte du défaut vu en salle le 12.09.
+        // Sa réponse : « non il faut progresser ». La fourchette 12–15 garde 15 comme
+        // haut, c'est-à-dire ce que la maquette demandait, et ouvre en dessous la marge
+        // dont la double progression a besoin.
+        repsRange: [12, 15],
         suggestedWeight: 25,
         restSeconds: REST.superset,
       },

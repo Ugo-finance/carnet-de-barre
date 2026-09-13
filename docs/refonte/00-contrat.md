@@ -28,6 +28,24 @@ Ce classement a servi deux fois. Les deux fois, la règle écrite avait raison c
    yeux, à la suite d'un P1 de Codex : à 57,5 kg de cible, veut-il `20 · 30 · 40 · 50` ou
    `20 · 30 · 40` ? Réponse : la rampe garde sa forme habituelle à toutes les cibles, le single
    lourd compris. Voir § 3.2 pour ce que cela donne plus bas.
+5. **Les face pulls entrent dans le moteur de double progression.** La maquette les annonce
+   « hors moteur (poulie) », et leur `2×15` ferme suffisait à les y laisser : sans fourchette,
+   `planAccessory` ne trouve aucun haut à atteindre et retombe toujours sur la charge de la
+   table. La conséquence n'était pas « ils ne montent pas » mais « ils **oublient** » — une
+   séance tirée à 30 kg laissait la proposition à 25, indéfiniment. C'est la forme exacte du
+   défaut qu'Ugo a vu en salle le 12.09, son incliné affichant 20 pendant qu'il en tirait 24.
+   Question posée le 13.09.2026 : veut-il que la charge suive ce qu'il a noté, sans progresser
+   pour autant ? Réponse : « non il faut progresser ». Ils reçoivent donc une fourchette
+   **12–15**, qui garde 15 comme haut — ce que demandait la maquette — et ouvre en dessous la
+   marge dont la double progression a besoin. Le pas reste celui du matériel, 5 kg.
+
+   Les abdos roulette restent en dehors, et c'est délibéré : au poids du corps il n'y a aucune
+   charge à faire monter, et la double progression déplace une charge, pas des répétitions.
+
+   **Une question reste ouverte**, notée ici pour ne pas se perdre : `machine` vaut 5 kg parce
+   que le coach l'a confirmé pour les **disques de la presse 45°**. Une colonne de poulie n'est
+   pas le même matériel, et 25 → 30 fait +20 % sur un mouvement d'arrière d'épaule. Si la
+   colonne de la salle avance de 2,5 en 2,5, `loadKind` doit distinguer les deux.
 
 ## 2. Arbitrages des agents
 

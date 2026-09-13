@@ -84,7 +84,7 @@ describe('la file de la séance', () => {
     }
   })
 
-  it('prérremplit les quatre optionnels aux charges de la maquette', () => {
+  it('préremplit les quatre optionnels aux charges de la maquette', () => {
     const a = brouillon('A')
     const b = brouillon('B')
 
@@ -97,8 +97,8 @@ describe('la file de la séance', () => {
       [8, 12],
     ])
     expect(travail(b, 'b-face-pulls').map((set) => [set.weight, set.reps])).toEqual([
-      [25, 15],
-      [25, 15],
+      [25, 12],
+      [25, 12],
     ])
     // Poids du corps : aucune charge à porter, et surtout pas un zéro qui ressemble à
     // une charge saisie.
@@ -137,14 +137,34 @@ describe('la double progression des optionnels', () => {
     ])
   })
 
-  it('laisse les face pulls hors du moteur, faute de fourchette', () => {
-    // « hors moteur (poulie) » dans la maquette validée. Ça tombe des données plutôt que
-    // d'un champ : sans `repsRange`, il n'existe aucun « haut » à atteindre, et
-    // `planAccessory` s'arrête à la charge de départ. Conséquence assumée et visible
-    // ici : une séance faite à 30 ne déplace pas la proposition. Donner une fourchette
-    // aux face pulls suffirait à les faire entrer dans le moteur — c'est le seul geste.
-    const apres = brouillon('B', [{ ...faite('b-face-pulls', 30, [15, 15]), type: 'B' as const }])
-    expect(travail(apres, 'b-face-pulls').map((set) => set.weight)).toEqual([25, 25])
+  it('fait monter les face pulls comme n’importe quel accessoire', () => {
+    // Arbitrage d'Ugo du 13.09.2026 : « non il faut progresser ». La maquette les disait
+    // « hors moteur (poulie) », ce qui revenait à oublier ce qu'il avait tiré — une
+    // séance à 30 laissait la proposition à 25, indéfiniment. Ils ont donc une
+    // fourchette, et le pas de la colonne est celui du matériel : 5 kg.
+    const apres = brouillon('B', [{ ...faite('b-face-pulls', 25, [15, 15]), type: 'B' as const }])
+    expect(travail(apres, 'b-face-pulls').map((set) => [set.weight, set.reps])).toEqual([
+      [30, 12],
+      [30, 12],
+    ])
+  })
+
+  it('n’oublie plus la charge qu’Ugo a réellement tirée', () => {
+    // Le défaut vu en salle le 12.09, dans sa forme générale : une charge notée plus
+    // lourde que la table ne doit jamais être remplacée par la table. 30 tiré sans
+    // atteindre le haut de la fourchette se maintient à 30, il ne retombe pas à 25.
+    const apres = brouillon('B', [{ ...faite('b-face-pulls', 30, [13, 12]), type: 'B' as const }])
+    expect(travail(apres, 'b-face-pulls').map((set) => set.weight)).toEqual([30, 30])
+  })
+
+  it('laisse les abdos hors du moteur, faute de charge à faire monter', () => {
+    // Au poids du corps il n'y a rien à faire monter : la double progression déplace une
+    // charge, pas des répétitions. Ils restent à 2×10 et c'est délibéré, pas un oubli.
+    const apres = brouillon('B', [{ ...faite('b-abdos', null, [10, 10]), type: 'B' as const }])
+    expect(travail(apres, 'b-abdos').map((set) => [set.weight, set.reps])).toEqual([
+      [null, 10],
+      [null, 10],
+    ])
   })
 })
 
