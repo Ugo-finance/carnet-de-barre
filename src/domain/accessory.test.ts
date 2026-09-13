@@ -232,12 +232,13 @@ describe('les trois trous que mes scénarios ne pouvaient pas voir', () => {
   })
 })
 
-describe('une charge non notée n’efface pas la charge connue', () => {
-  // Cinquième P1 de Codex, même famille que les quatre autres : l'inconnue traitée
-  // comme une information. Ugo oublie de noter le poids une fois, et l'app repartait
-  // de la charge de départ — 26 kg durement gagnés redevenaient 24.
+describe('une charge non notée vaut celle de la séance précédente', () => {
+  // Arbitrage d'Ugo, 13.09.2026 : « elle part du principe que j'ai fait pareil que la
+  // dernière fois ». Sa réponse ne figurait dans aucune des deux options que je lui
+  // avais proposées — ni ignorer la séance, ni couper la série — et elle est plus juste
+  // que les deux : en salle il recharge les mêmes disques et oublie de l'écrire.
 
-  it('ignore la séance sans poids et garde la dernière charge connue', () => {
+  it('garde la dernière charge connue au lieu de repartir du départ', () => {
     const plan = planAccessory(DI, [
       seance('2026-09-27', null, 10, 9, 8),
       seance('2026-09-20', 26, 10, 9, 8),
@@ -257,6 +258,40 @@ describe('une charge non notée n’efface pas la charge connue', () => {
     ])
 
     expect(plan).toMatchObject({ weight: 22, outcome: 'blocage' })
+  })
+
+  it('compte la séance au poids oublié comme une séance à cette charge', () => {
+    // C'est ici que l'arbitrage d'Ugo se distingue d'un simple « on l'ignore ».
+    // Deux séances notées à 24 et une oubliée entre les deux : la séance a bien eu
+    // lieu, aux mêmes disques, donc elle compte — et le blocage se déclenche.
+    // L'ignorer aurait laissé Ugo s'acharner une séance de plus sur une charge morte.
+    const plan = planAccessory(DI, [
+      seance('2026-09-20', 24, 8, 8, 8),
+      seance('2026-09-13', null, 8, 8, 8),
+      seance('2026-09-06', 24, 8, 8, 8),
+    ])
+
+    expect(plan).toMatchObject({ weight: 22, outcome: 'blocage' })
+  })
+
+  it('ne devine jamais des répétitions, seulement une charge', () => {
+    // La limite du report : deviner ce qu'Ugo a chargé est raisonnable, deviner ce
+    // qu'il a réussi ne l'est pas. Trois séances dont les répétitions sont incomplètes
+    // ne prouvent toujours aucun blocage.
+    const plan = planAccessory(DI, [
+      seance('2026-09-20', 24, 8, 8, null),
+      seance('2026-09-13', null, 8, 8, null),
+      seance('2026-09-06', 24, 8, 8, null),
+    ])
+
+    expect(plan.outcome).toBe('maintien')
+  })
+
+  it('n’infère rien avant la première charge connue', () => {
+    // Les séances les plus anciennes n'ont aucune charge d'où inférer : elles restent
+    // sans poids plutôt que d'hériter d'une valeur postérieure.
+    const plan = planAccessory(DI, [seance('2026-09-20', null, 8, 8, 8)])
+    expect(plan.outcome).toBe('depart')
   })
 
   it('n’aligne pas le groupe vers le bas à cause d’un poids oublié', () => {

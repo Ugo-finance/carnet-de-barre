@@ -78,16 +78,40 @@ function repeat(value: number, count: number): number[] {
 }
 
 /**
- * Les séances dont la charge est **connue**, de la plus récente à la plus ancienne.
+ * L'historique avec les charges non notées **reportées de la séance précédente**.
  *
- * Une séance sans charge notée ne prouve ni montée ni blocage : elle est invisible au
- * moteur, et surtout elle **n'efface pas** la dernière charge connue. Sans ce filtre,
- * une seule séance où Ugo oublie de noter le poids faisait repartir l'app de la charge
- * de départ — 26 kg durement gagnés redevenaient 24. Une inconnue n'est jamais un
- * échec, et ne doit pas non plus être une remise à zéro.
+ * Arbitrage d'Ugo, 13.09.2026 : quand il oublie de noter le poids, « elle part du
+ * principe que j'ai fait pareil que la dernière fois ». C'est ce qui se passe en
+ * salle — il recharge les mêmes disques et ne l'écrit pas.
+ *
+ * Deux lectures plus pauvres ont été écartées. **Ignorer** la séance revenait à ne pas
+ * compter un entraînement qui a bien eu lieu : trois passages à 24 kg dont un non noté
+ * ne déclenchaient aucun blocage. **Repartir de la charge de départ** effaçait des
+ * kilos durement gagnés — le défaut que Codex a trouvé.
+ *
+ * Le report ne concerne que la **charge**. Une répétition non notée reste inconnue, et
+ * une séance aux répétitions incomplètes ne prouve toujours aucun blocage : deviner ce
+ * qu'Ugo a chargé est raisonnable, deviner ce qu'il a réussi ne l'est pas.
+ *
+ * Les séances antérieures à toute charge connue restent sans charge : rien d'où inférer.
  */
+function avecChargesReportees(
+  history: readonly AccessoryPerformance[],
+): readonly AccessoryPerformance[] {
+  let derniere: number | null = null
+  const duPlusAncien = [...history].reverse().map((performance) => {
+    if (performance.weight != null) {
+      derniere = performance.weight
+      return performance
+    }
+    return derniere == null ? performance : { ...performance, weight: derniere }
+  })
+  return duPlusAncien.reverse()
+}
+
+/** Les séances dont la charge est connue, **après report**, la plus récente d'abord. */
 function chargesConnues(history: readonly AccessoryPerformance[]): readonly AccessoryPerformance[] {
-  return history.filter((performance) => performance.weight != null)
+  return avecChargesReportees(history).filter((performance) => performance.weight != null)
 }
 
 /** Dernière charge réellement notée sur cet exercice, s'il y en a une. */
@@ -117,8 +141,8 @@ export function planAccessory(
   }
 
   const [bas, haut] = range
-  // On raisonne sur les séances **dont la charge est connue**, pas sur la plus récente :
-  // une séance au poids non noté ne décide de rien et n'efface rien.
+  // On raisonne sur les séances dont la charge est connue, **charges reportées** :
+  // un poids non noté vaut celui de la séance précédente, comme Ugo l'a tranché.
   const connues = chargesConnues(history)
   const last = connues[0]
   if (!last || last.weight == null) {
