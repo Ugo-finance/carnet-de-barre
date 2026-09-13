@@ -102,34 +102,32 @@ export function useDraftEditor(store: DraftPort, initialDraft?: Draft) {
 
   const updateSet = useCallback(
     (setId: string, value: SetValue) => {
-      commit((current) => {
-        const changed = current.sets.find((set) => set.id === setId)
-        return {
-          ...current,
-          sets: (() => {
-            const exercise = changed ? findExercise(changed.exerciseId) : undefined
-            const nextBackoff =
-              changed?.role === 'top' && exercise?.backoff && changed.weight !== value.weight
-                ? value.weight === null
-                  ? null
-                  : backoffWeight(value.weight, exercise.backoff)
-                : undefined
+      commit((current) => ({
+        ...current,
+        sets: (() => {
+          const changed = current.sets.find((set) => set.id === setId)
+          const exercise = changed ? findExercise(changed.exerciseId) : undefined
+          const nextBackoff =
+            changed?.role === 'top' && exercise?.backoff && changed.weight !== value.weight
+              ? value.weight === null
+                ? null
+                : backoffWeight(value.weight, exercise.backoff)
+              : undefined
 
-            return current.sets.map((set) => {
-              if (set.id === setId) return { ...set, ...value }
-              if (
-                nextBackoff !== undefined &&
-                set.exerciseId === changed?.exerciseId &&
-                set.role === 'backoff' &&
-                set.status === 'planned'
-              ) {
-                return { ...set, weight: nextBackoff }
-              }
-              return set
-            })
-          })(),
-        }
-      })
+          return current.sets.map((set) => {
+            if (set.id === setId) return { ...set, ...value }
+            if (
+              nextBackoff !== undefined &&
+              set.exerciseId === changed?.exerciseId &&
+              set.role === 'backoff' &&
+              set.status === 'planned'
+            ) {
+              return { ...set, weight: nextBackoff }
+            }
+            return set
+          })
+        })(),
+      }))
     },
     [commit],
   )
