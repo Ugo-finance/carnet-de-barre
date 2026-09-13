@@ -16,7 +16,7 @@ import 'fake-indexeddb/auto'
 import { describe, expect, it } from 'vitest'
 import { CarnetDatabase } from './database.ts'
 import { DexieStore } from './store.ts'
-import { currentSession, isScheduledSessionDone, todayInZurich } from '../domain/schedule.ts'
+import { currentSession, todayInZurich } from '../domain/schedule.ts'
 import { parseImport } from '../domain/schema.ts'
 import { serializeExport } from './exchange.ts'
 import type { Draft } from '../domain/types.ts'
@@ -53,7 +53,8 @@ describe('la séance de ce soir, de bout en bout', () => {
     const aujourdhui = todayInZurich(SAMEDI_SOIR)
     expect(aujourdhui).toBe('2026-09-12')
 
-    const suggestion = currentSession(SAMEDI_SOIR, isScheduledSessionDone(aujourdhui, []))
+    // Rien d'enregistré : le créneau du dimanche n'est pas servi, il reste proposé.
+    const suggestion = currentSession(SAMEDI_SOIR, [])
     expect(suggestion.type).toBe('C')
     // Le champ s'appelle `scheduledDate` depuis CB-14, précisément parce que `date`
     // se confondait avec « aujourd'hui ». C'est la date du calendrier, pas celle du jour.

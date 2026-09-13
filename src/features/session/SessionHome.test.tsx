@@ -222,6 +222,23 @@ describe('SessionHome', () => {
     expect(store.finalizeSeance).toHaveBeenCalledWith('draft-C-2026-09-20')
   })
 
+  it('propose mardi après avoir fini C un samedi, jour creux', async () => {
+    // Le P1 de Codex sur CB-44, dans le parcours complet. Ugo finit sa séance C le
+    // samedi 12.09 : samedi n'est pas un jour de rotation, et la première version
+    // lui répondait « Prochaine séance · C » le lendemain — celle qu'il venait de
+    // terminer. Ce test échoue dès que le calcul rejuge le jour courant au lieu de
+    // chercher le premier créneau non servi.
+    const SAMEDI = new Date('2026-09-12T16:00:00Z')
+    const store = fakeStore({ initial: draftFor('C', '2026-09-12') })
+    render(<SessionHome store={store} now={SAMEDI} />)
+    await screen.findByRole('heading', { name: 'Séance C' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Terminer la séance' }))
+
+    expect(await screen.findByRole('heading', { name: 'Prochaine séance · A' })).toBeInTheDocument()
+    expect(screen.getByText('15.09.2026')).toBeInTheDocument()
+  })
+
   it('ignore un deuxième tap pendant la finalisation', async () => {
     let resolveFinalize!: (value: FinalizeResult) => void
     const pending = new Promise<FinalizeResult>((resolve) => {

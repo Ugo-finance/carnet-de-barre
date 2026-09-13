@@ -4,7 +4,6 @@ import type { CarnetStore, FinalizeResult } from '../../db/contracts'
 import {
   currentSession,
   describeWhen,
-  isScheduledSessionDone,
   type SeanceFaite,
   todayInZurich,
   type UpcomingSession,
@@ -80,11 +79,10 @@ function SessionEditor({
 
   if (result) {
     // La séance qu'on vient d'enregistrer compte, sans attendre un rechargement.
-    const scheduledDone = isScheduledSessionDone(state.today, [
-      ...state.seances,
-      { date: result.seance.date, type: result.seance.type },
-    ])
-    return <SessionSummary result={result} next={currentSession(now, scheduledDone)} />
+    // `currentSession` reçoit l'historique entier : c'est lui qui décide quel créneau
+    // est servi, y compris un jour creux où aucune séance n'est prévue.
+    const apres = [...state.seances, { date: result.seance.date, type: result.seance.type }]
+    return <SessionSummary result={result} next={currentSession(now, apres)} />
   }
 
   const replace = async () => {
@@ -264,7 +262,7 @@ export function SessionHome({ store, now = new Date() }: { store: SessionStore; 
         date: seance.date,
         type: seance.type,
       }))
-      const suggestion = currentSession(nowValue.current, isScheduledSessionDone(today, faites))
+      const suggestion = currentSession(nowValue.current, faites)
       const draft = existing ?? (await storeValue.current.openDraft(suggestion.type, today))
       return { draft, suggestion, today, seances: faites }
     })()

@@ -133,36 +133,48 @@ export interface UpcomingSession {
 }
 
 /**
- * Ce que l'écran d'accueil doit proposer.
+ * Ce que l'écran d'accueil doit proposer : **le premier créneau non servi**.
  *
- * Règle D7 : la séance **prévue ce jour-là** reste proposée tant qu'elle n'est pas
- * terminée ; une fois terminée, on montre la suivante.
+ * Règle D7 : la séance prévue reste proposée tant qu'elle n'est pas faite ; une fois
+ * faite, on montre la suivante.
  *
- * `scheduledSessionDone` se calcule par `isScheduledSessionDone`, qui regarde le
- * **créneau entier** et non le seul jour courant : une séance faite en avance sert son
- * créneau. Une séance hors rotation, elle, ne sert rien — voir les deux règles là-bas.
+ * La recherche part d'aujourd'hui et avance jour par jour, en demandant pour **chaque
+ * créneau candidat** s'il est déjà servi — et non en jugeant le seul jour courant.
+ *
+ * La distinction n'est pas théorique, et une première version l'a manquée. Le 12.09,
+ * Ugo finit sa séance C un **samedi**, qui n'est pas un jour de rotation : juger le
+ * jour courant n'y trouve aucune séance prévue, donc rien à servir, et l'écran
+ * proposait le C du lendemain — celui qu'il venait de faire. Interroger les créneaux
+ * candidats trouve au contraire que le C du dimanche est servi par la séance de la
+ * veille, et passe au A du mardi.
+ *
+ * Les séances **manquées** ne rattrapent pas : la recherche ne regarde jamais en
+ * arrière. Sauter un jeudi ne fait pas réapparaître B le dimanche, où C est prévu.
  *
  * Le sélecteur A/B/C reste disponible en permanence : ceci est une proposition, pas
  * une contrainte.
  */
 export function currentSession(
   now: Date = new Date(),
-  scheduledSessionDone = false,
+  seances: readonly SeanceFaite[] = [],
 ): UpcomingSession {
   const today = todayInZurich(now)
-  const todayType = sessionTypeFor(today)
 
-  if (todayType && !scheduledSessionDone) {
-    return { type: todayType, scheduledDate: today, inDays: 0, isToday: true }
+  for (let offset = 0; offset <= 7; offset += 1) {
+    const date = addDays(today, offset)
+    const type = sessionTypeFor(date)
+    if (type == null) continue
+    if (isScheduledSessionDone(date, seances)) continue
+    return { type, scheduledDate: date, inDays: offset, isToday: offset === 0 }
   }
 
+  // Atteignable seulement si les trois créneaux de la semaine sont servis : on rend
+  // alors le prochain du calendrier, qu'Ugo refera s'il le veut.
   for (let offset = 1; offset <= 7; offset += 1) {
     const date = addDays(today, offset)
     const type = sessionTypeFor(date)
     if (type) return { type, scheduledDate: date, inDays: offset, isToday: false }
   }
-
-  // Inatteignable : la rotation couvre trois jours sur sept.
   return { type: 'A', scheduledDate: addDays(today, 1), inDays: 1, isToday: false }
 }
 
