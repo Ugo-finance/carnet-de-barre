@@ -106,6 +106,33 @@ export interface ExerciseDef {
   supersetGroup?: string
   /** Charge indicative quand aucune cible du moteur ne s'applique. */
   suggestedWeight?: number
+  /**
+   * Ce que deviennent les répétitions visées **après** une montée de charge.
+   *
+   * - `'bottom'` (défaut) : retour au bas de la fourchette, la double progression
+   *   classique — c'est la règle du coach pour les haltères, où le saut de 2 kg fait
+   *   déjà +10 % et mérite qu'on reparte de plus bas ;
+   * - `'hold'` : on garde le haut de la fourchette. Décision d'Ugo du 13.09.2026 pour
+   *   les dips et les tractions lestées : « 2,5 sans retour plus bas ».
+   *
+   * Le champ existe pour que cette divergence soit **lisible dans la table**, au lieu
+   * d'être une condition sur des identifiants d'exercice enfouie dans le moteur.
+   */
+  repsAfterRise?: 'bottom' | 'hold'
+  /**
+   * Exercices dont la charge suggérée avance **ensemble**.
+   *
+   * Ugo enchaîne dips et tractions lestées en superset avec les mêmes disques : des
+   * suggestions divergentes l'obligeraient à recharger la ceinture entre deux
+   * mouvements enchaînés, ce qui défait l'intérêt du superset. Il a tranché le
+   * 13.09.2026 : charge commune, qui monte quand les deux passent.
+   *
+   * Volontairement distinct de `supersetGroup` : le rowing et le développé militaire
+   * sont eux aussi en superset, mais partent de 22 et 20 kg. Être enchaînés n'implique
+   * pas de partager une charge, et lier automatiquement par superset les aurait
+   * alignés de force.
+   */
+  loadGroup?: string
   /** Séries menées au maximum de répétitions (moins une ou deux). */
   amrap?: boolean
 }
@@ -150,9 +177,15 @@ export const SEANCES: Record<SeanceType, SeanceDef> = {
         label: 'Tractions lestées',
         kind: 'accessory',
         loadKind: 'added',
-        scheme: '3×8 — lest +10 kg',
+        // Le libellé ne porte plus la charge : la progression la fait bouger, et un
+        // « +10 kg » écrit en dur se met à mentir dès le premier saut — exactement ce
+        // qui est arrivé au « 20 kg par haltère » du développé incliné.
+        scheme: '3×8–10 — lest en disques',
         sets: 3,
-        reps: 8,
+        reps: null,
+        repsRange: [8, 10],
+        repsAfterRise: 'hold',
+        loadGroup: 'a-lest',
         suggestedWeight: 10,
         restSeconds: REST.superset,
         supersetGroup: 'a-ss',
@@ -162,10 +195,12 @@ export const SEANCES: Record<SeanceType, SeanceDef> = {
         label: 'Dips lestés',
         kind: 'accessory',
         loadKind: 'added',
-        scheme: '3×8–10 — lest +10 kg',
+        scheme: '3×8–10 — lest en disques',
         sets: 3,
         reps: null,
         repsRange: [8, 10],
+        repsAfterRise: 'hold',
+        loadGroup: 'a-lest',
         suggestedWeight: 10,
         restSeconds: REST.superset,
         supersetGroup: 'a-ss',
