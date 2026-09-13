@@ -158,15 +158,26 @@ export function useDraftEditor(store: DraftPort, initialDraft?: Draft) {
     [commit],
   )
 
+  /**
+   * Valide une série, et n'arme le chrono que si la série en demande un.
+   *
+   * `timer` vaut `null` pour un palier d'échauffement, et le repos en cours est alors
+   * laissé **exactement** tel quel : ni créé, ni remplacé, ni effacé. C'est la règle du
+   * contrat d'interaction (CB-60, § 4), et elle a une raison concrète — en séance A, la
+   * carte qui suit la dernière série de développé volume est un palier de tractions, et
+   * Ugo la valide pendant ses 150 s de récupération. Écraser l'échéance à ce moment lui
+   * retirerait son repos ; en créer une lui en donnerait un qu'il n'a pas demandé.
+   */
   const validateSet = useCallback(
-    (setId: string, value: SetValue, timer: { seconds: number; label: string }) => {
+    (setId: string, value: SetValue, timer: { seconds: number; label: string } | null) => {
       commit((current) => ({
         ...current,
         sets: current.sets.map((set) =>
           set.id === setId ? { ...set, ...value, status: 'validated' } : set,
         ),
-        timerEndsAt: Date.now() + timer.seconds * 1000,
-        timerLabel: timer.label,
+        ...(timer === null
+          ? {}
+          : { timerEndsAt: Date.now() + timer.seconds * 1000, timerLabel: timer.label }),
       }))
     },
     [commit],

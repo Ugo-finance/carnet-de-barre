@@ -22,15 +22,22 @@ async function magasinPret(): Promise<DexieStore> {
 
 /** La charge proposée sur le développé incliné du brouillon courant. */
 function chargeIncline(draft: {
-  sets: { exerciseId: string; weight: number | null }[]
+  sets: { exerciseId: string; role: string; weight: number | null }[]
 }): number | null {
-  return draft.sets.find((set) => set.exerciseId === 'c-di')?.weight ?? null
+  // Le rôle est **obligatoire** dans ce filtre depuis CB-56 : l'incliné de la séance C
+  // est précédé d'un palier d'échauffement à ~60 %, et « la première série de c-di »
+  // rend désormais ce palier. Un sélecteur qui l'ignore lit 14 kg au lieu de 24.
+  return (
+    draft.sets.find((set) => set.exerciseId === 'c-di' && set.role === 'accessory')?.weight ?? null
+  )
 }
 
 function repsIncline(draft: {
-  sets: { exerciseId: string; reps: number | null }[]
+  sets: { exerciseId: string; role: string; reps: number | null }[]
 }): (number | null)[] {
-  return draft.sets.filter((set) => set.exerciseId === 'c-di').map((set) => set.reps)
+  return draft.sets
+    .filter((set) => set.exerciseId === 'c-di' && set.role === 'accessory')
+    .map((set) => set.reps)
 }
 
 /** Fait une séance C entière, avec la charge et les répétitions voulues sur l'incliné. */
@@ -44,7 +51,9 @@ async function faireUneSeanceC(
   await store.saveDraft({
     ...draft,
     sets: draft.sets.map((set) => {
-      if (set.exerciseId !== 'c-di') return { ...set, status: 'validated' as const }
+      if (set.exerciseId !== 'c-di' || set.role !== 'accessory') {
+        return { ...set, status: 'validated' as const }
+      }
       const reps = incline.reps[rang] ?? null
       rang += 1
       return { ...set, status: 'validated' as const, weight: incline.weight, reps }
@@ -106,7 +115,30 @@ describe('le moteur atteint réellement le brouillon', () => {
     expect(chargeIncline(reconstruit!)).toBe(26)
     // Et la cible ajustée est bien prise en compte, sinon le test ne prouverait
     // que la moitié de ce qu'il prétend.
-    expect(reconstruit?.sets.find((set) => set.exerciseId === 'c-deadlift')?.weight).toBe(95)
+    expect(
+      reconstruit?.sets.find((set) => set.exerciseId === 'c-deadlift' && set.role === 'top')
+        ?.weight,
+    ).toBe(95)
+  })
+
+  it('échauffe l’incliné sur la charge qu’Ugo tire, pas sur celle de la table', async () => {
+    // Trou trouvé par mutation : faire calculer le palier depuis `suggestedWeight` au lieu
+    // de la charge réelle ne faisait tomber aucun test, alors que le commentaire de
+    // `warmupSetsFor` l'annonce noir sur blanc. Une affirmation de plus qui n'était pas
+    // éprouvée.
+    //
+    // Le défaut serait discret et durable : Ugo monterait à 30 kg par haltère en
+    // s'échauffant éternellement à 14, la valeur de départ d'il y a des mois.
+    const store = await magasinPret()
+    await faireUneSeanceC(store, '2026-09-20', { weight: 26, reps: [8, 8, 8] })
+    await store.clearDraft()
+
+    const suivant = await store.openDraft('C', '2026-09-27')
+    const palier = suivant.sets.find((set) => set.exerciseId === 'c-di' && set.role === 'warmup')
+    // 60 % de 26 vaut 15,6, arrondi à 16 au pas de 2 kg des haltères. À la valeur de la
+    // table, ce serait resté 14.
+    expect(palier?.weight).toBe(16)
+    expect(chargeIncline(suivant)).toBe(26)
   })
 
   it('survit à une réouverture de la base', async () => {

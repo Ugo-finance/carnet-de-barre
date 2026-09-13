@@ -54,6 +54,62 @@ function createMemoryDraftPort(initial: Draft): DraftPort {
 }
 
 describe('useDraftEditor', () => {
+  it('laisse intact un repos en cours quand la série ne demande aucun chrono', async () => {
+    // P1 de la contre-revue sur CB-56, et contrat d'interaction § 4 : un palier
+    // d'échauffement ne crée, ne remplace et n'efface jamais une échéance.
+    //
+    // Le cas réel, séance A : la carte qui suit la dernière série de développé volume est
+    // un palier de tractions. Ugo la valide **pendant** ses 150 s de récupération, parce
+    // que c'est exactement ce qu'on lui demande de faire. Écraser l'échéance à ce
+    // moment-là lui retire son repos sans qu'il ait rien demandé.
+    const echeance = 1_700_000_000_000
+    const initial = { ...draftFixture(), timerEndsAt: echeance, timerLabel: 'Récup Squat' }
+    const saveDraft = vi.fn<(draft: Draft) => Promise<void>>().mockResolvedValue(undefined)
+    const store: DraftPort = { loadDraft: vi.fn().mockResolvedValue(initial), saveDraft }
+    const { result } = renderHook(() => useDraftEditor(store))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    act(() =>
+      result.current.validateSet(
+        'set-1',
+        { weight: 20, reps: 8, rpe: null, status: 'validated' },
+        null,
+      ),
+    )
+    await act(() => result.current.flush())
+
+    expect(saveDraft).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sets: [expect.objectContaining({ status: 'validated' })],
+        timerEndsAt: echeance,
+        timerLabel: 'Récup Squat',
+      }),
+    )
+  })
+
+  it('n’invente pas de chrono quand il n’y en avait aucun', async () => {
+    // L'autre moitié de la même règle : « ne crée jamais ». Sans elle, un palier validé
+    // hors de tout repos ferait apparaître un compte à rebours que rien ne justifie.
+    const initial = draftFixture()
+    const saveDraft = vi.fn<(draft: Draft) => Promise<void>>().mockResolvedValue(undefined)
+    const store: DraftPort = { loadDraft: vi.fn().mockResolvedValue(initial), saveDraft }
+    const { result } = renderHook(() => useDraftEditor(store))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    act(() =>
+      result.current.validateSet(
+        'set-1',
+        { weight: 20, reps: 8, rpe: null, status: 'validated' },
+        null,
+      ),
+    )
+    await act(() => result.current.flush())
+
+    expect(saveDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ timerEndsAt: null, timerLabel: null }),
+    )
+  })
+
   it('valide une série préremplie en un tap et appelle saveDraft une fois', async () => {
     const initial = draftFixture()
     const saveDraft = vi.fn<(draft: Draft) => Promise<void>>().mockResolvedValue(undefined)
