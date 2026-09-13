@@ -56,14 +56,21 @@ export interface AccessoryPlan {
   outcome: AccessoryOutcome
 }
 
-/** Somme des répétitions notées d'une séance. Une série non notée compte pour zéro. */
+/** Somme des répétitions d'une séance. À n'appeler que sur une séance complète. */
 function total(performance: AccessoryPerformance): number {
   return performance.reps.reduce<number>((sum, reps) => sum + (reps ?? 0), 0)
 }
 
-/** Nombre de séries que la table prévoit pour cet exercice. */
-function setCount(exercise: ExerciseDef, last: AccessoryPerformance | undefined): number {
-  return last && last.reps.length > 0 ? last.reps.length : exercise.sets
+/**
+ * `true` si la séance porte **toutes** les séries prescrites, toutes renseignées.
+ *
+ * C'est la condition d'entrée de toute décision automatique. Une séance où Ugo a
+ * validé une série sur trois — parce qu'il a terminé plus tôt, ou sauté le reste —
+ * ne dit rien de ce qu'il aurait fait sur les autres. La prendre pour argent comptant
+ * ferait monter une charge sur un tiers de l'effort prévu.
+ */
+function seanceComplete(performance: AccessoryPerformance, series: number): boolean {
+  return performance.reps.length >= series && performance.reps.every((reps) => reps != null)
 }
 
 function repeat(value: number, count: number): number[] {
@@ -94,17 +101,21 @@ export function planAccessory(
   const [bas, haut] = range
   const last = history[0]
   if (!last || last.weight == null) {
-    return { weight: depart, reps: repeat(bas, setCount(exercise, last)), outcome: 'depart' }
+    return { weight: depart, reps: repeat(bas, exercise.sets), outcome: 'depart' }
   }
 
   const charge = last.weight
   const pas = weightStepFor(exercise.loadKind)
-  const series = setCount(exercise, last)
+  // Le nombre de séries vient **toujours** de la table, jamais de l'historique. Le
+  // déduire de la dernière séance faisait rétrécir la séance suivante : une séance
+  // écourtée à une série en aurait proposé une seule la fois d'après, définitivement.
+  const series = exercise.sets
 
-  // Montée : **toutes** les séries au haut de la fourchette. Une série non notée n'y
-  // suffit pas — on ne fait pas monter une charge sur une donnée absente.
+  // Montée : toutes les séries **prescrites**, toutes renseignées, toutes au haut de
+  // la fourchette. Chacune de ces trois conditions a sa raison — sans la première,
+  // une séance écourtée suffit à faire monter la charge.
   const toutesEnHaut =
-    last.reps.length > 0 && last.reps.every((reps) => reps != null && reps >= haut)
+    seanceComplete(last, series) && last.reps.every((reps) => reps != null && reps >= haut)
   if (toutesEnHaut) {
     // `'hold'` garde le haut de la fourchette après le saut — la règle d'Ugo pour les
     // dips et les tractions. Le défaut reste le retour au bas, règle du coach pour les
@@ -114,11 +125,27 @@ export function planAccessory(
   }
 
   // Blocage : le meilleur total atteint à cette charge n'a pas été battu depuis
-  // `STALL_SESSIONS` séances à cette charge. Formulation choisie parce qu'elle se
-  // comporte bien aux limites — 8/8/8 trois fois bloque, 8/8/8 puis 9/8/8 non.
-  const aCetteCharge = history.filter((performance) => performance.weight === charge)
-  if (aCetteCharge.length >= STALL_SESSIONS) {
-    const recentes = aCetteCharge.slice(0, STALL_SESSIONS)
+  // `STALL_SESSIONS` séances **consécutives** à cette charge.
+  //
+  // Consécutives, et non « toutes celles de l'historique qui portent cette charge » :
+  // un passage à 24, un allègement à 22, puis un retour à 24 ne font pas trois séances
+  // bloquées à 24. Agréger sans regarder la suite faisait redescendre Ugo au moment
+  // précis où il revenait sur la charge après l'avoir allégée.
+  const suite: AccessoryPerformance[] = []
+  for (const performance of history) {
+    if (performance.weight !== charge) break
+    suite.push(performance)
+  }
+
+  // Une séance incomplète ne prouve **rien**. Règle dure du projet, déjà écrite dans
+  // le moteur des cinq mouvements suivis : une valeur inconnue n'est jamais un échec.
+  // Sans ce garde, trois séances notées `8/8/—` faisaient redescendre la charge, alors
+  // qu'Ugo avait peut-être fait sa troisième série sans la noter.
+  if (
+    suite.length >= STALL_SESSIONS &&
+    suite.slice(0, STALL_SESSIONS).every((performance) => seanceComplete(performance, series))
+  ) {
+    const recentes = suite.slice(0, STALL_SESSIONS)
     const meilleurAncien = total(recentes[STALL_SESSIONS - 1])
     const battu = recentes
       .slice(0, STALL_SESSIONS - 1)

@@ -169,6 +169,63 @@ describe('la règle de blocage', () => {
   })
 })
 
+describe('les trois trous que mes scénarios ne pouvaient pas voir', () => {
+  // Trois P1 de Codex sur la première tête. Mes dix-sept tests partaient tous d'un
+  // historique **complet, bien formé et monotone** — le cas auquel je pensais. Aucun
+  // ne décrivait une séance écourtée, une répétition non notée, ni un retour sur une
+  // charge après l'avoir allégée. Le code était défendable, les scénarios étaient
+  // creux, et c'est la troisième fois de la journée que le défaut est là et pas
+  // ailleurs.
+
+  it('une séance écourtée ne fait pas monter la charge', () => {
+    // Ugo valide une série sur trois puis termine la séance. `[12]` n'est pas `3×12`.
+    const plan = planAccessory(DI, [seance('2026-09-20', 24, 12)])
+    expect(plan).toMatchObject({ weight: 24, outcome: 'maintien' })
+  })
+
+  it('et ne rétrécit jamais la séance suivante', () => {
+    // Le pire des deux effets : le nombre de séries venait de l'historique, donc une
+    // séance écourtée une fois l'aurait été **pour toujours**.
+    expect(planAccessory(DI, [seance('2026-09-20', 24, 12)]).reps).toHaveLength(3)
+    expect(planAccessory(DI, [seance('2026-09-20', 24, 8, 8)]).reps).toHaveLength(3)
+  })
+
+  it('une répétition non notée ne prouve aucun blocage', () => {
+    // Règle dure du projet, déjà tenue par le moteur des cinq mouvements suivis : une
+    // valeur inconnue n'est jamais un échec. Ugo a peut-être fait sa troisième série
+    // sans la noter — lui baisser la charge pour ça serait la punir d'une saisie.
+    const plan = planAccessory(DI, [
+      seance('2026-09-20', 24, 8, 8, null),
+      seance('2026-09-13', 24, 8, 8, null),
+      seance('2026-09-06', 24, 8, 8, null),
+    ])
+    expect(plan).toMatchObject({ weight: 24, outcome: 'maintien' })
+  })
+
+  it('ne bloque que sur des séances consécutives à la même charge', () => {
+    // 24, puis allègement à 22, puis deux anciens passages à 24. Agréger sans regarder
+    // la suite faisait redescendre Ugo au moment précis où il revenait sur la charge.
+    const plan = planAccessory(DI, [
+      seance('2026-09-20', 24, 8, 8, 8),
+      seance('2026-09-13', 22, 8, 8, 8),
+      seance('2026-09-06', 24, 8, 8, 8),
+      seance('2026-08-30', 24, 8, 8, 8),
+    ])
+    expect(plan).toMatchObject({ weight: 24, outcome: 'maintien' })
+  })
+
+  it('bloque toujours sur trois séances vraiment consécutives', () => {
+    // Le pendant du test précédent : la correction ne doit pas avoir désarmé la règle.
+    const plan = planAccessory(DI, [
+      seance('2026-09-20', 24, 8, 8, 8),
+      seance('2026-09-13', 24, 8, 8, 8),
+      seance('2026-09-06', 24, 8, 8, 8),
+      seance('2026-08-30', 22, 8, 8, 8),
+    ])
+    expect(plan).toMatchObject({ weight: 22, outcome: 'blocage' })
+  })
+})
+
 describe('un exercice sans fourchette', () => {
   it('ne décide rien plutôt que d’inventer un seuil', () => {
     // Les tractions lestées de la séance A n'avaient pas de fourchette avant CB-45 :
