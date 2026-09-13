@@ -54,8 +54,23 @@ export function accessoryHistory(
         // Trié sur `index`, le rang **contractuel** de la série, et non sur la position
         // dans le tableau. Un import ou une correction peut rendre les séries dans un
         // autre ordre ; s'y fier reproposerait les répétitions sur les mauvaises lignes.
+        //
+        // Le rôle est filtré, et c'est vital : un accessoire peut être précédé d'un
+        // palier d'échauffement, validé comme les autres, portant le **même**
+        // `exerciseId` et bien plus léger. Sans ce filtre, les 14 kg du palier d'incliné
+        // deviennent la charge de la séance — `Math.min` ci-dessous les choisit — et Ugo
+        // se voit reproposer 14 kg au lieu des 24 qu'il a réellement tirés. C'est
+        // exactement le défaut du 12.09, ressuscité par une autre porte.
+        //
+        // Atteignable dès ce lot par l'import d'un export v2, et systématiquement une
+        // fois les paliers posés dans le brouillon (CB-56).
         const faites = (seance.sets ?? [])
-          .filter((set) => set.exerciseId === exerciseId && set.status === 'validated')
+          .filter(
+            (set) =>
+              set.exerciseId === exerciseId &&
+              set.status === 'validated' &&
+              set.role === 'accessory',
+          )
           .toSorted((a, b) => a.index - b.index)
         if (faites.length === 0) return []
 

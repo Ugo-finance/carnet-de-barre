@@ -15,8 +15,15 @@
 import { z } from 'zod'
 import type { LiftKey } from './types.ts'
 
-/** Version du format produit par cette build. À incrémenter uniquement sur évolution additive. */
-export const SCHEMA_VERSION = 1
+/**
+ * Version du format produit par cette build. À incrémenter uniquement sur évolution additive.
+ *
+ * Passée à 2 en CB-55, pour le rôle de série `warmup`. L'évolution n'enlève rien : un
+ * export v1 et le seed non versionné restent lus sans changement. Ce qui change est le
+ * sens du refus dans l'autre sens — un fichier v2 porte des paliers qu'une build v1 ne
+ * saurait pas exclure de la progression, et doit donc bien être refusé par elle.
+ */
+export const SCHEMA_VERSION = 2
 
 /** Vraie date du calendrier, pas seulement la bonne forme : `2026-99-99` est refusé. */
 function isRealDate(value: string): boolean {
@@ -96,7 +103,7 @@ export const setLogSchema = z
   .object({
     id: z.string().min(1),
     exerciseId: z.string().min(1),
-    role: z.enum(['top', 'backoff', 'volume', 'accessory']),
+    role: z.enum(['top', 'backoff', 'volume', 'accessory', 'warmup']),
     index: z.number().int().nonnegative(),
     status: z.enum(['planned', 'entered', 'validated', 'skipped']),
     loadKind,

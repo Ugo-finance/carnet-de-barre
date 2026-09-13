@@ -13,6 +13,7 @@ const SET_ROLE_LABELS: Record<SetLog['role'], string> = {
   backoff: 'Backoff',
   volume: 'Série',
   accessory: 'Série',
+  warmup: 'Échauffement',
 }
 
 type SessionScreenProps = {
