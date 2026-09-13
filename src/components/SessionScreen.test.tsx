@@ -97,6 +97,29 @@ describe('SessionScreen', () => {
     expect(screen.getByText(second)).toBeInTheDocument()
   })
 
+  it.each([
+    ['A', 'Squat', 'a-squat:0', '2,5', 77.5],
+    ['C', 'Développé incliné haltères', 'c-di:0', '2', 22],
+  ] as const)(
+    'applique le pas du matériel dans la séance %s',
+    (type, exerciseLabel, setId, stepLabel, expectedWeight) => {
+      const onSetChange = vi.fn()
+      renderSession(type, { onSetChange })
+      const exercise = screen.getByRole('article', { name: exerciseLabel })
+
+      fireEvent.click(
+        within(exercise).getAllByRole('button', {
+          name: `Augmenter Poids de ${stepLabel}`,
+        })[0],
+      )
+
+      expect(onSetChange).toHaveBeenCalledWith(
+        setId,
+        expect.objectContaining({ weight: expectedWeight }),
+      )
+    },
+  )
+
   it('respecte l’ordre de la séance C et affiche les plaques de la barre', () => {
     renderSession('C')
     const cards = screen.getAllByRole('article')

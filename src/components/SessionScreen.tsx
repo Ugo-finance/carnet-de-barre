@@ -1,6 +1,6 @@
 import { formatDate, formatLoad, formatNumber } from '../domain/format'
 import { describePlates, platesPerSide } from '../domain/plates'
-import { SEANCES, type ExerciseDef } from '../domain/program'
+import { SEANCES, weightStepFor, type ExerciseDef } from '../domain/program'
 import type { AccessoryLog, Draft, SeanceType, SetLog } from '../domain/types'
 import { wakeLockAvailable } from '../features/session/timer'
 import { SetCard, type EditableSet } from './SetCard'
@@ -149,6 +149,7 @@ function ExerciseCard({
             onSkip={(value) => onSetChange(set.id, value)}
             showWeight={set.loadKind !== 'bodyweight'}
             showRpe={set.role === 'top' || (set.role === 'volume' && set.index === sets.length - 1)}
+            weightStep={weightStepFor(exercise.loadKind)}
           />
         ))}
       </div>
