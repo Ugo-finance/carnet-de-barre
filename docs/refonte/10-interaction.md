@@ -27,6 +27,10 @@ validée. Pour un brouillon créé par une ancienne version sans `startedAt`, to
 validée ou passée, note ou chrono le rend actif. Il est proposé à la reprise sans réécriture
 destructive.
 
+Ce prédicat est unique et vit dans `src/db/`. CB-62 le livre avec `startedAt`, puis tous ses
+appelants — verrou de navigation, mise à jour PWA, import et ajustement de cible dans les magasins
+Dexie et mémoire — l'utilisent. Aucun écran ne reconstruit sa propre définition d'une séance active.
+
 Une séance active :
 
 - masque la navigation globale et le sélecteur A/B/C ;
@@ -52,9 +56,10 @@ La file est une **projection du brouillon et du programme**, pas une seconde sou
 est reconstruite au montage et après chaque écriture :
 
 1. ordre des exercices du programme ;
-2. paliers `warmup` immédiatement avant les séries de travail du même exercice ;
-3. séries d'un même superset alternées par rang : exercice 1 série 1, exercice 2 série 1, exercice 1
-   série 2, exercice 2 série 2 ;
+2. paliers `warmup` d'un exercice émis ensemble juste avant sa première série de travail ;
+3. séries de travail d'un même superset alternées par rang : lors de la première apparition d'un
+   membre, ses paliers sont émis avant sa série, sans être eux-mêmes alternés. La séance A donne donc
+   palier des tractions, tractions série 1, dips série 1, tractions série 2, dips série 2, etc. ;
 4. exercices au-delà du deuxième omis de la file active en mode pressé, sans supprimer leurs
    séries du brouillon ;
 5. optionnels structurés présents et explicitement passables.
@@ -88,7 +93,8 @@ Affiche uniquement des données réelles :
 - liste concise des exercices ;
 - sélecteur manuel A/B/C ;
 - mode pressé ;
-- nombre de paliers d'échauffement calculé pour la sélection ;
+- nombre de paliers d'échauffement calculé pour la sélection par le sélecteur de données de CB-62,
+  depuis les cibles, les plans d'accessoires et `warmupPlan` ;
 - bouton principal « Démarrer la séance [A/B/C] ».
 
 La durée estimée, le bloc de huit semaines et les tendances sont absents. Changer A/B/C ne crée ni
@@ -136,8 +142,10 @@ dans tous ses états :
   arrêter ;
 - expiré : 0:00 et signal sonore/vibration si la plateforme l'autorise.
 
-Valider une autre série remplace l'échéance par celle de cette nouvelle validation. Un palier
-`warmup` ne crée jamais de chrono ; le texte bref est « Repos libre ».
+Valider une autre série de travail remplace l'échéance par celle de cette nouvelle validation. Un
+palier `warmup` ne crée, ne remplace et n'efface jamais de chrono. Si une échéance issue d'une série
+de travail court encore, elle reste visible avec son libellé d'origine ; « Repos libre » ne s'affiche
+que lorsque la zone du chrono est inactive.
 
 ### S5 — Erreur d'écriture pendant la séance
 
@@ -231,7 +239,7 @@ Il ne finalise et n'abandonne jamais une séance.
 | S2 | Reprendre | Aucune ; relire le brouillon | S3, première série à faire | Rester S2 |
 | S2 | Abandonner, puis confirmer | Attendre les écritures, supprimer le brouillon | S1 | Garder S2 et le brouillon |
 | S3 | Modifier charge/reps/RPE | Mettre la série à `entered`, écrire le brouillon | Même carte | Conserver les valeurs à l'écran et montrer S5 |
-| S3 | Valider un warmup | Mettre `validated`, sans échéance de chrono | Série suivante | Rester sur la série, S5 |
+| S3 | Valider un warmup | Mettre `validated` sans créer, remplacer ni effacer l'échéance existante | Série suivante ; conserver S4 si un chrono court déjà | Rester sur la série, S5 |
 | S3 | Valider une série de travail | Mettre `validated` et écrire l'échéance éventuelle dans la même version du brouillon | Série suivante + S4 | Rester sur la série, aucun nouveau chrono |
 | S3 | Passer | Mettre `skipped`, sans effet de progression | Série suivante | Rester sur la série |
 | S3 | Précédente | Aucune, curseur de consultation local | Série précédente | Sans objet |
@@ -253,14 +261,18 @@ Il ne finalise et n'abandonne jamais une séance.
 
 ## 5. File détaillée et contrôles par rôle
 
-| Rôle | Charge | Répétitions | RPE | Passable | Chrono après validation |
-|---|---|---|---|---|---|
-| `warmup` | Préremplie, modifiable | Préremplies, modifiables | Non | Oui | Non |
-| `top` | Préremplie, modifiable | Préremplies, modifiables | Oui, avec texte en plus de la couleur | Non par défaut ; fin incomplète reste possible | Repos principal du programme |
-| `backoff` | Préremplie, modifiable | Préremplies, modifiables | Non | Non par défaut | Repos principal du programme |
-| `volume` | Préremplie, modifiable | Préremplies, modifiables | Non | Non par défaut | Repos du programme |
-| `accessory` obligatoire | Adaptée au matériel | Oui | Non | Non par défaut | Repos du programme |
-| `accessory` optionnel | Adaptée au matériel | Oui | Non | Oui | Repos du programme si validé |
+| Rôle `SetRole` | Nature d'exercice | Charge | Répétitions | RPE | Passable | Chrono après validation |
+|---|---|---|---|---|---|---|
+| `warmup` | Toute politique autre que `aucun` | Préremplie, modifiable | Préremplies, modifiables | Non | Oui | Aucun ; préserver un chrono existant |
+| `top` | `topset` | Préremplie, modifiable | Préremplies, modifiables | Oui, avec texte en plus de la couleur | Non par défaut ; fin incomplète reste possible | Repos principal du programme |
+| `backoff` | `topset` | Préremplie, modifiable | Préremplies, modifiables | Non | Non par défaut | Repos principal du programme |
+| `volume` | `volume` | Préremplie, modifiable | Préremplies, modifiables | Non | Non par défaut | Repos du programme |
+| `accessory` | `accessory` | Adaptée au matériel | Oui | Non | Non par défaut | Repos du programme |
+| `accessory` | `optional`, structuré par CB-69 | Adaptée au matériel | Oui | Non | Oui | Repos du programme si validé |
+
+Le caractère optionnel vient de `ExerciseDef.kind === 'optional'`, pas de `SetRole`. CB-69 structure
+ces exercices tout en conservant cette propriété du programme ; le composant de séance la reçoit du
+sélecteur et ne la déduit ni du rôle ni de l'identifiant.
 
 Les boutons de pas utilisent `weightStepFor(loadKind)`. Une charge `bodyweight` affiche « PDC » et
 n'offre aucun stepper de poids. Une charge `perDumbbell` dit « kg par haltère » ; une charge machine
@@ -316,9 +328,11 @@ bandeau dit « Mise à jour prête après ta séance » et ne propose aucun rech
 3. Démarrer A : `startedAt` est fixé et la première série réelle apparaît.
 4. Valider un palier : l'écriture réussit, la file avance, aucun chrono ne démarre.
 5. Modifier puis valider un top set : la saisie est persistée, puis le chrono apparaît.
-6. Quitter la vue et reprendre : série courante et échéance sont retrouvées.
-7. Terminer : la transaction réussit une fois, S7 affiche seulement les résultats retournés.
-8. Ouvrir l'historique puis exporter : la séance est visible et le JSON la contient.
+6. Poursuivre jusqu'à la dernière série de développé volume ; pendant son chrono, valider le palier
+   des tractions qui suit : l'échéance et son libellé restent inchangés tandis que la file avance.
+7. Quitter la vue et reprendre : série courante et échéance sont retrouvées.
+8. Terminer : la transaction réussit une fois, S7 affiche seulement les résultats retournés.
+9. Ouvrir l'historique puis exporter : la séance est visible et le JSON la contient.
 
 ### Parcours d'échec d'écriture
 
