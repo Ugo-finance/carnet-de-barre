@@ -27,6 +27,8 @@ type SessionScreenProps = {
   onAccessoryChange: (exerciseId: string, value: Pick<AccessoryLog, 'done' | 'note'>) => void
   onNotesChange: (notes: string) => void
   onTimerAdjust: (deltaMs: number) => void
+  keepAwake: boolean
+  onKeepAwakeChange: (enabled: boolean) => void
   onTimerStop: () => void
   onFinish: () => void
   finishing?: boolean
@@ -162,6 +164,8 @@ export function SessionScreen({
   onAccessoryChange,
   onNotesChange,
   onTimerAdjust,
+  keepAwake,
+  onKeepAwakeChange,
   onTimerStop,
   onFinish,
   finishing = false,
@@ -219,7 +223,9 @@ export function SessionScreen({
         <TimerCard
           endsAt={draft.timerEndsAt}
           label={draft.timerLabel}
+          keepAwake={keepAwake}
           onAdjust={onTimerAdjust}
+          onKeepAwakeChange={onKeepAwakeChange}
           onStop={onTimerStop}
         />
       ) : null}

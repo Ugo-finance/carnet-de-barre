@@ -71,6 +71,8 @@ function renderSession(
     onAccessoryChange: vi.fn(),
     onNotesChange: vi.fn(),
     onTimerAdjust: vi.fn(),
+    keepAwake: false,
+    onKeepAwakeChange: vi.fn(),
     onTimerStop: vi.fn(),
     onFinish: vi.fn(),
     ...overrides,

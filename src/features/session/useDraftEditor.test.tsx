@@ -129,6 +129,18 @@ describe('useDraftEditor', () => {
     )
   })
 
+  it('persiste la préférence écran allumé au niveau de la séance', async () => {
+    const saveDraft = vi.fn<(draft: Draft) => Promise<void>>().mockResolvedValue(undefined)
+    const initial = draftFixture()
+    const store: DraftPort = { loadDraft: vi.fn().mockResolvedValue(initial), saveDraft }
+    const { result } = renderHook(() => useDraftEditor(store, initial))
+
+    act(() => result.current.updateKeepAwake(true))
+    await act(() => result.current.flush())
+
+    expect(saveDraft).toHaveBeenCalledWith(expect.objectContaining({ keepAwake: true }))
+  })
+
   it('expose une erreur de sauvegarde et empêche une action dépendante de continuer', async () => {
     const store: DraftPort = {
       loadDraft: vi.fn().mockResolvedValue(draftFixture()),

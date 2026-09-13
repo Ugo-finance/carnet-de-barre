@@ -101,6 +101,7 @@ function SessionEditor({
   const unfinishedCount = draft.sets.filter(
     (set) => set.status !== 'validated' && set.status !== 'skipped',
   ).length
+  const keepAwake = (draft as Draft & { keepAwake?: boolean }).keepAwake ?? false
 
   const requestFinish = () => {
     if (unfinishedCount > 0) setConfirmFinish(true)
@@ -121,6 +122,8 @@ function SessionEditor({
         onAccessoryChange={editor.updateAccessory}
         onNotesChange={editor.updateNotes}
         onTimerAdjust={editor.adjustTimer}
+        keepAwake={keepAwake}
+        onKeepAwakeChange={editor.updateKeepAwake}
         onTimerStop={editor.stopTimer}
         onFinish={requestFinish}
         finishing={finalizing}

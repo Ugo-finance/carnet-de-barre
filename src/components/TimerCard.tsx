@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback } from 'react'
 import { formatDuration } from '../domain/format'
 import {
   notifyTimerDone,
@@ -10,12 +10,20 @@ import {
 type TimerCardProps = {
   endsAt: number
   label: string
+  keepAwake: boolean
   onAdjust: (deltaMs: number) => void
+  onKeepAwakeChange: (enabled: boolean) => void
   onStop: () => void
 }
 
-export function TimerCard({ endsAt, label, onAdjust, onStop }: TimerCardProps) {
-  const [keepAwake, setKeepAwake] = useState(false)
+export function TimerCard({
+  endsAt,
+  label,
+  keepAwake,
+  onAdjust,
+  onKeepAwakeChange,
+  onStop,
+}: TimerCardProps) {
   const notify = useCallback(() => notifyTimerDone(), [])
   const remaining = useRecoveryTimer(endsAt, notify)
   const available = wakeLockAvailable()
@@ -61,7 +69,7 @@ export function TimerCard({ endsAt, label, onAdjust, onStop }: TimerCardProps) {
           className="min-h-11 rounded-xl border border-line px-3 text-sm font-medium text-muted disabled:opacity-50"
           aria-pressed={keepAwake}
           disabled={!available}
-          onClick={() => setKeepAwake((current) => !current)}
+          onClick={() => onKeepAwakeChange(!keepAwake)}
         >
           {available
             ? keepAwake
