@@ -2,15 +2,16 @@
  * Les paliers d'échauffement sur une vraie IndexedDB — CB-55.
  *
  * Le ticket demandait de « faire évoluer Dexie sans perdre séances, cibles ni brouillon ».
- * La réponse honnête est qu'**aucune migration n'est nécessaire** : les séries vivent dans
- * l'enregistrement de la séance, et aucun index ne porte sur leur rôle (`database.ts`
- * indexe `id, date, type`). Ajouter une version Dexie qui ne change rien serait du bruit,
- * et un bruit qu'il faudrait rejouer sur le téléphone d'Ugo.
+ * **Aucune migration n'est nécessaire**, et ce qui l'établit est l'inspection du schéma, pas
+ * un test : les séries vivent dans l'enregistrement de la séance, et aucun magasin ni index
+ * ne porte sur leur rôle (`database.ts` indexe `id, date, type`). Ajouter une version Dexie
+ * qui ne change rien serait du bruit, et un bruit à rejouer sur le téléphone d'Ugo.
  *
- * Ce fichier éprouve cette affirmation au lieu de la poser : une séance portant des paliers
- * est écrite, la base est fermée, rouverte, et tout doit être là. Et surtout, la progression
- * qui en sort doit être **identique** à celle d'une séance sans paliers — cette fois par le
- * chemin réel, celui qui écrit.
+ * **Ce fichier ne prouve donc pas cette absence** — P3 de Codex, et il a raison : fermer puis
+ * rouvrir une base créée par la build courante ne fait tourner aucune ancienne version du
+ * schéma. Il prouve deux autres choses, qui sont celles dont on a besoin : que le nouveau
+ * rôle se persiste et se relit intact, et que la progression issue d'une séance échauffée
+ * est **identique** à celle d'une séance sans paliers, cette fois par le chemin qui écrit.
  */
 
 import 'fake-indexeddb/auto'
@@ -130,10 +131,10 @@ describe('une séance échauffée, écrite pour de vrai', () => {
     expect(squat).not.toContain('52,5')
   })
 
-  it('survit à une fermeture et une réouverture de la base', async () => {
-    // La preuve qu'aucune migration ne manque : le rôle `warmup` n'est porté par aucun
-    // index, donc rien à migrer. Si ce test tombait un jour, c'est qu'une version Dexie
-    // serait devenue nécessaire.
+  it('persiste le nouveau rôle et le relit intact après réouverture', async () => {
+    // Ce que ce test établit : la persistance. Ce qu'il **n'établit pas** : l'absence de
+    // migration nécessaire — il ne fait tourner aucune version antérieure du schéma. Cette
+    // absence-là se lit dans `database.ts`, qui n'indexe ni ne stocke le rôle.
     const nom = nomDeBase()
     const base = new CarnetDatabase(nom)
     const store = new DexieStore(base)

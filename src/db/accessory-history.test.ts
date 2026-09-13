@@ -73,6 +73,31 @@ describe('ce qui ne doit pas entrer dans l’historique', () => {
     expect(historique[0].date).toBe('2026-09-13')
   })
 
+  it('ignore les paliers d’échauffement du même exercice', () => {
+    // P1 de Codex sur CB-55. Un palier porte le **même** `exerciseId` que les séries de
+    // travail qu'il précède, et il est validé comme elles. Sans filtre sur le rôle,
+    // `Math.min` retient ses 14 kg comme la charge de la séance, et l'app repropose 14 kg
+    // à Ugo au lieu des 24 qu'il a tirés — le défaut du 12.09 par une autre porte.
+    const s = seance('2026-09-20', [
+      set('c-di', 0, { role: 'warmup', weight: 14, reps: 8 }),
+      set('c-di', 0, { weight: 24, reps: 12 }),
+      set('c-di', 1, { weight: 24, reps: 11 }),
+      set('c-di', 2, { weight: 24, reps: 10 }),
+    ])
+
+    const historique = accessoryHistory([s], 'c-di')
+    expect(historique).toHaveLength(1)
+    expect(historique[0].weight).toBe(24)
+    expect(historique[0].reps).toEqual([12, 11, 10])
+  })
+
+  it('ne garde rien quand l’exercice n’a que son palier', () => {
+    // Un échauffement fait sans le travail qui suit n'est pas une séance à 14 kg : c'est
+    // une absence. La compter ferait redescendre la charge au prochain passage.
+    const s = seance('2026-09-20', [set('c-di', 0, { role: 'warmup', weight: 14, reps: 8 })])
+    expect(accessoryHistory([s], 'c-di')).toEqual([])
+  })
+
   it('ne mélange pas les exercices d’une même séance', () => {
     const s = seance('2026-09-20', [
       set('c-di', 0, { weight: 24 }),

@@ -48,7 +48,15 @@ export type SetStatus =
   | 'planned'
   /** Modifiée par l'utilisateur, pas encore validée. */
   | 'entered'
-  /** Validée d'un tap. Déclenche le chrono et compte pour la progression. */
+  /**
+   * Validée d'un tap : la série a bien été **réalisée**.
+   *
+   * Ses deux effets habituels — déclencher le chrono, compter pour la progression —
+   * appartiennent aux seules **séries de travail**. Une série `warmup` validée a été
+   * faite comme les autres et n'en produit aucun : le repos entre paliers est libre, et
+   * `workingSets` l'écarte du résumé comme du moteur. « Réalisée » et « compte » sont
+   * deux choses distinctes depuis CB-55, et c'est ce contrat que lisent CB-56 et CB-58.
+   */
   | 'validated'
   /** Explicitement sautée. Ne compte pas comme un échec. */
   | 'skipped'
