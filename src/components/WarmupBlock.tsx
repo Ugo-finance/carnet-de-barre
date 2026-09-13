@@ -18,10 +18,14 @@ function isTreated(set: Pick<SetLog, 'status'>): boolean {
   return set.status === 'validated' || set.status === 'skipped'
 }
 
+function isBodyweightStep(set: SetLog): boolean {
+  return set.loadKind === 'bodyweight' || (set.loadKind === 'added' && set.targetWeight === null)
+}
+
 function describeSet(set: SetLog): string {
   const reps = set.reps === null ? '?' : formatNumber(set.reps)
 
-  if (set.loadKind === 'bodyweight') return `PDC×${reps}`
+  if (isBodyweightStep(set)) return `PDC×${reps}`
   if (set.weight === null) return `?×${reps}`
   const weight = formatNumber(set.weight)
   if (set.loadKind === 'added') return `+${weight}×${reps}`
@@ -78,6 +82,9 @@ export function WarmupBlock({
         <div className="mt-2 grid gap-3" id={contentId}>
           {sets.map((set, index) => (
             <div key={set.id}>
+              {isBodyweightStep(set) ? (
+                <p className="mb-2 px-3 text-sm font-semibold text-fg">PDC · poids du corps</p>
+              ) : null}
               <SetCard
                 label={`Palier ${index + 1}`}
                 value={set}
@@ -93,7 +100,7 @@ export function WarmupBlock({
                   if (!isTreated(set) && treated + 1 === sets.length) setExpanded(false)
                   onSetChange(set.id, value)
                 }}
-                showWeight={loadKind !== 'bodyweight'}
+                showWeight={!isBodyweightStep(set)}
                 showRpe={false}
                 weightStep={weightStepFor(loadKind)}
               />

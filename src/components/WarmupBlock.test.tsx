@@ -122,4 +122,27 @@ describe('WarmupBlock', () => {
       expect.objectContaining({ status: 'skipped' }),
     )
   })
+
+  it('présente le premier palier de tractions comme poids du corps sans champ de lest', () => {
+    const bodyweight = {
+      ...warmup(0, null, 5, 'planned'),
+      id: 'tractions:warmup:0',
+      exerciseId: 'tractions',
+      loadKind: 'added' as const,
+    }
+    render(
+      <WarmupBlock
+        exerciseLabel="Tractions lestées"
+        loadKind="added"
+        sets={[bodyweight]}
+        onSetChange={vi.fn()}
+        onSetValidate={vi.fn()}
+      />,
+    )
+
+    const palier = screen.getByRole('article', { name: 'Palier 1' })
+    expect(screen.getByText('PDC · poids du corps')).toBeInTheDocument()
+    expect(within(palier).queryByRole('textbox', { name: 'Poids' })).not.toBeInTheDocument()
+    expect(within(palier).getByRole('textbox', { name: 'Répétitions' })).toHaveValue('5')
+  })
 })
