@@ -157,7 +157,14 @@ export class MemoryStore implements DraftStore {
       this.targets = targets
       this.adjustments.push({ at, lift, before: courant[lift], after: targets[lift] })
       if (this.draft) {
-        this.draft = buildDraft(this.draft.type, this.draft.date, targets, { id: this.draft.id })
+        // L'historique voyage ici comme dans `openDraft` : sans lui, un ajustement de
+        // cible ramènerait les accessoires aux valeurs de la table. Le raccord n'avait
+        // été fait que côté Dexie, ce qui faisait diverger les deux magasins d'un
+        // contrat qu'ils sont censés partager.
+        this.draft = buildDraft(this.draft.type, this.draft.date, targets, {
+          id: this.draft.id,
+          seances: this.seances,
+        })
       }
     }
     return structuredClone(targets)

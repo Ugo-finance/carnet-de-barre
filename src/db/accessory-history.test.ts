@@ -28,8 +28,8 @@ function set(exerciseId: string, index: number, over: Partial<SetLog> = {}): Set
   }
 }
 
-function seance(date: string, sets: SetLog[] | undefined): Seance {
-  return { id: `s-${date}`, date, type: 'C', lines: [], tops: {}, notes: '', sets }
+function seance(date: string, sets: SetLog[] | undefined, ts?: number): Seance {
+  return { id: `s-${date}-${ts ?? 0}`, date, type: 'C', lines: [], tops: {}, notes: '', sets, ts }
 }
 
 describe('ce qui ne doit pas entrer dans l’historique', () => {
@@ -138,6 +138,49 @@ describe('ordre et lecture', () => {
     ])
 
     expect(accessoryHistory([s], 'c-di')[0].reps).toEqual([10, 9, 8])
+  })
+})
+
+describe('l’ordre, quand rien ne garantit qu’il soit déjà bon', () => {
+  it('suit le rang contractuel de la série, pas sa place dans le tableau', () => {
+    // P2 de Codex. Un import ou une correction peut rendre les séries dans le désordre.
+    // S'y fier reproposerait à Ugo ses répétitions sur les mauvaises lignes.
+    const s = seance('2026-09-20', [
+      set('c-di', 2, { reps: 8 }),
+      set('c-di', 0, { reps: 10 }),
+      set('c-di', 1, { reps: 9 }),
+    ])
+
+    expect(accessoryHistory([s], 'c-di')[0].reps).toEqual([10, 9, 8])
+  })
+
+  it('départage deux séances du même jour par leur horodatage', () => {
+    // Le contrat autorise deux séances à la même date. Sans départage, la plus
+    // ancienne pouvait passer pour la dernière, et le moteur raisonnait sur une
+    // charge périmée.
+    const historique = accessoryHistory(
+      [
+        seance('2026-09-20', [set('c-di', 0, { weight: 24 })], 1),
+        seance('2026-09-20', [set('c-di', 0, { weight: 26 })], 2),
+      ],
+      'c-di',
+    )
+
+    expect(historique.map((performance) => performance.weight)).toEqual([26, 24])
+  })
+
+  it('range une séance sans horodatage en dernier dans sa journée', () => {
+    // Déterministe, et sans inventer de chronologie. En pratique les seules séances
+    // sans `ts` viennent du carnet papier, déjà écartées faute de séries.
+    const historique = accessoryHistory(
+      [
+        seance('2026-09-20', [set('c-di', 0, { weight: 24 })]),
+        seance('2026-09-20', [set('c-di', 0, { weight: 26 })], 5),
+      ],
+      'c-di',
+    )
+
+    expect(historique.map((performance) => performance.weight)).toEqual([26, 24])
   })
 })
 

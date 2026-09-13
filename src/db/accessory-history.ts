@@ -38,31 +38,44 @@ export function accessoryHistory(
   seances: readonly Seance[],
   exerciseId: string,
 ): AccessoryPerformance[] {
-  return seances
-    .filter((seance) => seance.sets != null)
-    .toSorted((a, b) => b.date.localeCompare(a.date))
-    .flatMap<AccessoryPerformance>((seance) => {
-      const faites = (seance.sets ?? []).filter(
-        (set) => set.exerciseId === exerciseId && set.status === 'validated',
-      )
-      if (faites.length === 0) return []
+  return (
+    seances
+      .filter((seance) => seance.sets != null)
+      // Deux séances peuvent porter la **même date** — le contrat l'autorise, et une
+      // reprise le même jour arrive. Sans départage, la plus ancienne pouvait passer
+      // pour la dernière et le moteur raisonnait sur une charge périmée.
+      //
+      // `ts` départage. Une séance qui n'en porte pas est rangée en dernier dans sa
+      // journée : c'est déterministe, et ça n'invente aucune chronologie — en pratique
+      // les seules séances sans `ts` sont celles du carnet papier, déjà écartées
+      // au-dessus faute de séries.
+      .toSorted((a, b) => b.date.localeCompare(a.date) || (b.ts ?? 0) - (a.ts ?? 0))
+      .flatMap<AccessoryPerformance>((seance) => {
+        // Trié sur `index`, le rang **contractuel** de la série, et non sur la position
+        // dans le tableau. Un import ou une correction peut rendre les séries dans un
+        // autre ordre ; s'y fier reproposerait les répétitions sur les mauvaises lignes.
+        const faites = (seance.sets ?? [])
+          .filter((set) => set.exerciseId === exerciseId && set.status === 'validated')
+          .toSorted((a, b) => a.index - b.index)
+        if (faites.length === 0) return []
 
-      // Charge de la séance quand les séries divergent : la **plus petite**. Ne jamais
-      // proposer à Ugo une charge qu'il n'a pas tenue sur l'ensemble de l'exercice.
-      // Une série au poids non noté ne tire pas la charge vers le bas : elle est
-      // inconnue, pas nulle — c'est `planAccessory` qui décidera d'en reporter une.
-      const charges = faites
-        .map((set) => set.weight)
-        .filter((weight): weight is number => weight != null)
+        // Charge de la séance quand les séries divergent : la **plus petite**. Ne jamais
+        // proposer à Ugo une charge qu'il n'a pas tenue sur l'ensemble de l'exercice.
+        // Une série au poids non noté ne tire pas la charge vers le bas : elle est
+        // inconnue, pas nulle — c'est `planAccessory` qui décidera d'en reporter une.
+        const charges = faites
+          .map((set) => set.weight)
+          .filter((weight): weight is number => weight != null)
 
-      return [
-        {
-          date: seance.date,
-          weight: charges.length > 0 ? Math.min(...charges) : null,
-          reps: faites.map((set) => set.reps),
-        },
-      ]
-    })
+        return [
+          {
+            date: seance.date,
+            weight: charges.length > 0 ? Math.min(...charges) : null,
+            reps: faites.map((set) => set.reps),
+          },
+        ]
+      })
+  )
 }
 
 /**

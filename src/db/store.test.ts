@@ -146,5 +146,34 @@ describe('DraftStore (implémentation en mémoire)', () => {
       targets.squat.w = 999
       expect((await store.getTargets()).squat.w).toBe(75)
     })
+
+    it('ne perd pas la progression des accessoires en reconstruisant le brouillon', async () => {
+      // P2 de Codex sur CB-45 lot B2. Le raccord n'avait été fait que dans `openDraft`,
+      // pas dans la reconstruction d'`adjustTarget` : ajuster une cible ramenait
+      // l'incliné de 26 à 24 kg, c'est-à-dire à la valeur de la table.
+      //
+      // Ce test vit dans la **suite de contrat** parce que le défaut était précisément
+      // une divergence entre les deux magasins : la version Dexie était correcte, celle
+      // en mémoire non. Un test propre à l'une des deux n'aurait pas vu l'écart.
+      const premier = await store.openDraft('C', '2026-09-20')
+      await store.saveDraft({
+        ...premier,
+        sets: premier.sets.map((set) =>
+          set.exerciseId === 'c-di'
+            ? { ...set, status: 'validated' as const, weight: 26, reps: 8 }
+            : { ...set, status: 'validated' as const },
+        ),
+      })
+      await store.finalizeSeance(premier.id)
+      await store.openDraft('C', '2026-09-27')
+
+      await store.adjustTarget('deadlift', { w: 95 })
+
+      const reconstruit = await store.loadDraft()
+      expect(reconstruit?.sets.find((set) => set.exerciseId === 'c-di')?.weight).toBe(26)
+      // Et l'ajustement demandé a bien eu lieu : sans ça le test ne prouverait que
+      // la moitié de ce qu'il prétend.
+      expect(reconstruit?.sets.find((set) => set.exerciseId === 'c-deadlift')?.weight).toBe(95)
+    })
   })
 })
