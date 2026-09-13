@@ -71,6 +71,8 @@ function renderSession(
     onAccessoryChange: vi.fn(),
     onNotesChange: vi.fn(),
     onTimerAdjust: vi.fn(),
+    keepAwake: false,
+    onKeepAwakeChange: vi.fn(),
     onTimerStop: vi.fn(),
     onFinish: vi.fn(),
     ...overrides,
@@ -80,6 +82,10 @@ function renderSession(
 }
 
 describe('SessionScreen', () => {
+  afterEach(() => {
+    Reflect.deleteProperty(navigator, 'wakeLock')
+  })
+
   it.each([
     ['A', '75 kg', '60 kg'],
     ['B', '70 kg', '+15 kg'],
@@ -121,6 +127,21 @@ describe('SessionScreen', () => {
     expect(button).toHaveClass('min-h-11')
     fireEvent.click(button)
     expect(onSelectType).toHaveBeenCalledWith('A')
+  })
+
+  it('laisse l’interrupteur d’écran allumé accessible entre deux chronos', () => {
+    Object.defineProperty(navigator, 'wakeLock', {
+      configurable: true,
+      value: { request: vi.fn() },
+    })
+    const onKeepAwakeChange = vi.fn()
+    renderSession('C', { keepAwake: true, onKeepAwakeChange })
+
+    expect(screen.queryByRole('timer')).not.toBeInTheDocument()
+    const button = screen.getByRole('button', { name: 'Écran allumé ✓' })
+    expect(button).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(button)
+    expect(onKeepAwakeChange).toHaveBeenCalledWith(false)
   })
 
   it('valide une série préremplie en un tap avec son identifiant', () => {

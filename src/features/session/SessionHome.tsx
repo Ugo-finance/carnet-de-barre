@@ -10,7 +10,7 @@ import {
 } from '../../domain/schedule'
 import type { Draft, SeanceType } from '../../domain/types'
 import { useDraftEditor } from './useDraftEditor'
-import { unlockTimerAudio } from './timer'
+import { unlockTimerAudio, useWakeLock } from './timer'
 import { SessionSummary } from './SessionSummary'
 
 export type SessionStore = Pick<
@@ -54,6 +54,8 @@ function SessionEditor({
   const [result, setResult] = useState<FinalizeResult>()
   const [confirmFinish, setConfirmFinish] = useState(false)
   const finalizingRef = useRef(false)
+  const keepAwake = editor.draft?.keepAwake ?? false
+  useWakeLock(keepAwake, Boolean(editor.draft) && !result)
 
   if (editor.loadError) {
     return <StatusScreen message={`Brouillon indisponible : ${editor.loadError.message}`} error />
@@ -101,7 +103,6 @@ function SessionEditor({
   const unfinishedCount = draft.sets.filter(
     (set) => set.status !== 'validated' && set.status !== 'skipped',
   ).length
-
   const requestFinish = () => {
     if (unfinishedCount > 0) setConfirmFinish(true)
     else void finish()
@@ -121,6 +122,8 @@ function SessionEditor({
         onAccessoryChange={editor.updateAccessory}
         onNotesChange={editor.updateNotes}
         onTimerAdjust={editor.adjustTimer}
+        keepAwake={keepAwake}
+        onKeepAwakeChange={editor.updateKeepAwake}
         onTimerStop={editor.stopTimer}
         onFinish={requestFinish}
         finishing={finalizing}

@@ -74,6 +74,10 @@ function fakeStore(options: { initial?: Draft; seances?: Seance[] } = {}) {
 const SUNDAY = new Date('2026-09-20T14:00:00Z')
 
 describe('SessionHome', () => {
+  afterEach(() => {
+    Reflect.deleteProperty(navigator, 'wakeLock')
+  })
+
   it('ouvre directement la séance C prévue le dimanche', async () => {
     const store = fakeStore()
     render(<SessionHome store={store} now={SUNDAY} />)
@@ -110,6 +114,21 @@ describe('SessionHome', () => {
 
     expect(await screen.findByText('Récup Soulevé de terre')).toBeInTheDocument()
     expect(screen.getByRole('timer')).toBeInTheDocument()
+  })
+
+  it('garde l’écran allumé entre deux chronos pendant la séance', async () => {
+    const request = vi.fn().mockResolvedValue({ release: vi.fn().mockResolvedValue(undefined) })
+    Object.defineProperty(navigator, 'wakeLock', {
+      configurable: true,
+      value: { request },
+    })
+    const initial = { ...draftFor('C', '2026-09-20'), keepAwake: true }
+    const store = fakeStore({ initial })
+
+    render(<SessionHome store={store} now={SUNDAY} />)
+
+    await waitFor(() => expect(request).toHaveBeenCalledWith('screen'))
+    expect(screen.queryByRole('timer')).not.toBeInTheDocument()
   })
 
   it('ne remplace une séance en cours qu’après un abandon explicite', async () => {

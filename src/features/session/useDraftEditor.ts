@@ -151,6 +151,13 @@ export function useDraftEditor(store: DraftPort, initialDraft?: Draft) {
     [commit],
   )
 
+  const updateKeepAwake = useCallback(
+    (keepAwake: boolean) => {
+      commit((current) => ({ ...current, keepAwake }))
+    },
+    [commit],
+  )
+
   const validateSet = useCallback(
     (setId: string, value: SetValue, timer: { seconds: number; label: string }) => {
       commit((current) => ({
@@ -191,6 +198,7 @@ export function useDraftEditor(store: DraftPort, initialDraft?: Draft) {
     updateSet,
     updateAccessory,
     updateNotes,
+    updateKeepAwake,
     validateSet,
     skipSet: (setId: string) => setStatus(setId, 'skipped'),
     editSet: (setId: string) => setStatus(setId, 'entered'),

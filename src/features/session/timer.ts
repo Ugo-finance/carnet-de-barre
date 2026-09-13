@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 
 type AudioContextConstructor = new () => AudioContext
 
+/** Une alarme très en retard surprend davantage qu'elle n'aide après retour dans la PWA. */
+export const LATE_NOTIFICATION_GRACE_MS = 5_000
+
 let audioContext: AudioContext | undefined
 
 function audioConstructor(): AudioContextConstructor | undefined {
@@ -49,30 +52,60 @@ export function useRecoveryTimer(
   const [timestamp, setTimestamp] = useState(() => now())
   const [visible, setVisible] = useState(() => document.visibilityState === 'visible')
   const notifiedDeadline = useRef<number | undefined>(undefined)
+  const backgroundedDeadline = useRef<number | undefined>(
+    document.visibilityState === 'visible' ? undefined : endsAt,
+  )
 
   useEffect(() => {
-    const refresh = () => setTimestamp(now())
-    refresh()
-    const interval = window.setInterval(refresh, 250)
+    let interval: number | undefined
+    backgroundedDeadline.current = document.visibilityState === 'visible' ? undefined : endsAt
+
+    const stopLoop = () => {
+      if (interval === undefined) return
+      window.clearInterval(interval)
+      interval = undefined
+    }
+    const refresh = () => {
+      const current = now()
+      setTimestamp(current)
+      if (current >= endsAt) stopLoop()
+      return current
+    }
+
+    // Une échéance déjà passée n'arme aucune boucle. Quand une boucle atteint zéro,
+    // elle se détruit elle-même ; seul un nouvel `endsAt` relance cet effet.
+    if (refresh() < endsAt) interval = window.setInterval(refresh, 250)
     const onVisibility = () => {
       const nextVisible = document.visibilityState === 'visible'
       setVisible(nextVisible)
-      if (nextVisible) refresh()
+      if (nextVisible) {
+        const current = refresh()
+        if (current < endsAt) backgroundedDeadline.current = undefined
+      } else {
+        backgroundedDeadline.current = endsAt
+      }
     }
     document.addEventListener('visibilitychange', onVisibility)
     return () => {
-      window.clearInterval(interval)
+      stopLoop()
       document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [now])
+  }, [endsAt, now])
 
   const remaining = secondsUntil(endsAt, timestamp)
   useEffect(() => {
-    if (remaining === 0 && visible && notifiedDeadline.current !== endsAt) {
+    const lateBy = timestamp - endsAt
+    const discoveredAfterBackground = backgroundedDeadline.current === endsAt
+    if (
+      remaining === 0 &&
+      visible &&
+      (!discoveredAfterBackground || lateBy <= LATE_NOTIFICATION_GRACE_MS) &&
+      notifiedDeadline.current !== endsAt
+    ) {
       notifiedDeadline.current = endsAt
       onElapsed()
     }
-  }, [endsAt, onElapsed, remaining, visible])
+  }, [endsAt, onElapsed, remaining, timestamp, visible])
 
   return remaining
 }

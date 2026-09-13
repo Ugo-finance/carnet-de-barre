@@ -45,6 +45,7 @@ describe('SetCard', () => {
   })
 
   it('permet de corriger une série validée avant finalisation', () => {
+    const onValidate = vi.fn()
     function ControlledSet() {
       const [value, setValue] = useState<EditableSet>({ ...planned, status: 'validated' })
       return (
@@ -52,7 +53,7 @@ describe('SetCard', () => {
           label="Top set"
           value={value}
           onChange={setValue}
-          onValidate={setValue}
+          onValidate={onValidate}
           onSkip={setValue}
         />
       )
@@ -60,9 +61,17 @@ describe('SetCard', () => {
 
     render(<ControlledSet />)
     fireEvent.click(screen.getByRole('button', { name: 'Modifier' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Augmenter Poids de 2,5' }))
 
-    expect(screen.getByText('Saisie')).toBeInTheDocument()
+    // Le statut validé est conservé dans le brouillon : même si iOS décharge la PWA
+    // ici, le remontage ne peut pas confondre cette correction avec une première saisie.
+    expect(screen.getByText('Correction')).toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: 'Poids' })).toBeEnabled()
+    expect(screen.getByRole('textbox', { name: 'Poids' })).toHaveValue('77,5')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Valider' }))
+    expect(onValidate).not.toHaveBeenCalled()
+    expect(screen.getByText('Validée')).toBeInTheDocument()
   })
 
   it('ne demande que les répétitions pour une série au poids du corps', () => {

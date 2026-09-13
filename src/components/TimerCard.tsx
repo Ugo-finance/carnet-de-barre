@@ -1,11 +1,6 @@
-import { useCallback, useState } from 'react'
+import { useCallback } from 'react'
 import { formatDuration } from '../domain/format'
-import {
-  notifyTimerDone,
-  useRecoveryTimer,
-  useWakeLock,
-  wakeLockAvailable,
-} from '../features/session/timer'
+import { notifyTimerDone, useRecoveryTimer } from '../features/session/timer'
 
 type TimerCardProps = {
   endsAt: number
@@ -15,11 +10,8 @@ type TimerCardProps = {
 }
 
 export function TimerCard({ endsAt, label, onAdjust, onStop }: TimerCardProps) {
-  const [keepAwake, setKeepAwake] = useState(false)
   const notify = useCallback(() => notifyTimerDone(), [])
   const remaining = useRecoveryTimer(endsAt, notify)
-  const available = wakeLockAvailable()
-  useWakeLock(keepAwake, remaining > 0)
 
   return (
     <aside className="sticky top-[max(0.5rem,env(safe-area-inset-top))] z-10 rounded-2xl border border-accent/60 bg-surface p-3 shadow-xl">
@@ -48,26 +40,13 @@ export function TimerCard({ endsAt, label, onAdjust, onStop }: TimerCardProps) {
         </div>
       </div>
 
-      <div className="mt-2 grid grid-cols-2 gap-2">
+      <div className="mt-2">
         <button
           type="button"
-          className="min-h-11 rounded-xl border border-line px-3 text-sm font-medium text-muted"
+          className="min-h-11 w-full rounded-xl border border-line px-3 text-sm font-medium text-muted"
           onClick={onStop}
         >
           Arrêter
-        </button>
-        <button
-          type="button"
-          className="min-h-11 rounded-xl border border-line px-3 text-sm font-medium text-muted disabled:opacity-50"
-          aria-pressed={keepAwake}
-          disabled={!available}
-          onClick={() => setKeepAwake((current) => !current)}
-        >
-          {available
-            ? keepAwake
-              ? 'Écran allumé ✓'
-              : 'Garder l’écran allumé'
-            : 'Veille habituelle'}
         </button>
       </div>
       <p className="mt-2 text-xs text-muted">

@@ -2,6 +2,7 @@ import { formatDate, formatLoad, formatNumber } from '../domain/format'
 import { describePlates, platesPerSide } from '../domain/plates'
 import { SEANCES, type ExerciseDef } from '../domain/program'
 import type { AccessoryLog, Draft, SeanceType, SetLog } from '../domain/types'
+import { wakeLockAvailable } from '../features/session/timer'
 import { SetCard, type EditableSet } from './SetCard'
 import { TimerCard } from './TimerCard'
 
@@ -27,6 +28,8 @@ type SessionScreenProps = {
   onAccessoryChange: (exerciseId: string, value: Pick<AccessoryLog, 'done' | 'note'>) => void
   onNotesChange: (notes: string) => void
   onTimerAdjust: (deltaMs: number) => void
+  keepAwake: boolean
+  onKeepAwakeChange: (enabled: boolean) => void
   onTimerStop: () => void
   onFinish: () => void
   finishing?: boolean
@@ -162,6 +165,8 @@ export function SessionScreen({
   onAccessoryChange,
   onNotesChange,
   onTimerAdjust,
+  keepAwake,
+  onKeepAwakeChange,
   onTimerStop,
   onFinish,
   finishing = false,
@@ -169,6 +174,7 @@ export function SessionScreen({
   errorMessage,
 }: SessionScreenProps) {
   const definition = SEANCES[draft.type]
+  const canKeepAwake = wakeLockAvailable()
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col gap-4 py-4 pb-8">
@@ -205,6 +211,19 @@ export function SessionScreen({
             )
           })}
         </nav>
+        <button
+          type="button"
+          className="mt-2 min-h-11 w-full rounded-xl border border-line px-3 text-sm font-medium text-muted disabled:opacity-50"
+          aria-pressed={keepAwake}
+          disabled={!canKeepAwake}
+          onClick={() => onKeepAwakeChange(!keepAwake)}
+        >
+          {canKeepAwake
+            ? keepAwake
+              ? 'Écran allumé ✓'
+              : 'Garder l’écran allumé'
+            : 'Veille habituelle'}
+        </button>
         {errorMessage ? (
           <p
             className="mt-3 rounded-xl border border-bad/60 bg-bad/10 p-3 text-sm text-fg"
