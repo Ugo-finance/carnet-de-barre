@@ -167,3 +167,95 @@ export function planAccessory(
     outcome: 'maintien',
   }
 }
+
+/** Un exercice du groupe et son historique, pour une décision commune. */
+export interface AccessoryGroupMember {
+  exercise: ExerciseDef
+  history: readonly AccessoryPerformance[]
+}
+
+/**
+ * Décide d'une charge **commune** à plusieurs exercices — CB-45.
+ *
+ * Ugo enchaîne dips et tractions lestées avec les mêmes disques. Deux suggestions
+ * divergentes l'obligeraient à recharger la ceinture au milieu du superset, ce qui
+ * défait l'intérêt de l'enchaînement. Il a tranché le 13.09.2026 : **charge commune,
+ * qui monte quand les deux passent**.
+ *
+ * Un seul principe gouverne le groupe : **il ne bouge que sur preuve unanime.**
+ *
+ * - monter dès qu'un seul mouvement le mérite imposerait à l'autre une charge qu'il
+ *   n'a pas gagnée — c'est exactement ce qu'Ugo a écarté ;
+ * - descendre dès qu'un seul bloque punirait celui qui progresse. Ugo n'a tranché que
+ *   la montée ; la symétrie est **mon interprétation**, signalée comme telle, et se
+ *   renverse en changeant `every` en `some`.
+ *
+ * Les répétitions, elles, restent **propres à chaque exercice** : il peut faire 10 aux
+ * dips et 8 aux tractions à la même charge, et doit voir ces deux chiffres-là.
+ */
+export function planLinkedAccessories(
+  members: readonly AccessoryGroupMember[],
+): Map<string, AccessoryPlan> {
+  const plans = members.map((member) => ({
+    member,
+    plan: planAccessory(member.exercise, member.history),
+  }))
+
+  // Le pas le plus fin du groupe : si deux matériels s'y mélangeaient, proposer le
+  // saut du plus grossier ferait tomber l'autre sur une charge qui n'existe pas.
+  const pas = Math.min(...members.map((member) => weightStepFor(member.exercise.loadKind)))
+
+  // Charge de référence : la **plus petite** des dernières charges connues. Si les
+  // deux ont divergé par le passé, les réaligner vers le bas ne propose jamais à Ugo
+  // une charge qu'il n'a pas tenue sur les deux mouvements.
+  const dernieres = members
+    .map((member) => member.history[0]?.weight)
+    .filter((weight): weight is number => weight != null)
+  const base = dernieres.length > 0 ? Math.min(...dernieres) : (plans[0]?.plan.weight ?? null)
+
+  const tousMontent = plans.every(({ plan }) => plan.outcome === 'monte')
+  const tousBloquent = plans.every(({ plan }) => plan.outcome === 'blocage')
+
+  let outcome: AccessoryOutcome = 'maintien'
+  let commune = base
+  // Aucune charge connue sur aucun membre : il n'y a rien à maintenir, on démarre.
+  // Annoncer un « maintien » ici ferait passer une première séance pour une reprise.
+  if (base == null || dernieres.length === 0) {
+    outcome = 'depart'
+  } else if (tousMontent) {
+    outcome = 'monte'
+    commune = base + pas
+  } else if (tousBloquent) {
+    outcome = 'blocage'
+    commune = Math.max(0, base - pas)
+  }
+
+  // Les répétitions se redérivent du **résultat du groupe**, jamais du plan individuel :
+  // un exercice qui montait seul doit se voir proposer un maintien, pas le
+  // pré-remplissage d'une montée qui n'a pas lieu.
+  return new Map(
+    plans.map(({ member, plan }) => {
+      const range = member.exercise.repsRange
+      const series = member.exercise.sets
+      if (!range || outcome === 'depart') return [member.exercise.id, { ...plan, weight: commune }]
+
+      const [bas, haut] = range
+      if (outcome === 'monte') {
+        const apres = member.exercise.repsAfterRise === 'hold' ? haut : bas
+        return [member.exercise.id, { weight: commune, reps: repeat(apres, series), outcome }]
+      }
+      if (outcome === 'blocage') {
+        return [member.exercise.id, { weight: commune, reps: repeat(bas, series), outcome }]
+      }
+      const last = member.history[0]
+      return [
+        member.exercise.id,
+        {
+          weight: commune,
+          reps: Array.from({ length: series }, (_, index) => last?.reps[index] ?? bas),
+          outcome,
+        },
+      ]
+    }),
+  )
+}

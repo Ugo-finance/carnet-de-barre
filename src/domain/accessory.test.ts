@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { STALL_SESSIONS, planAccessory, type AccessoryPerformance } from './accessory.ts'
+import {
+  STALL_SESSIONS,
+  planAccessory,
+  planLinkedAccessories,
+  type AccessoryPerformance,
+  type AccessoryPlan,
+} from './accessory.ts'
 import { findExercise } from './program.ts'
 import type { ExerciseDef } from './program.ts'
 
@@ -236,5 +242,83 @@ describe('un exercice sans fourchette', () => {
 
     expect(plan).toMatchObject({ weight: 24, outcome: 'depart' })
     expect(plan.reps).toEqual([8, 8, 8])
+  })
+})
+
+describe('charge commune aux dips et aux tractions', () => {
+  // Décision d'Ugo du 13.09.2026 : « charge commune, montée quand les deux passent ».
+  // Il enchaîne les deux avec les mêmes disques ; deux suggestions divergentes
+  // l'obligeraient à recharger la ceinture au milieu du superset.
+  const groupe = (
+    dips: AccessoryPerformance[],
+    tractions: AccessoryPerformance[],
+  ): Map<string, AccessoryPlan> =>
+    planLinkedAccessories([
+      { exercise: DIPS, history: dips },
+      { exercise: TRACTIONS, history: tractions },
+    ])
+
+  it('monte les deux quand les deux atteignent le haut', () => {
+    const plans = groupe(
+      [seance('2026-09-20', 10, 10, 10, 10)],
+      [seance('2026-09-20', 10, 10, 10, 10)],
+    )
+
+    expect(plans.get('a-dips')).toMatchObject({ weight: 12.5, outcome: 'monte' })
+    expect(plans.get('a-tractions-lestees')).toMatchObject({ weight: 12.5, outcome: 'monte' })
+  })
+
+  it('ne monte aucun des deux si un seul a passé', () => {
+    // Le cœur de l'arbitrage : les dips ont mérité 12,5 kg, les tractions non. Monter
+    // imposerait aux tractions une charge qu'Ugo n'a pas tenue.
+    const plans = groupe(
+      [seance('2026-09-20', 10, 10, 10, 10)],
+      [seance('2026-09-20', 10, 9, 9, 8)],
+    )
+
+    expect(plans.get('a-dips')).toMatchObject({ weight: 10, outcome: 'maintien' })
+    expect(plans.get('a-tractions-lestees')).toMatchObject({ weight: 10, outcome: 'maintien' })
+  })
+
+  it('garde des répétitions propres à chaque exercice', () => {
+    // La charge est commune, l'effort ne l'est pas : il doit voir 10/10/10 aux dips et
+    // 9/9/8 aux tractions, sinon il perd le fil de ce qu'il a à battre sur chacun.
+    const plans = groupe(
+      [seance('2026-09-20', 10, 10, 10, 10)],
+      [seance('2026-09-20', 10, 9, 9, 8)],
+    )
+
+    expect(plans.get('a-dips')?.reps).toEqual([10, 10, 10])
+    expect(plans.get('a-tractions-lestees')?.reps).toEqual([9, 9, 8])
+  })
+
+  it('ne redescend que si les deux sont bloqués', () => {
+    const bloque = [
+      seance('2026-09-20', 10, 8, 8, 8),
+      seance('2026-09-13', 10, 8, 8, 8),
+      seance('2026-09-06', 10, 8, 8, 8),
+    ]
+    const progresse = [
+      seance('2026-09-20', 10, 9, 8, 8),
+      seance('2026-09-13', 10, 8, 8, 8),
+      seance('2026-09-06', 10, 8, 8, 8),
+    ]
+
+    expect(groupe(bloque, progresse).get('a-dips')).toMatchObject({ outcome: 'maintien' })
+    expect(groupe(bloque, bloque).get('a-dips')).toMatchObject({ weight: 7.5, outcome: 'blocage' })
+    expect(groupe(bloque, bloque).get('a-tractions-lestees')?.weight).toBe(7.5)
+  })
+
+  it('réaligne vers le bas deux charges qui auraient divergé', () => {
+    // Ne jamais proposer une charge qu'Ugo n'a pas tenue sur les deux mouvements.
+    const plans = groupe([seance('2026-09-20', 12.5, 8, 8, 8)], [seance('2026-09-20', 10, 8, 8, 8)])
+
+    expect(plans.get('a-dips')?.weight).toBe(10)
+    expect(plans.get('a-tractions-lestees')?.weight).toBe(10)
+  })
+
+  it('n’a rien à décider sans le moindre historique', () => {
+    const plans = groupe([], [])
+    expect(plans.get('a-dips')).toMatchObject({ weight: 10, outcome: 'depart' })
   })
 })

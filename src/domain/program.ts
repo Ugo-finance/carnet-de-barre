@@ -119,6 +119,20 @@ export interface ExerciseDef {
    * d'être une condition sur des identifiants d'exercice enfouie dans le moteur.
    */
   repsAfterRise?: 'bottom' | 'hold'
+  /**
+   * Exercices dont la charge suggérée avance **ensemble**.
+   *
+   * Ugo enchaîne dips et tractions lestées en superset avec les mêmes disques : des
+   * suggestions divergentes l'obligeraient à recharger la ceinture entre deux
+   * mouvements enchaînés, ce qui défait l'intérêt du superset. Il a tranché le
+   * 13.09.2026 : charge commune, qui monte quand les deux passent.
+   *
+   * Volontairement distinct de `supersetGroup` : le rowing et le développé militaire
+   * sont eux aussi en superset, mais partent de 22 et 20 kg. Être enchaînés n'implique
+   * pas de partager une charge, et lier automatiquement par superset les aurait
+   * alignés de force.
+   */
+  loadGroup?: string
   /** Séries menées au maximum de répétitions (moins une ou deux). */
   amrap?: boolean
 }
@@ -171,6 +185,7 @@ export const SEANCES: Record<SeanceType, SeanceDef> = {
         reps: null,
         repsRange: [8, 10],
         repsAfterRise: 'hold',
+        loadGroup: 'a-lest',
         suggestedWeight: 10,
         restSeconds: REST.superset,
         supersetGroup: 'a-ss',
@@ -185,6 +200,7 @@ export const SEANCES: Record<SeanceType, SeanceDef> = {
         reps: null,
         repsRange: [8, 10],
         repsAfterRise: 'hold',
+        loadGroup: 'a-lest',
         suggestedWeight: 10,
         restSeconds: REST.superset,
         supersetGroup: 'a-ss',
