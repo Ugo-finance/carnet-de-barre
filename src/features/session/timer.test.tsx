@@ -72,6 +72,25 @@ describe('retour au premier plan', () => {
     vi.useRealTimers()
   })
 
+  it('avertit même en retard quand la page est restée au premier plan', () => {
+    vi.useFakeTimers()
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible')
+    vi.setSystemTime(0)
+    const elapsed = vi.fn()
+    const { result } = renderHook(() => useRecoveryTimer(150_000, elapsed))
+
+    // `setSystemTime` simule un fil principal bloqué : aucun tour de boucle n'a pu
+    // constater l'échéance avant ce réveil très tardif.
+    vi.setSystemTime(200_000)
+    act(() => vi.advanceTimersByTime(250))
+
+    expect(result.current).toBe(0)
+    expect(elapsed).toHaveBeenCalledOnce()
+
+    vi.restoreAllMocks()
+    vi.useRealTimers()
+  })
+
   it('arrête la boucle à zéro et ne la relance que pour une nouvelle échéance', () => {
     vi.useFakeTimers()
     vi.setSystemTime(0)

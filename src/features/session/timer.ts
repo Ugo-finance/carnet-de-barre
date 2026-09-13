@@ -52,9 +52,13 @@ export function useRecoveryTimer(
   const [timestamp, setTimestamp] = useState(() => now())
   const [visible, setVisible] = useState(() => document.visibilityState === 'visible')
   const notifiedDeadline = useRef<number | undefined>(undefined)
+  const backgroundedDeadline = useRef<number | undefined>(
+    document.visibilityState === 'visible' ? undefined : endsAt,
+  )
 
   useEffect(() => {
     let interval: number | undefined
+    backgroundedDeadline.current = document.visibilityState === 'visible' ? undefined : endsAt
 
     const stopLoop = () => {
       if (interval === undefined) return
@@ -74,7 +78,12 @@ export function useRecoveryTimer(
     const onVisibility = () => {
       const nextVisible = document.visibilityState === 'visible'
       setVisible(nextVisible)
-      if (nextVisible) refresh()
+      if (nextVisible) {
+        const current = refresh()
+        if (current < endsAt) backgroundedDeadline.current = undefined
+      } else {
+        backgroundedDeadline.current = endsAt
+      }
     }
     document.addEventListener('visibilitychange', onVisibility)
     return () => {
@@ -86,10 +95,11 @@ export function useRecoveryTimer(
   const remaining = secondsUntil(endsAt, timestamp)
   useEffect(() => {
     const lateBy = timestamp - endsAt
+    const discoveredAfterBackground = backgroundedDeadline.current === endsAt
     if (
       remaining === 0 &&
       visible &&
-      lateBy <= LATE_NOTIFICATION_GRACE_MS &&
+      (!discoveredAfterBackground || lateBy <= LATE_NOTIFICATION_GRACE_MS) &&
       notifiedDeadline.current !== endsAt
     ) {
       notifiedDeadline.current = endsAt
