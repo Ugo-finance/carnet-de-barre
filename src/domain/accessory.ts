@@ -78,6 +78,24 @@ function repeat(value: number, count: number): number[] {
 }
 
 /**
+ * Les séances dont la charge est **connue**, de la plus récente à la plus ancienne.
+ *
+ * Une séance sans charge notée ne prouve ni montée ni blocage : elle est invisible au
+ * moteur, et surtout elle **n'efface pas** la dernière charge connue. Sans ce filtre,
+ * une seule séance où Ugo oublie de noter le poids faisait repartir l'app de la charge
+ * de départ — 26 kg durement gagnés redevenaient 24. Une inconnue n'est jamais un
+ * échec, et ne doit pas non plus être une remise à zéro.
+ */
+function chargesConnues(history: readonly AccessoryPerformance[]): readonly AccessoryPerformance[] {
+  return history.filter((performance) => performance.weight != null)
+}
+
+/** Dernière charge réellement notée sur cet exercice, s'il y en a une. */
+function derniereChargeConnue(history: readonly AccessoryPerformance[]): number | null {
+  return chargesConnues(history)[0]?.weight ?? null
+}
+
+/**
  * Ce que l'app doit proposer sur cet accessoire à la prochaine séance.
  *
  * `history` contient les séances où cet exercice a été **réalisé**, de la plus récente
@@ -99,7 +117,10 @@ export function planAccessory(
   }
 
   const [bas, haut] = range
-  const last = history[0]
+  // On raisonne sur les séances **dont la charge est connue**, pas sur la plus récente :
+  // une séance au poids non noté ne décide de rien et n'efface rien.
+  const connues = chargesConnues(history)
+  const last = connues[0]
   if (!last || last.weight == null) {
     return { weight: depart, reps: repeat(bas, exercise.sets), outcome: 'depart' }
   }
@@ -132,7 +153,7 @@ export function planAccessory(
   // bloquées à 24. Agréger sans regarder la suite faisait redescendre Ugo au moment
   // précis où il revenait sur la charge après l'avoir allégée.
   const suite: AccessoryPerformance[] = []
-  for (const performance of history) {
+  for (const performance of connues) {
     if (performance.weight !== charge) break
     suite.push(performance)
   }
@@ -214,10 +235,12 @@ export function planLinkedAccessories(
   // atteints aux dips : l'absence de preuve redevenait une preuve, ce que ce fichier
   // refuse partout ailleurs.
   const references = members
-    .map((member) => member.history[0]?.weight ?? member.exercise.suggestedWeight ?? null)
+    .map(
+      (member) => derniereChargeConnue(member.history) ?? member.exercise.suggestedWeight ?? null,
+    )
     .filter((weight): weight is number => weight != null)
   const base = references.length > 0 ? Math.min(...references) : null
-  const aucunHistorique = members.every((member) => member.history[0]?.weight == null)
+  const aucunHistorique = members.every((member) => derniereChargeConnue(member.history) == null)
 
   const tousMontent = plans.every(({ plan }) => plan.outcome === 'monte')
   const tousBloquent = plans.every(({ plan }) => plan.outcome === 'blocage')
@@ -253,7 +276,7 @@ export function planLinkedAccessories(
       if (outcome === 'blocage') {
         return [member.exercise.id, { weight: commune, reps: repeat(bas, series), outcome }]
       }
-      const last = member.history[0]
+      const last = chargesConnues(member.history)[0]
       return [
         member.exercise.id,
         {

@@ -232,6 +232,47 @@ describe('les trois trous que mes scénarios ne pouvaient pas voir', () => {
   })
 })
 
+describe('une charge non notée n’efface pas la charge connue', () => {
+  // Cinquième P1 de Codex, même famille que les quatre autres : l'inconnue traitée
+  // comme une information. Ugo oublie de noter le poids une fois, et l'app repartait
+  // de la charge de départ — 26 kg durement gagnés redevenaient 24.
+
+  it('ignore la séance sans poids et garde la dernière charge connue', () => {
+    const plan = planAccessory(DI, [
+      seance('2026-09-27', null, 10, 9, 8),
+      seance('2026-09-20', 26, 10, 9, 8),
+    ])
+
+    expect(plan).toMatchObject({ weight: 26, outcome: 'maintien' })
+  })
+
+  it('ne laisse pas une séance sans poids interrompre un blocage', () => {
+    // Trois séances stériles à 24, avec un poids non noté glissé au milieu. La séance
+    // invisible ne doit ni compter ni couper la suite.
+    const plan = planAccessory(DI, [
+      seance('2026-09-27', 24, 8, 8, 8),
+      seance('2026-09-20', null, 8, 8, 8),
+      seance('2026-09-13', 24, 8, 8, 8),
+      seance('2026-09-06', 24, 8, 8, 8),
+    ])
+
+    expect(plan).toMatchObject({ weight: 22, outcome: 'blocage' })
+  })
+
+  it('n’aligne pas le groupe vers le bas à cause d’un poids oublié', () => {
+    const plans = planLinkedAccessories([
+      {
+        exercise: DIPS,
+        history: [seance('2026-09-27', null, 8, 8, 8), seance('2026-09-20', 12.5, 8, 8, 8)],
+      },
+      { exercise: TRACTIONS, history: [seance('2026-09-20', 12.5, 8, 8, 8)] },
+    ])
+
+    expect(plans.get('a-dips')?.weight).toBe(12.5)
+    expect(plans.get('a-tractions-lestees')?.weight).toBe(12.5)
+  })
+})
+
 describe('un exercice sans fourchette', () => {
   it('ne décide rien plutôt que d’inventer un seuil', () => {
     // Les tractions lestées de la séance A n'avaient pas de fourchette avant CB-45 :
