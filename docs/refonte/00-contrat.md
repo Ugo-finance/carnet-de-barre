@@ -30,9 +30,12 @@ Sous une seule règle : *une livraison peut masquer une métrique indéfinie, el
 afficher une donnée de démonstration comme une donnée réelle.*
 
 4. **e1RM, tonnage, carte record, bloc « Bloc 2 · Semaine 1/8 », flèches de tendance : non rendus.**
-   La maquette les qualifie elle-même d'illustratifs, et aucune donnée du dépôt ne permet de les
-   calculer — il n'existe notamment aucune date de début de cycle. Les écrans se livrent sans eux.
-   Leur formule reste à définir (CB-13).
+   La maquette les qualifie elle-même d'illustratifs. Ce qui manque n'est pas la même chose pour
+   tous : l'e1RM, le record et le tonnage **ont leurs données** — les top sets existent — et
+   attendent une **formule contractuelle**, celle de CB-13 ; le bloc de huit semaines et les
+   flèches de tendance attendent en plus une donnée qui n'existe nulle part, date de début de
+   cycle et période de comparaison. Les écrans se livrent sans les uns ni les autres, mais un
+   ticket futur ne doit pas conclure à tort qu'il manque une donnée là où il manque une règle.
 5. **Polices embarquées en WOFF2**, licences consignées. Aucun appel à Google Fonts : il casserait
    l'usage hors ligne, qui est l'usage en salle.
 6. **Chrono : aucune promesse d'alarme écran verrouillé.** La maquette annonce un comportement
@@ -58,13 +61,36 @@ Les paliers d'un exercice forment une suite **strictement croissante**, obtenue 
 3. dédupliquer, en gardant la première occurrence et ses répétitions.
 
 Un palier qui disparaît à cible basse est une **conséquence** de ces règles, jamais un cas
-particulier écrit à la main. C'est ce que voulait dire « sous 60 kg de cible barre, le palier
-~87 % saute » : ce n'est pas un seuil, c'est la règle 2 qui s'applique.
+particulier écrit à la main.
+
+### Ce que ces règles donnent réellement à cible basse
+
+Le document d'origine annonce « sous 60 kg de cible barre, le palier ~87 % saute ». **C'est
+faux**, et il faut le dire ici plutôt que de laisser deux comportements déclarés à la fois :
+à 57,5 kg de cible, 87 % vaut 50,025 et s'arrondit à 50 kg, qui reste strictement sous la
+charge de travail. Le palier ne saute pas.
+
+Ce qui saute, c'est le palier à **50 %**, puis celui à 70 % — ils s'écrasent sur la barre à
+vide et tombent par la règle 3.2. Le palier haut est au contraire le dernier à survivre. Le
+comportement vérifié :
+
+| Cible | Paliers |
+|---|---|
+| 57,5 | 20×8 · 30×5 · 40×3 · 50×1 |
+| 50 | 20×8 · 25×5 · 35×3 · 42,5×1 |
+| 40 | 20×8 · 27,5×3 · 35×1 |
+| 32,5 | 20×8 · 22,5×3 · 27,5×1 |
+| 25 | 20×8 · 22,5×1 |
+
+Aucune cible d'Ugo n'est aujourd'hui sous 60 kg à la barre : le cas est théorique, et c'est
+pourquoi il est tranché ici plutôt que remonté comme un blocage. **La phrase d'origine est
+corrigée dans `01-echauffement.md`.** Si Ugo veut qu'un single à 87 % disparaisse sous un
+seuil donné, ce sera un seuil explicite et non une conséquence — voir § 7.
 
 ### 3.3 Politiques
 
-Six politiques, déclarées **exercice par exercice dans la table du programme**. Aucune déduction
-au nom de l'exercice ni au groupe musculaire : « premier mouvement à froid » ne se lit pas dans une
+Sept politiques, `aucun` compris, déclarées **exercice par exercice dans la table du
+programme**. Aucune déduction au nom de l'exercice ni au groupe musculaire : « premier mouvement à froid » ne se lit pas dans une
 chaîne de caractères, et une déduction implicite se tromperait silencieusement au premier exercice
 ajouté.
 
@@ -181,5 +207,8 @@ contredit d'une ligne si Ugo ou son coach le corrige.
 - **Mode pressé et échauffement** : Q4 réduit les exercices, le document d'origine évoque aussi de
   réduire les paliers. Aucune règle n'est validée : le mode pressé ne touche à aucun palier, et
   Ugo peut passer une série individuellement.
+- **Un seuil sous lequel la rampe s'arrête** : les règles ne font disparaître aucun palier haut
+  à cible basse, et produisent par exemple 20 · 22,5 pour une cible de 25 kg. C'est cohérent,
+  mais personne n'a dit que c'était voulu. Aucune cible actuelle n'est concernée.
 - **Disques de 1,25 kg en salle** : le pas `added` est à 2,5 kg, soit +25 % sur 10 kg de lest.
   Question posée au coach, sans réponse à ce jour.

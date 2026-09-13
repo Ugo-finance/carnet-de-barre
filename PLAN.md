@@ -173,8 +173,9 @@ données, et renvoie au contrat pour le reste.
   contrainte étant la hauteur de départ de la barre et non le poids des disques.
 - **Les optionnels deviennent des séries structurées** (CB-69). Curls, élévations, face pulls et
   abdos entrent dans `sets` avec charge et répétitions. C'est la condition de la séance en focus :
-  sans eux, la file s'interrompt avant la fin. **Révise Q4** — le mode pressé continue de replier
-  les exercices 3 et suivants, mais il n'y a plus d'exercice en texte libre à traiter à part.
+  sans eux, la file s'interrompt avant la fin. **Révise Q2**, qui rangeait ces quatre exercices
+  hors des accessoires structurés. Q4 est inchangée : le mode pressé continue de replier les
+  exercices 3 et suivants, et son périmètre ne dépend pas du genre de l'exercice.
 
 ### Tranché par les agents
 
