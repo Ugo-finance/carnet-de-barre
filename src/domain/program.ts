@@ -6,6 +6,7 @@
  */
 
 import type { LiftKey, LoadKind, SeanceType } from './types.ts'
+import type { WarmupPolicy } from './warmup.ts'
 
 /** Barre olympique standard. */
 export const BAR_WEIGHT = 20
@@ -92,6 +93,14 @@ export interface ExerciseDef {
   loadKind: LoadKind
   /** Schéma affiché sous le titre de la carte. */
   scheme: string
+  /**
+   * Ce que cet exercice reçoit comme échauffement — CB-54.
+   *
+   * Obligatoire, et déclaré ici plutôt que déduit : « premier mouvement d'un pattern
+   * froid » ne se lit pas dans un nom d'exercice. Le champ force à trancher pour chaque
+   * entrée, y compris celles qu'on ajoutera. Valeurs et motifs : `docs/refonte/00-contrat.md`.
+   */
+  warmup: WarmupPolicy
   /** Présent si l'exercice est piloté par le moteur de progression. */
   lift?: LiftKey
   /** Nombre de séries hors top set. */
@@ -151,6 +160,7 @@ export const SEANCES: Record<SeanceType, SeanceDef> = {
     exercises: [
       {
         id: 'a-squat',
+        warmup: 'barreComplet',
         label: 'Squat',
         kind: 'topset',
         loadKind: 'barTotal',
@@ -163,6 +173,7 @@ export const SEANCES: Record<SeanceType, SeanceDef> = {
       },
       {
         id: 'a-bench-vol',
+        warmup: 'barreReduit',
         label: 'Développé couché volume',
         kind: 'volume',
         loadKind: 'barTotal',
@@ -174,6 +185,7 @@ export const SEANCES: Record<SeanceType, SeanceDef> = {
       },
       {
         id: 'a-tractions-lestees',
+        warmup: 'lestReduit',
         label: 'Tractions lestées',
         kind: 'accessory',
         loadKind: 'added',
@@ -192,6 +204,7 @@ export const SEANCES: Record<SeanceType, SeanceDef> = {
       },
       {
         id: 'a-dips',
+        warmup: 'aucun',
         label: 'Dips lestés',
         kind: 'accessory',
         loadKind: 'added',
@@ -207,6 +220,7 @@ export const SEANCES: Record<SeanceType, SeanceDef> = {
       },
       {
         id: 'a-curls',
+        warmup: 'aucun',
         label: 'Curls',
         kind: 'optional',
         loadKind: 'perDumbbell',
@@ -218,6 +232,7 @@ export const SEANCES: Record<SeanceType, SeanceDef> = {
       },
       {
         id: 'a-elevations',
+        warmup: 'aucun',
         label: 'Élévations latérales',
         kind: 'optional',
         loadKind: 'perDumbbell',
@@ -235,6 +250,7 @@ export const SEANCES: Record<SeanceType, SeanceDef> = {
     exercises: [
       {
         id: 'b-bench',
+        warmup: 'barreComplet',
         label: 'Développé couché',
         kind: 'topset',
         loadKind: 'barTotal',
@@ -247,6 +263,7 @@ export const SEANCES: Record<SeanceType, SeanceDef> = {
       },
       {
         id: 'b-tractions',
+        warmup: 'lestComplet',
         label: 'Tractions lestées, prise large',
         kind: 'topset',
         loadKind: 'added',
@@ -259,6 +276,7 @@ export const SEANCES: Record<SeanceType, SeanceDef> = {
       },
       {
         id: 'b-rowing',
+        warmup: 'aucun',
         label: 'Rowing haltères',
         kind: 'accessory',
         loadKind: 'perDumbbell',
@@ -274,6 +292,7 @@ export const SEANCES: Record<SeanceType, SeanceDef> = {
       },
       {
         id: 'b-dm',
+        warmup: 'aucun',
         label: 'Développé militaire haltères',
         kind: 'accessory',
         loadKind: 'perDumbbell',
@@ -287,6 +306,7 @@ export const SEANCES: Record<SeanceType, SeanceDef> = {
       },
       {
         id: 'b-face-pulls',
+        warmup: 'aucun',
         label: 'Face pulls',
         kind: 'optional',
         loadKind: 'machine',
@@ -297,6 +317,7 @@ export const SEANCES: Record<SeanceType, SeanceDef> = {
       },
       {
         id: 'b-abdos',
+        warmup: 'aucun',
         label: 'Abdos roulette',
         kind: 'optional',
         loadKind: 'bodyweight',
@@ -313,6 +334,7 @@ export const SEANCES: Record<SeanceType, SeanceDef> = {
     exercises: [
       {
         id: 'c-deadlift',
+        warmup: 'barrePlancher',
         label: 'Soulevé de terre',
         kind: 'topset',
         loadKind: 'barTotal',
@@ -326,6 +348,7 @@ export const SEANCES: Record<SeanceType, SeanceDef> = {
       {
         // Deuxième exercice de la séance, pas un accessoire : reste visible en mode pressé.
         id: 'c-di',
+        warmup: 'accessoire',
         label: 'Développé incliné haltères',
         kind: 'accessory',
         loadKind: 'perDumbbell',
@@ -340,6 +363,7 @@ export const SEANCES: Record<SeanceType, SeanceDef> = {
       },
       {
         id: 'c-presse',
+        warmup: 'aucun',
         label: 'Presse 45°',
         kind: 'accessory',
         loadKind: 'machine',
@@ -352,6 +376,7 @@ export const SEANCES: Record<SeanceType, SeanceDef> = {
       },
       {
         id: 'c-tractions-pdc',
+        warmup: 'aucun',
         label: 'Tractions poids de corps',
         kind: 'accessory',
         loadKind: 'bodyweight',
@@ -364,6 +389,7 @@ export const SEANCES: Record<SeanceType, SeanceDef> = {
       },
       {
         id: 'c-elevations',
+        warmup: 'aucun',
         label: 'Élévations latérales',
         kind: 'optional',
         loadKind: 'perDumbbell',
