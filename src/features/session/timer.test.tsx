@@ -17,7 +17,7 @@ describe('calcul du chrono', () => {
 })
 
 describe('retour au premier plan', () => {
-  it('recalcule depuis l’horloge et avertit une seule fois à l’échéance', () => {
+  it('recalcule depuis l’horloge sans alarme quand l’échéance est passée depuis plus de 5 s', () => {
     vi.useFakeTimers()
     let visible = true
     vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() =>
@@ -32,6 +32,31 @@ describe('retour au premier plan', () => {
     act(() => {
       document.dispatchEvent(new Event('visibilitychange'))
       vi.setSystemTime(200_000)
+      vi.advanceTimersByTime(250)
+    })
+    expect(result.current).toBe(0)
+    expect(elapsed).not.toHaveBeenCalled()
+
+    visible = true
+    act(() => document.dispatchEvent(new Event('visibilitychange')))
+    expect(elapsed).not.toHaveBeenCalled()
+
+    vi.restoreAllMocks()
+    vi.useRealTimers()
+  })
+
+  it('avertit une seule fois quand le retour arrive dans les 5 s après l’échéance', () => {
+    vi.useFakeTimers()
+    let visible = false
+    vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() =>
+      visible ? 'visible' : 'hidden',
+    )
+    vi.setSystemTime(0)
+    const elapsed = vi.fn()
+    const { result } = renderHook(() => useRecoveryTimer(150_000, elapsed))
+
+    act(() => {
+      vi.setSystemTime(154_000)
       vi.advanceTimersByTime(250)
     })
     expect(result.current).toBe(0)

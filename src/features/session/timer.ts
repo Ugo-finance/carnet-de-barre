@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 
 type AudioContextConstructor = new () => AudioContext
 
+/** Une alarme très en retard surprend davantage qu'elle n'aide après retour dans la PWA. */
+export const LATE_NOTIFICATION_GRACE_MS = 5_000
+
 let audioContext: AudioContext | undefined
 
 function audioConstructor(): AudioContextConstructor | undefined {
@@ -82,11 +85,17 @@ export function useRecoveryTimer(
 
   const remaining = secondsUntil(endsAt, timestamp)
   useEffect(() => {
-    if (remaining === 0 && visible && notifiedDeadline.current !== endsAt) {
+    const lateBy = timestamp - endsAt
+    if (
+      remaining === 0 &&
+      visible &&
+      lateBy <= LATE_NOTIFICATION_GRACE_MS &&
+      notifiedDeadline.current !== endsAt
+    ) {
       notifiedDeadline.current = endsAt
       onElapsed()
     }
-  }, [endsAt, onElapsed, remaining, visible])
+  }, [endsAt, onElapsed, remaining, timestamp, visible])
 
   return remaining
 }
