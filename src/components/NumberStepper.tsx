@@ -83,20 +83,20 @@ export function NumberStepper({
       <label className="text-sm font-medium text-muted" htmlFor={inputId}>
         {label}
       </label>
-      <div className="flex min-w-0 items-stretch overflow-hidden rounded-xl border border-line bg-bg">
-        <button
-          type="button"
-          className="min-h-11 min-w-11 border-r border-line text-xl text-fg disabled:opacity-40"
-          aria-label={`Diminuer ${label} de ${stepLabel}`}
-          onClick={() => changeBy(-1)}
-          disabled={disabled || (value !== null && value <= min)}
-        >
-          −
-        </button>
-        <div className="flex min-w-0 flex-1 items-center justify-center gap-1 px-1">
+      {/*
+        La valeur occupe sa propre ligne, les commandes sont dessous.
+
+        Avec les deux boutons de part et d'autre, il ne restait que 17 px pour le
+        nombre sur un écran de 390 px : « 92,5 » en demande 43, donc toutes les charges
+        étaient tronquées — mesuré, pas supposé. Empiler rend au nombre la largeur
+        entière de la colonne et permet de le grossir, ce qui est le point : cet écran
+        se lit debout, à bout de bras, entre deux séries.
+      */}
+      <div className="min-w-0 overflow-hidden rounded-xl border border-line bg-bg">
+        <div className="flex min-w-0 items-baseline justify-center gap-1 px-2 py-2">
           <input
             id={inputId}
-            className="num min-w-0 flex-1 bg-transparent text-center text-lg font-semibold outline-none"
+            className="num min-w-0 flex-1 bg-transparent text-center text-2xl font-semibold outline-none"
             type="text"
             inputMode="decimal"
             autoComplete="off"
@@ -109,17 +109,28 @@ export function NumberStepper({
             onBlur={normalizeInput}
             disabled={disabled}
           />
-          {unit ? <span className="text-xs text-muted">{unit}</span> : null}
+          {unit ? <span className="shrink-0 text-xs text-muted">{unit}</span> : null}
         </div>
-        <button
-          type="button"
-          className="min-h-11 min-w-11 border-l border-line text-xl text-fg disabled:opacity-40"
-          aria-label={`Augmenter ${label} de ${stepLabel}`}
-          onClick={() => changeBy(1)}
-          disabled={disabled || (max !== undefined && value !== null && value >= max)}
-        >
-          +
-        </button>
+        <div className="grid grid-cols-2 border-t border-line">
+          <button
+            type="button"
+            className="min-h-11 border-r border-line text-xl text-fg disabled:opacity-40"
+            aria-label={`Diminuer ${label} de ${stepLabel}`}
+            onClick={() => changeBy(-1)}
+            disabled={disabled || (value !== null && value <= min)}
+          >
+            −
+          </button>
+          <button
+            type="button"
+            className="min-h-11 text-xl text-fg disabled:opacity-40"
+            aria-label={`Augmenter ${label} de ${stepLabel}`}
+            onClick={() => changeBy(1)}
+            disabled={disabled || (max !== undefined && value !== null && value >= max)}
+          >
+            +
+          </button>
+        </div>
       </div>
     </div>
   )
