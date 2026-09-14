@@ -82,10 +82,16 @@ test.describe('écrans de consultation', () => {
     await expect(feuille).toHaveAccessibleName('Ajuster Squat')
 
     // « En feuille basse » est une promesse de position, pas seulement de balisage :
-    // la feuille doit occuper le bas de la vue, là où le pouce arrive.
-    const boite = await feuille.boundingBox()
+    // le panneau doit occuper le bas de la vue, là où le pouce arrive. On mesure le
+    // panneau et non le `<dialog>` lui-même, qui porte le fond et couvre tout l'écran.
+    const panneau = feuille.locator('section').first()
+    const boite = await panneau.boundingBox()
     expect(boite).not.toBeNull()
     expect(boite!.y + boite!.height).toBeLessThanOrEqual(759)
     expect(boite!.y).toBeGreaterThan(759 / 2)
+
+    // Et une vraie modale : Échap la ferme, ce qu'un `div role="dialog"` ne fait pas.
+    await page.keyboard.press('Escape')
+    await expect(feuille).toBeHidden()
   })
 })

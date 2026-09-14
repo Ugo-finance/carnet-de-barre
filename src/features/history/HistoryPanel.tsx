@@ -42,12 +42,17 @@ function libelleSemaine(semaine: SemaineGroupee): string {
 /** Le libellé qu'Ugo reconnaît : l'exercice, puis le rôle de la série. */
 function libelleSerie(set: SetLog): string {
   const exercice = findExercise(set.exerciseId)?.label ?? set.exerciseId
+  // Un palier d'échauffement n'est pas une série de travail. Depuis CB-55 il est
+  // persisté comme les autres, et le classer par défaut en « série N » le ferait
+  // passer pour du travail dans l'historique — P3 de Codex sur #61.
   const role =
     set.role === 'top'
       ? 'top set'
       : set.role === 'backoff'
         ? `backoff ${set.index + 1}`
-        : `série ${set.index + 1}`
+        : set.role === 'warmup'
+          ? `palier ${set.index + 1}`
+          : `série ${set.index + 1}`
   return `${exercice} — ${role}`
 }
 

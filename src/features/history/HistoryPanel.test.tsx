@@ -388,6 +388,33 @@ describe('historique', () => {
   })
 })
 
+describe('libellés des séries enregistrées', () => {
+  it('nomme un palier d’échauffement « palier », et non « série »', () => {
+    // Depuis CB-55 les paliers sont persistés comme les autres séries. Les classer par
+    // défaut en « série N » les ferait passer pour du travail : Ugo relirait sa séance
+    // en croyant avoir fait quatre séries de squat de plus qu'en réalité. P3 de Codex.
+    const draft = buildDraft('A', '2026-09-15', CIBLES, { id: 'avec-palier', now: 1 })
+    const palier = draft.sets.find((set) => set.role === 'warmup')
+    expect(palier, 'la séance A doit porter des paliers').toBeDefined()
+    const enregistree = draftToSeance(
+      {
+        ...draft,
+        sets: draft.sets.map((set) =>
+          set.id === palier!.id
+            ? { ...set, status: 'validated' as const, weight: 40, reps: 5, rpe: null }
+            : set,
+        ),
+      },
+      1000,
+    )
+
+    render(<HistoryPanel seances={[enregistree]} store={faux([enregistree])} />)
+
+    expect(screen.getByRole('button', { name: /— palier 1/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Squat — série/ })).not.toBeInTheDocument()
+  })
+})
+
 describe('renvois vers l’écran de correction des cibles', () => {
   // L'onglet « Cibles » est devenu « Progression » en CB-66. Un texte qui nomme
   // l'ancien envoie Ugo chercher un onglet absent — et c'est exactement le texte

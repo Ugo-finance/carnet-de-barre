@@ -17,6 +17,7 @@
  */
 
 import { useState } from 'react'
+import { BottomSheet } from '../../components/BottomSheet.tsx'
 import { formatDate, formatKg, formatLoad } from '../../domain/format.ts'
 import { LIFTS } from '../../domain/program.ts'
 import { resumeProgression, type LigneProgression } from '../../db/selectors.ts'
@@ -161,46 +162,50 @@ function LigneLift({
  *
  * CB-66 l'exige sorti, « jamais caché dans un menu ». Le motif est le pouce : la ligne
  * du squat est en haut de l'écran, hors d'atteinte d'une main qui tient le téléphone.
- * Une feuille ancrée en bas met le champ et son bouton là où le pouce arrive déjà,
- * quel que soit le lift qu'on ajuste.
+ *
+ * Elle s'appuie sur `BottomSheet`, qui est la vraie modale du projet — `<dialog>`,
+ * `showModal()`, fond, Échap, fermeture au clic extérieur. Une première version
+ * déclarait `role="dialog" aria-modal="true"` sur un `div` sans rien appliquer de tout
+ * cela : elle annonçait une modalité qu'elle n'avait pas, et laissait la navigation
+ * cliquable derrière elle. P2 de Codex, fondé.
+ *
+ * **Le refus du magasin s'affiche dans la feuille**, pas en dessous. Le message vivait
+ * sous les cinq cartes, à y = 1347 px pendant que la feuille tenait le bas de l'écran :
+ * une charge refusée ne produisait donc aucune réponse visible. Ugo tapait « Poser la
+ * cible » et rien ne bougeait. Second P2 de Codex, et le plus coûteux des deux.
  */
 function FeuilleAjustement({
   ligne,
   depart,
+  refusMagasin,
   onPoser,
   onFermer,
 }: {
   ligne: LigneProgression
   depart: number
+  /** Le refus venu du magasin, à montrer là où Ugo regarde : dans la feuille. */
+  refusMagasin: string | undefined
   onPoser: (valeur: number) => void
   onFermer: () => void
 }) {
   const [saisie, setSaisie] = useState(String(depart).replace('.', ','))
-  const [refus, setRefus] = useState<string>()
+  const [refusSaisie, setRefusSaisie] = useState<string>()
 
   const poser = () => {
     const valeur = lireCharge(saisie)
     if (valeur === null) {
-      setRefus('Entre une charge en chiffres, par exemple 77,5.')
+      setRefusSaisie('Entre une charge en chiffres, par exemple 77,5.')
       return
     }
-    setRefus(undefined)
+    setRefusSaisie(undefined)
     onPoser(valeur)
   }
 
+  const refus = refusSaisie ?? refusMagasin
+
   return (
-    <div
-      className="fixed inset-x-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-20 mx-auto max-w-sm rounded-2xl border border-line bg-surface p-4 shadow-2xl"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="ajustement-titre"
-    >
-      <h2 className="font-bold" id="ajustement-titre">
-        Ajuster {ligne.label}
-      </h2>
-      <p className="mt-1 text-sm text-muted">
-        Le moteur repartira de cette valeur au prochain passage.
-      </p>
+    <BottomSheet open title={`Ajuster ${ligne.label}`} onClose={onFermer}>
+      <p className="text-sm text-muted">Le moteur repartira de cette valeur au prochain passage.</p>
 
       <label className="mt-3 block text-sm font-medium text-muted">
         Nouvelle cible (kg)
@@ -221,7 +226,7 @@ function FeuilleAjustement({
         </p>
       ) : null}
 
-      <div className="mt-4 grid gap-2">
+      <div className="mt-4 grid gap-2 pb-2">
         <button
           type="button"
           className="min-h-11 rounded-xl bg-accent px-4 font-semibold text-bg"
@@ -229,15 +234,8 @@ function FeuilleAjustement({
         >
           Poser la cible
         </button>
-        <button
-          type="button"
-          className="min-h-11 rounded-xl border border-line px-4 font-medium text-muted"
-          onClick={onFermer}
-        >
-          Annuler
-        </button>
       </div>
-    </div>
+    </BottomSheet>
   )
 }
 
@@ -300,14 +298,23 @@ export function ProgressionPanel({
             ligne={ligne}
             targets={etat}
             ajustable={resume.ajustable}
-            onAjuster={() => setAjustement(ligne.lift)}
+            onAjuster={() => {
+              // Un refus d'un lift précédent n'a rien à dire sur celui-ci.
+              setErreur(undefined)
+              setAjustement(ligne.lift)
+            }}
             onRepartir={() => void ajuster(ligne.lift, { fail: null })}
           />
         ))}
       </ul>
 
+      {/*
+       * Ne porte que les refus survenus **hors** de la feuille — « Repartir à zéro ».
+       * Quand la feuille est ouverte, c'est elle qui montre le refus, là où Ugo
+       * regarde ; le répéter ici le mettrait à 1347 px, hors de sa vue.
+       */}
       <p className="min-h-6 text-sm text-bad" role="status" aria-live="polite">
-        {erreur ?? ''}
+        {ajustement === undefined ? (erreur ?? '') : ''}
       </p>
 
       {/*
@@ -335,6 +342,7 @@ export function ProgressionPanel({
         <FeuilleAjustement
           ligne={ligneOuverte}
           depart={ligneOuverte.cible}
+          refusMagasin={erreur}
           onFermer={() => setAjustement(undefined)}
           onPoser={(valeur) => {
             void ajuster(ligneOuverte.lift, { w: valeur }).then((ok) => {

@@ -131,6 +131,9 @@ describe('ajustement en feuille basse', () => {
     const feuille = screen.getByRole('dialog')
     expect(feuille).toHaveAccessibleName('Ajuster Squat')
     expect(within(feuille).getByLabelText('Nouvelle cible Squat')).toBeInTheDocument()
+    // Une vraie modale, et non un div qui l'annonce : c'est `BottomSheet` qui fournit
+    // `<dialog>`, `showModal()`, le fond, Échap et la fermeture au clic extérieur.
+    expect(feuille.tagName).toBe('DIALOG')
   })
 
   it('pose une nouvelle cible et la réaffiche', async () => {
@@ -171,14 +174,17 @@ describe('ajustement en feuille basse', () => {
     ouvrirSquat()
 
     fireEvent.change(screen.getByLabelText('Nouvelle cible Squat'), { target: { value: '200' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Annuler' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Fermer' }))
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(within(carte('Squat')).getByText('75 kg')).toBeInTheDocument()
     expect((await store.getTargets()).squat.w).toBe(75)
   })
 
-  it('refuse une valeur absurde et le dit, sans rien écrire', async () => {
+  it('montre le refus du magasin dans la feuille, là où Ugo regarde', async () => {
+    // Le message vivait sous les cinq cartes, à y = 1347 px pendant que la feuille
+    // tenait le bas de l'écran : une charge refusée ne produisait aucune réponse
+    // visible. P2 de Codex, et le plus coûteux — Ugo tapait, rien ne bougeait.
     const store = await magasinPret()
     await monter(store)
     ouvrirSquat()
@@ -186,8 +192,25 @@ describe('ajustement en feuille basse', () => {
     fireEvent.change(screen.getByLabelText('Nouvelle cible Squat'), { target: { value: '750' } })
     fireEvent.click(screen.getByRole('button', { name: 'Poser la cible' }))
 
-    expect(await screen.findByRole('status')).toHaveTextContent(/500 kg/)
+    const feuille = screen.getByRole('dialog')
+    await waitFor(() => expect(within(feuille).getByRole('alert')).toHaveTextContent(/500 kg/))
     expect((await store.getTargets()).squat.w).toBe(75)
+  })
+
+  it('n’oppose plus le refus d’un lift quand on en ouvre un autre', async () => {
+    const store = await magasinPret()
+    await monter(store)
+    ouvrirSquat()
+    fireEvent.change(screen.getByLabelText('Nouvelle cible Squat'), { target: { value: '750' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Poser la cible' }))
+    await waitFor(() =>
+      expect(within(screen.getByRole('dialog')).getByRole('alert')).toBeInTheDocument(),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Fermer' }))
+
+    fireEvent.click(within(carte('Développé couché')).getByRole('button', { name: 'Ajuster' }))
+
+    expect(within(screen.getByRole('dialog')).queryByRole('alert')).not.toBeInTheDocument()
   })
 
   it('refuse un nombre suivi de n’importe quoi, au lieu de garder le début', async () => {
@@ -216,7 +239,9 @@ describe('ajustement en feuille basse', () => {
     fireEvent.change(screen.getByLabelText('Nouvelle cible Squat'), { target: { value: '750' } })
     fireEvent.click(screen.getByRole('button', { name: 'Poser la cible' }))
 
-    await screen.findByRole('status')
+    await waitFor(() =>
+      expect(within(screen.getByRole('dialog')).getByRole('alert')).toBeInTheDocument(),
+    )
     expect(screen.getByRole('dialog')).toBeInTheDocument()
     expect(screen.getByLabelText('Nouvelle cible Squat')).toHaveValue('750')
   })
