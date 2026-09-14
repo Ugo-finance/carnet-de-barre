@@ -1,5 +1,6 @@
-import { RUSHED_EXERCISE_COUNT, SEANCES, type ExerciseDef } from '../../domain/program'
+import type { ExerciseDef } from '../../domain/program'
 import type { Draft, SetLog } from '../../domain/types'
+import { exercicesActifs } from '../../db/selectors'
 
 export type SessionQueueItem = {
   exercise: ExerciseDef
@@ -77,10 +78,7 @@ function appendSuperset(queue: SessionQueueItem[], members: ExerciseSets[]): voi
 export function buildSessionQueue(
   draft: Pick<Draft, 'type' | 'sets' | 'rushed'>,
 ): SessionQueueItem[] {
-  const definition = SEANCES[draft.type]
-  const exercises = draft.rushed
-    ? definition.exercises.slice(0, RUSHED_EXERCISE_COUNT)
-    : definition.exercises
+  const exercises = exercicesActifs(draft.type, draft.rushed)
   const queue: SessionQueueItem[] = []
 
   for (let index = 0; index < exercises.length;) {

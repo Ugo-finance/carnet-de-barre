@@ -48,6 +48,22 @@ function deadliftTop(): SetLog {
   }
 }
 
+function deadliftWarmup(): SetLog {
+  return {
+    id: 'c-deadlift:warmup:0',
+    exerciseId: 'c-deadlift',
+    role: 'warmup',
+    index: 0,
+    status: 'planned',
+    loadKind: 'barTotal',
+    weight: 60,
+    reps: 5,
+    rpe: null,
+    targetWeight: 60,
+    targetReps: 5,
+  }
+}
+
 function saved(type: SeanceType, date: string): Seance {
   return { id: `saved-${type}`, type, date, lines: [], tops: {}, notes: '' }
 }
@@ -199,6 +215,41 @@ describe('SessionHome', () => {
     await resumeSession()
     expect(await screen.findByText('Récup Soulevé de terre')).toBeInTheDocument()
     expect(screen.getByRole('timer')).toBeInTheDocument()
+  })
+
+  it('ne lance aucun chrono après un palier d’échauffement', async () => {
+    const initial = draftFor('C', '2026-09-20')
+    initial.sets = [deadliftWarmup(), deadliftTop()]
+    const store = fakeStore({ initial })
+    render(<SessionHome store={store} now={SUNDAY} />)
+    await resumeSession()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Valider' }))
+
+    await screen.findByRole('article', { name: 'Soulevé de terre · série de travail' })
+    expect(screen.queryByRole('timer')).not.toBeInTheDocument()
+    expect(store.saveDraft).toHaveBeenLastCalledWith(
+      expect.objectContaining({ timerEndsAt: null, timerLabel: null }),
+    )
+  })
+
+  it('laisse intact un chrono actif après un palier d’échauffement', async () => {
+    const deadline = Date.now() + 150_000
+    const initial = draftFor('C', '2026-09-20')
+    initial.sets = [deadliftWarmup(), deadliftTop()]
+    initial.timerEndsAt = deadline
+    initial.timerLabel = 'Récup précédente'
+    const store = fakeStore({ initial })
+    render(<SessionHome store={store} now={SUNDAY} />)
+    await resumeSession()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Valider' }))
+
+    await screen.findByRole('article', { name: 'Soulevé de terre · série de travail' })
+    expect(screen.getByText('Récup précédente')).toBeInTheDocument()
+    expect(store.saveDraft).toHaveBeenLastCalledWith(
+      expect.objectContaining({ timerEndsAt: deadline, timerLabel: 'Récup précédente' }),
+    )
   })
 
   it('n’avance qu’après la réussite de la sauvegarde de la série', async () => {

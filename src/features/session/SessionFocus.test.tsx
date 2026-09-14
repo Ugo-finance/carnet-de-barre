@@ -147,6 +147,20 @@ describe('SessionFocus', () => {
     expect(screen.getByRole('article')).toHaveAttribute('aria-label', canonicalName)
   })
 
+  it('identifie un palier sauté quand il est relu', () => {
+    let value = draft()
+    const first = buildSessionQueue(value)[0]!.set.id
+    const second = buildSessionQueue(value)[1]!.set.id
+    value = withStatus(value, first, 'validated')
+    value = withStatus(value, second, 'skipped')
+    render(<SessionFocus {...props(value)} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Précédente' }))
+
+    expect(screen.getByText('Statut : Sautée')).toBeInTheDocument()
+    expect(screen.queryByText('Statut : Validée')).not.toBeInTheDocument()
+  })
+
   it('duplique précédente/suivante au balayage sans dépasser la série canonique', () => {
     let value = draft()
     const first = buildSessionQueue(value)[0]!.set.id

@@ -31,6 +31,7 @@ type FocusSetCardProps = {
   loadDetail?: string
   barbellTotal?: number
   supersetPartner?: string
+  status?: 'validated' | 'skipped'
   children?: ReactNode
   primaryLabel?: string
   skipLabel?: string
@@ -50,6 +51,7 @@ export function FocusSetCard({
   loadDetail,
   barbellTotal,
   supersetPartner,
+  status,
   children,
   primaryLabel = 'Valider la série',
   skipLabel = 'Sauter — optionnel',
@@ -73,6 +75,11 @@ export function FocusSetCard({
         {supersetPartner ? (
           <span className="rounded-md border border-focus/50 px-2 py-1 text-[0.6875rem] font-semibold tracking-wide text-focus">
             SS · {supersetPartner}
+          </span>
+        ) : null}
+        {status ? (
+          <span className="rounded-md border border-line px-2 py-1 text-[0.6875rem] font-semibold text-muted">
+            Statut : {status === 'validated' ? 'Validée' : 'Sautée'}
           </span>
         ) : null}
       </div>

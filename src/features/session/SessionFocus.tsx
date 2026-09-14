@@ -246,6 +246,11 @@ export function SessionFocus({
         }
         barbellTotal={canShowBarbell ? (set.weight ?? undefined) : undefined}
         supersetPartner={visible.supersetPartner}
+        status={
+          reviewing && (set.status === 'validated' || set.status === 'skipped')
+            ? set.status
+            : undefined
+        }
         primaryLabel={writing ? 'Sauvegarde…' : errorMessage ? 'Réessayer' : 'Valider'}
         skipLabel={set.role === 'warmup' ? 'Passer ce palier' : 'Sauter — optionnel'}
         busy={writing}
