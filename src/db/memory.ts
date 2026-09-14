@@ -27,7 +27,7 @@ import { applyTargetPatch, type TargetPatch } from './targets.ts'
 import { StoreError, type FinalizeResult, type ImportPreview } from './contracts.ts'
 import { seanceSchema } from '../domain/schema.ts'
 import { loadSeed } from './seed.ts'
-import { buildDraft, isDraftActive, startDraft } from './draft.ts'
+import { buildDraft, isDraftActive, reutilisable, startDraft } from './draft.ts'
 import { applyProgression, draftToSeance, targetsDiverged } from './derive.ts'
 import { buildExport, describeImport, validateImport } from './exchange.ts'
 import type { DraftStore } from './store.ts'
@@ -104,11 +104,12 @@ export class MemoryStore implements DraftStore {
    */
   async startSession(type: SeanceType, date: string, now = Date.now()): Promise<Draft> {
     const draft =
-      this.draft ??
-      buildDraft(type, date, await this.getTargets(), {
-        id: crypto.randomUUID(),
-        seances: this.seances,
-      })
+      this.draft && reutilisable(this.draft, type, date)
+        ? this.draft
+        : buildDraft(type, date, await this.getTargets(), {
+            id: crypto.randomUUID(),
+            seances: this.seances,
+          })
     this.draft = { ...startDraft(draft, now), updatedAt: now }
     return structuredClone(this.draft)
   }

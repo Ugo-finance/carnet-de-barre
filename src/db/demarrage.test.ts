@@ -167,3 +167,30 @@ describe('l’aller-retour d’export', () => {
     expect(seance?.completedAt).toBeGreaterThan(0)
   })
 })
+
+describe('le magasin en mémoire répond comme celui du téléphone', () => {
+  it('démarre le type demandé quand le brouillon ouvert est vierge', async () => {
+    // Les deux implémentations du même contrat doivent répondre pareil, sinon un test
+    // écrit contre la mauvaise ne prouve rien. P1 de Codex sur #54.
+    const store = new MemoryStore()
+    await store.ready()
+    await store.openDraft('A', '2026-09-15')
+
+    const demarre = await store.startSession('B', '2026-09-17', 5000)
+    expect(demarre.type).toBe('B')
+    expect(demarre.date).toBe('2026-09-17')
+  })
+
+  it('ne remplace jamais une séance commencée par celle qu’on demande', async () => {
+    // D9 : rien ne se perd. C'est à l'interface de proposer explicitement d'abandonner.
+    const store = new MemoryStore()
+    await store.ready()
+    const draft = await store.startSession('C', '2026-09-20', 5000)
+    await store.saveDraft({ ...draft, notes: 'Dos chargé' })
+
+    const reprise = await store.startSession('A', '2026-09-21', 9000)
+    expect(reprise.type).toBe('C')
+    expect(reprise.notes).toBe('Dos chargé')
+    expect(reprise.startedAt).toBe(5000)
+  })
+})

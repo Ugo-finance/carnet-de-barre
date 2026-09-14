@@ -289,6 +289,28 @@ export function startDraft(draft: Draft, now = Date.now()): Draft {
  * Retirer le repli maintenant rendrait toute séance en cours invisible d'ici là. Une
  * fois CB-63 livré, le repli ne couvre plus que les brouillons ouverts avant.
  */
+/**
+ * Ce brouillon-là sert-il la demande de démarrage ? — CB-62a.
+ *
+ * Deux cas, et ils ne se ressemblent pas.
+ *
+ * Un brouillon **actif** gagne toujours : D9 dit que rien ne se perd, et démarrer une
+ * séance ne doit jamais effacer une saisie en cours. Demander A pendant qu'une C est
+ * commencée rend la C — c'est à l'interface de proposer explicitement de l'abandonner.
+ *
+ * Un brouillon **vierge** ne porte aucune information, donc rien à protéger. Le
+ * réutiliser quand même annulerait le choix manuel : Ugo sélectionne B, l'app démarre
+ * A — celle que l'accueil avait construite toute seule en s'affichant — et sa date avec.
+ * Il n'est donc réutilisable que s'il sert déjà le type **et** la date demandés.
+ *
+ * P1 de Codex sur #54, reproduit : `openDraft('A', 15.09)` puis
+ * `startSession('B', 17.09)` rendait A au 15.
+ */
+export function reutilisable(draft: Draft, type: SeanceType, date: string): boolean {
+  if (isDraftActive(draft)) return true
+  return draft.type === type && draft.date === date
+}
+
 export function isDraftActive(draft: Draft): boolean {
   return draft.startedAt !== null || porteUneInformation(draft)
 }

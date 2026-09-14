@@ -90,6 +90,44 @@ describe('démarrer une séance', () => {
     expect(second.id).toBe(premier.id)
   })
 
+  it('démarre le type manuellement choisi, pas celui que l’accueil avait construit', async () => {
+    // P1 de Codex sur #54. L'accueil construit un brouillon au simple affichage ; Ugo
+    // choisit ensuite B au sélecteur. Un brouillon vierge ne porte aucune information,
+    // donc rien à protéger : le réutiliser annulait le choix manuel, et sa date avec.
+    const store = await magasin()
+    await store.openDraft('A', '2026-09-15')
+
+    const demarre = await store.startSession('B', '2026-09-17', 5000)
+
+    expect(demarre.type).toBe('B')
+    expect(demarre.date).toBe('2026-09-17')
+    expect(demarre.startedAt).toBe(5000)
+    // Et il n'en reste qu'un : l'ancien vierge a été remplacé, pas laissé derrière.
+    expect((await store.loadDraft())?.type).toBe('B')
+  })
+
+  it('ne date pas la séance d’hier quand le même type est redemandé', async () => {
+    // Le cas qu'Ugo rencontrera vraiment : il ouvre l'app la veille sans rien faire,
+    // revient le lendemain et démarre. Un brouillon vierge réutilisé sur le seul type
+    // garderait la date d'hier, et la séance s'enregistrerait au mauvais jour — donc
+    // dans la mauvaise semaine de l'historique, et hors de la rotation.
+    const store = await magasin()
+    await store.openDraft('A', '2026-09-15')
+
+    const demarre = await store.startSession('A', '2026-09-16', 5000)
+    expect(demarre.date).toBe('2026-09-16')
+  })
+
+  it('garde le brouillon vierge quand la demande est la même', async () => {
+    // L'autre moitié : même type, même date, rien ne justifie de reconstruire — et
+    // surtout pas de changer l'identifiant, qui devient celui de la séance.
+    const store = await magasin()
+    const ouvert = await store.openDraft('A', '2026-09-15')
+
+    const demarre = await store.startSession('A', '2026-09-15', 5000)
+    expect(demarre.id).toBe(ouvert.id)
+  })
+
   it('reprend la séance en cours plutôt que d’en ouvrir une autre', async () => {
     // Le sélecteur A/B/C reste libre, mais démarrer ne détruit jamais une saisie : D9.
     const store = await magasin()

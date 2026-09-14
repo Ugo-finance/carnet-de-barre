@@ -32,7 +32,7 @@ import {
   db as defaultDb,
   ensureSeeded,
 } from './database.ts'
-import { buildDraft, hydrateDraft, isDraftActive, startDraft } from './draft.ts'
+import { buildDraft, hydrateDraft, isDraftActive, reutilisable, startDraft } from './draft.ts'
 import { applyProgression, draftToSeance, targetsDiverged } from './derive.ts'
 import { applyTargetPatch, type TargetPatch } from './targets.ts'
 import { seanceSchema } from '../domain/schema.ts'
@@ -149,7 +149,10 @@ export class DexieStore implements DraftStore {
       async () => {
         const stocke = await this.database.drafts.toCollection().first()
         const existant = stocke ? hydrateDraft(stocke) : undefined
-        const draft = existant ?? (await this.construireDansTransaction(type, date))
+        const draft =
+          existant && reutilisable(existant, type, date)
+            ? existant
+            : await this.construireDansTransaction(type, date)
 
         // Idempotent : une séance déjà démarrée garde son instant. Reprendre après un
         // rechargement ne redémarre pas le compteur.
