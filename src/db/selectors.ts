@@ -16,13 +16,40 @@
  * d'afficher un blanc que personne ne sait interpréter.
  */
 
-import { LIFTS, SEANCES } from '../domain/program.ts'
+import { LIFTS, RUSHED_EXERCISE_COUNT, SEANCES } from '../domain/program.ts'
 import { currentSession, describeWhen, todayInZurich } from '../domain/schedule.ts'
+import type { ExerciseDef } from '../domain/program.ts'
 import type { Draft, Seance, SeanceType, SetLog, Targets } from '../domain/types.ts'
 import { accessoryPlans } from './accessory-history.ts'
 import { setsForExercise } from './draft.ts'
 import { isDraftActive } from './draft.ts'
 import { workingSets } from './derive.ts'
+
+/**
+ * Les exercices de la **file active** — `10-interaction.md` § 1, point 4.
+ *
+ * Le mode pressé omet les exercices au-delà du deuxième de la file, **sans supprimer
+ * leurs séries du brouillon** : basculer l'interrupteur ne doit jamais faire disparaître
+ * une saisie. La distinction se joue donc ici, à la projection, et nulle part ailleurs.
+ */
+export function exercicesActifs(type: SeanceType, rushed: boolean): readonly ExerciseDef[] {
+  const exercices = SEANCES[type].exercises
+  return rushed ? exercices.slice(0, RUSHED_EXERCISE_COUNT) : exercices
+}
+
+/**
+ * Les séries de la file active d'un brouillon, **paliers compris**.
+ *
+ * C'est l'unité dans laquelle le contrat exprime l'avancement : « le nombre de séries
+ * `validated` ou `skipped` sur le nombre de séries de la file active », et les totaux
+ * 23 / 22 / 16 en sont la mesure. Compter sur les seules séries de travail donnerait
+ * 0/16 à quelqu'un qui vient de valider ses sept paliers — ce qu'il a réellement fait
+ * n'apparaîtrait nulle part. P1 de Codex sur #55.
+ */
+export function seriesActives(draft: Draft): SetLog[] {
+  const actifs = new Set(exercicesActifs(draft.type, draft.rushed).map((exercice) => exercice.id))
+  return draft.sets.filter((set) => actifs.has(set.exerciseId))
+}
 
 /** Un exercice tel que l'accueil l'annonce, sans charge : la séance n'est pas ouverte. */
 export interface ExerciceAnnonce {
@@ -58,7 +85,13 @@ export interface AccueilSeanceEnCours {
   etat: 'en-cours'
   type: SeanceType
   date: string
-  /** Séries de travail traitées — validées ou sautées — sur le total prévu. */
+  /**
+   * Séries de la **file active** traitées — validées ou sautées — sur son total.
+   *
+   * Paliers compris : c'est l'unité du contrat, et celle des totaux 23 / 22 / 16. Le
+   * mode pressé rétrécit les deux, puisqu'il retire les exercices au-delà du deuxième
+   * de la file sans toucher au brouillon.
+   */
   traitees: number
   total: number
   /** Reste-t-il quelque chose à faire ? Décide du libellé de fin de séance. */
@@ -88,8 +121,8 @@ export function resumeAccueil(entree: {
   const now = entree.now ?? new Date()
 
   if (draft && isDraftActive(draft)) {
-    const travail = draft.sets.filter((set) => set.role !== 'warmup')
-    const traitees = travail.filter(
+    const file = seriesActives(draft)
+    const traitees = file.filter(
       (set) => set.status === 'validated' || set.status === 'skipped',
     ).length
     return {
@@ -97,8 +130,8 @@ export function resumeAccueil(entree: {
       type: draft.type,
       date: draft.date,
       traitees,
-      total: travail.length,
-      complet: traitees === travail.length,
+      total: file.length,
+      complet: traitees === file.length,
       misAJourA: draft.updatedAt,
       demarreeA: draft.startedAt,
     }
@@ -124,15 +157,19 @@ export function apercuSeance(
   type: SeanceType,
   targets: Targets,
   seances: readonly Seance[],
+  rushed = false,
 ): Pick<AccueilSansSeance, 'exercices' | 'paliers' | 'seriesDeTravail'> {
-  const definition = SEANCES[type]
-  const plans = accessoryPlans(definition.exercises, seances)
-  const series = definition.exercises.flatMap((exercise) =>
+  // La projection pressée vit ici, pas dans l'écran : la règle des deux exercices est
+  // déjà écrite une fois, et un composant qui la réimplémenterait annoncerait un jour
+  // une file que le brouillon ne produit pas.
+  const exercices = exercicesActifs(type, rushed)
+  const plans = accessoryPlans(exercices, seances)
+  const series = exercices.flatMap((exercise) =>
     setsForExercise(exercise, targets, plans.get(exercise.id)),
   )
 
   return {
-    exercices: definition.exercises.map((exercise) => ({
+    exercices: exercices.map((exercise) => ({
       id: exercise.id,
       label: exercise.label,
       scheme: exercise.scheme,

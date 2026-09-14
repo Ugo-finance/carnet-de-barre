@@ -139,11 +139,14 @@ describe('l’accueil', () => {
     expect(resume.etat).toBe('en-cours')
   })
 
-  it('compte l’avancement sur les séries de travail, pas sur les paliers', () => {
-    // Sinon la séance A annoncerait 23 séries à faire au lieu de 16, et un échauffement
-    // entièrement validé afficherait un tiers du travail accompli.
+  it('compte l’avancement sur la file active, paliers compris', () => {
+    // `10-interaction.md` § 1 : « le nombre de séries validated ou skipped sur le nombre
+    // de séries de la file active », et les totaux 23 / 22 / 16 en sont la mesure. Une
+    // première version comptait les seules séries de travail : Ugo validait ses sept
+    // paliers et lisait 0/16, ce qu'il venait de faire n'apparaissant nulle part.
+    // P1 de Codex sur #55.
     const draft = brouillon('A')
-    const avecPaliersFaits: Draft = {
+    const paliersFaits: Draft = {
       ...draft,
       startedAt: 5000,
       sets: draft.sets.map((set) =>
@@ -152,15 +155,40 @@ describe('l’accueil', () => {
     }
 
     const resume = resumeAccueil({
-      draft: avecPaliersFaits,
+      draft: paliersFaits,
       seances: [],
       targets: CIBLES,
       now: DIMANCHE,
     })
     if (resume.etat !== 'en-cours') throw new Error('état inattendu')
-    expect(resume.total).toBe(16)
-    expect(resume.traitees).toBe(0)
+    expect(resume.total).toBe(23)
+    expect(resume.traitees).toBe(7)
     expect(resume.complet).toBe(false)
+  })
+
+  it('rétrécit la file au mode pressé, sans rien retirer du brouillon', () => {
+    // Point 4 du contrat : les exercices au-delà du deuxième sont omis de la file
+    // active, **sans supprimer leurs séries du brouillon**. Une séance pressée dont les
+    // deux premiers exercices sont traités est donc terminée.
+    const draft = brouillon('A')
+    const presse: Draft = {
+      ...draft,
+      rushed: true,
+      startedAt: 5000,
+      sets: draft.sets.map((set) =>
+        set.exerciseId === 'a-squat' || set.exerciseId === 'a-bench-vol'
+          ? { ...set, status: 'skipped' as const }
+          : set,
+      ),
+    }
+
+    const resume = resumeAccueil({ draft: presse, seances: [], targets: CIBLES, now: DIMANCHE })
+    if (resume.etat !== 'en-cours') throw new Error('état inattendu')
+    expect(resume.total).toBe(12)
+    expect(resume.traitees).toBe(12)
+    expect(resume.complet).toBe(true)
+    // Et le brouillon porte toujours ses 23 séries : l'interrupteur n'efface rien.
+    expect(presse.sets).toHaveLength(23)
   })
 
   it('compte une série sautée comme traitée', () => {
@@ -239,5 +267,21 @@ describe('la progression', () => {
     ])
     // Chaque motif dit où la décision manque, pas seulement qu'elle manque.
     expect(metriquesDifferees.every((metrique) => metrique.motif.includes('CB-13'))).toBe(true)
+  })
+})
+
+describe('l’aperçu suit le mode pressé', () => {
+  it('ne projette que les deux premiers exercices, échauffements gardés', () => {
+    // La règle des deux exercices est déjà écrite une fois. Un composant qui la
+    // réimplémenterait annoncerait un jour une file que le brouillon ne produit pas.
+    const complet = apercuSeance('A', CIBLES, [])
+    const presse = apercuSeance('A', CIBLES, [], true)
+
+    expect(complet.exercices).toHaveLength(6)
+    expect(presse.exercices.map((exercice) => exercice.id)).toEqual(['a-squat', 'a-bench-vol'])
+    expect(presse.paliers + presse.seriesDeTravail).toBe(12)
+    // Les paliers des deux exercices actifs restent : le mode pressé ampute la file,
+    // pas l'échauffement de ce qu'Ugo va réellement faire.
+    expect(presse.paliers).toBeGreaterThan(0)
   })
 })

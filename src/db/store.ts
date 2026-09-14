@@ -159,7 +159,12 @@ export class DexieStore implements DraftStore {
    * `listSeances()` / `getTargets()`, qui en ouvriraient une seconde et rouvriraient la
    * fenêtre qu'on ferme.
    */
-  async startSession(type: SeanceType, date: string, now = Date.now()): Promise<Draft> {
+  async startSession(
+    type: SeanceType,
+    date: string,
+    options: { now?: number; rushed?: boolean } = {},
+  ): Promise<Draft> {
+    const now = options.now ?? Date.now()
     return this.database.transaction(
       'rw',
       this.database.drafts,
@@ -174,7 +179,7 @@ export class DexieStore implements DraftStore {
         const draft =
           existant && reutilisable(existant, type, date)
             ? existant
-            : await this.construireDansTransaction(type, date)
+            : await this.construireDansTransaction(type, date, options.rushed)
 
         // Idempotent : une séance déjà démarrée garde son instant. Reprendre après un
         // rechargement ne redémarre pas le compteur.
@@ -193,16 +198,22 @@ export class DexieStore implements DraftStore {
    * l'accueil et une séance démarrée depuis le sélecteur doivent s'ouvrir dans le même
    * état. Les oublier ferait de `startSession` le seul chemin qui ignore le mode pressé.
    */
-  private async construireDansTransaction(type: SeanceType, date: string): Promise<Draft> {
+  private async construireDansTransaction(
+    type: SeanceType,
+    date: string,
+    rushed?: boolean,
+  ): Promise<Draft> {
     const row = await this.database.targets.get(TARGETS_KEY)
     if (!row) throw new StoreError('storage-unavailable', 'Cibles introuvables.')
     const { key: _key, ...targets } = row
     const seances = await this.database.seances.toArray()
     const reglages = await this.database.meta.get(PREFERENCES_KEY)
+    const preferences = readPreferences(reglages?.value)
     return buildDraft(type, date, targets, {
       id: crypto.randomUUID(),
       seances,
-      preferences: readPreferences(reglages?.value),
+      // Le choix de l'accueil l'emporte sur la préférence, qui n'est qu'un défaut.
+      preferences: { ...preferences, modePresseParDefaut: rushed ?? preferences.modePresseParDefaut },
     })
   }
 

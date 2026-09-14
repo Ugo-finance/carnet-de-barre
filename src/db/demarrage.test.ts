@@ -176,7 +176,7 @@ describe('le magasin en mémoire répond comme celui du téléphone', () => {
     await store.ready()
     await store.openDraft('A', '2026-09-15')
 
-    const demarre = await store.startSession('B', '2026-09-17', 5000)
+    const demarre = await store.startSession('B', '2026-09-17', { now: 5000 })
     expect(demarre.type).toBe('B')
     expect(demarre.date).toBe('2026-09-17')
   })
@@ -185,10 +185,10 @@ describe('le magasin en mémoire répond comme celui du téléphone', () => {
     // D9 : rien ne se perd. C'est à l'interface de proposer explicitement d'abandonner.
     const store = new MemoryStore()
     await store.ready()
-    const draft = await store.startSession('C', '2026-09-20', 5000)
+    const draft = await store.startSession('C', '2026-09-20', { now: 5000 })
     await store.saveDraft({ ...draft, notes: 'Dos chargé' })
 
-    const reprise = await store.startSession('A', '2026-09-21', 9000)
+    const reprise = await store.startSession('A', '2026-09-21', { now: 9000 })
     expect(reprise.type).toBe('C')
     expect(reprise.notes).toBe('Dos chargé')
     expect(reprise.startedAt).toBe(5000)

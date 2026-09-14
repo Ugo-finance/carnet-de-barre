@@ -176,9 +176,36 @@ describe('ce que les réglages changent réellement', () => {
     await store.ready()
     await store.savePreferences({ modePresseParDefaut: true, ecranAllume: true })
 
-    const demarre = await store.startSession('B', '2026-09-17', 5000)
+    const demarre = await store.startSession('B', '2026-09-17', { now: 5000 })
     expect(demarre.rushed).toBe(true)
     expect(demarre.keepAwake).toBe(true)
+  })
+
+  it('laisse le choix de l’accueil l’emporter sur la préférence, dans les deux sens', async () => {
+    // Le mode pressé est un choix d'interface jusqu'au clic : type, date, mode et
+    // `startedAt` forment une seule intention. Le poser après coup par `saveDraft`
+    // casserait l'atomicité que `startSession` existe pour tenir. P1 de Codex sur #55.
+    const a = magasin()
+    await a.store.ready()
+    await a.store.savePreferences({ modePresseParDefaut: false })
+    expect((await a.store.startSession('A', '2026-09-15', { rushed: true })).rushed).toBe(true)
+
+    const b = magasin()
+    await b.store.ready()
+    await b.store.savePreferences({ modePresseParDefaut: true })
+    expect((await b.store.startSession('A', '2026-09-15', { rushed: false })).rushed).toBe(false)
+  })
+
+  it('ne rouvre pas une file qu’Ugo a repliée en salle', async () => {
+    // Une séance **déjà démarrée** garde son mode : le choix de l'accueil ne s'applique
+    // qu'à la construction, et reprendre n'est pas recommencer.
+    const { store } = magasin()
+    await store.ready()
+    const demarre = await store.startSession('A', '2026-09-15', { now: 5000, rushed: true })
+    await store.saveDraft({ ...demarre, rushed: false })
+
+    const reprise = await store.startSession('A', '2026-09-15', { now: 9000, rushed: true })
+    expect(reprise.rushed).toBe(false)
   })
 
   it('n’impose rien quand rien n’a été réglé', async () => {

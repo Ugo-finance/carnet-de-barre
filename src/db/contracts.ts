@@ -100,8 +100,19 @@ export interface CarnetStore {
    *
    * **Idempotente** : reprendre une séance déjà démarrée rend la même, `startedAt`
    * inchangé. Un second tap ne peut pas raccourcir une durée réelle.
+   *
+   * `rushed` porte le choix fait sur l'accueil, qui reste un choix d'interface jusqu'au
+   * clic : type, date, mode et `startedAt` forment **une seule intention utilisateur**
+   * (`docs/refonte/10-interaction.md` § 1). Le passer après coup par `saveDraft`
+   * casserait l'atomicité que cette méthode existe pour tenir. Omis, on retombe sur la
+   * préférence `modePresseParDefaut`. Une séance **déjà démarrée** garde le sien : le
+   * choix de l'accueil ne rouvre pas une file qu'Ugo a repliée en salle.
    */
-  startSession(type: SeanceType, date: string, now?: number): Promise<Draft>
+  startSession(
+    type: SeanceType,
+    date: string,
+    options?: { now?: number; rushed?: boolean },
+  ): Promise<Draft>
 
   /**
    * Écrit le brouillon. Appelé à chaque changement : saisie, validation, note,

@@ -111,14 +111,23 @@ export class MemoryStore implements DraftStore {
    * ouvrir, mais le contrat doit être le même — un test écrit contre ce magasin doit
    * rester vrai contre celui qui tourne sur le téléphone d'Ugo.
    */
-  async startSession(type: SeanceType, date: string, now = Date.now()): Promise<Draft> {
+  async startSession(
+    type: SeanceType,
+    date: string,
+    options: { now?: number; rushed?: boolean } = {},
+  ): Promise<Draft> {
+    const now = options.now ?? Date.now()
+    const preferences = await this.getPreferences()
     const draft =
       this.draft && reutilisable(this.draft, type, date)
         ? this.draft
         : buildDraft(type, date, await this.getTargets(), {
             id: crypto.randomUUID(),
             seances: this.seances,
-            preferences: await this.getPreferences(),
+            preferences: {
+              ...preferences,
+              modePresseParDefaut: options.rushed ?? preferences.modePresseParDefaut,
+            },
           })
     this.draft = { ...startDraft(draft, now), updatedAt: now }
     return structuredClone(this.draft)
