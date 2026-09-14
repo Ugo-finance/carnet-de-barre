@@ -1,0 +1,163 @@
+import { fireEvent, render, screen, within } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
+import { buildDraft } from '../../db/draft'
+import type { Draft, SeanceType, SetLog, Targets } from '../../domain/types'
+import { SessionFocus } from './SessionFocus'
+import { buildSessionQueue } from './sessionQueue'
+
+const TARGETS: Targets = {
+  updatedAt: '2026-09-14',
+  squat: { w: 80, inc: 2.5, reps: 4, fail: null },
+  bench: { w: 72.5, inc: 2.5, reps: 4, fail: null },
+  deadlift: { w: 100, inc: 5, reps: 3, fail: null },
+  tractions: { w: 17.5, inc: 2.5, reps: 4, fail: null },
+  benchVol: { w: 62.5, inc: 2.5, reps: 8, sets: 3, fail: null },
+}
+
+function draft(type: SeanceType = 'C'): Draft {
+  return buildDraft(type, '2026-09-20', TARGETS, { id: `focus-${type}`, now: 1 })
+}
+
+function callbacks() {
+  return {
+    onSetChange: vi.fn(),
+    onValidate: vi.fn(),
+    onSkip: vi.fn(),
+    onExit: vi.fn(),
+  }
+}
+
+function props(value: Draft = draft()) {
+  return {
+    type: value.type,
+    queue: buildSessionQueue(value),
+    elapsedLabel: '12 min',
+    ...callbacks(),
+  }
+}
+
+function treatBefore(value: Draft, setId: string): Draft {
+  const order = buildSessionQueue(value).map(({ set }) => set.id)
+  const targetIndex = order.indexOf(setId)
+  if (targetIndex < 0) throw new Error(`Série absente du scénario : ${setId}`)
+  return {
+    ...value,
+    sets: value.sets.map((set) => {
+      const index = order.indexOf(set.id)
+      return index >= 0 && index < targetIndex ? { ...set, status: 'validated' as const } : set
+    }),
+  }
+}
+
+function withStatus(value: Draft, setId: string, status: SetLog['status']): Draft {
+  return {
+    ...value,
+    sets: value.sets.map((set) => (set.id === setId ? { ...set, status } : set)),
+  }
+}
+
+describe('SessionFocus', () => {
+  it('ne rend que la série canonique avec l’avancement et le chrono stable', () => {
+    render(<SessionFocus {...props()} />)
+
+    expect(screen.getAllByRole('article')).toHaveLength(1)
+    expect(screen.getByRole('heading', { name: 'Soulevé de terre' })).toBeInTheDocument()
+    expect(screen.queryByText('Développé incliné')).not.toBeInTheDocument()
+    expect(screen.getByText('Série 1/16')).toBeInTheDocument()
+    expect(screen.getByText('Séance C · Exercice 1/5')).toBeInTheDocument()
+    expect(screen.getByText('Repos libre')).toBeInTheDocument()
+    expect(screen.getByRole('progressbar')).toHaveAttribute(
+      'aria-valuetext',
+      '0/16 séries traitées',
+    )
+  })
+
+  it('n’avance pas avant que le parent fournisse le brouillon écrit', () => {
+    const value = draft()
+    const actions = props(value)
+    render(<SessionFocus {...actions} />)
+    const currentName = screen.getByRole('article').getAttribute('aria-label')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Valider' }))
+
+    expect(actions.onValidate).toHaveBeenCalledOnce()
+    expect(screen.getByRole('article')).toHaveAttribute('aria-label', currentName)
+    expect(screen.getByText('Série 1/16')).toBeInTheDocument()
+  })
+
+  it('affiche le RPE uniquement sur le top set', () => {
+    const value = treatBefore(draft(), 'c-deadlift:top:0')
+    render(<SessionFocus {...props(value)} />)
+
+    expect(screen.getByRole('group', { name: 'RPE' })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: /100 kg — Par côté/ })).toBeInTheDocument()
+  })
+
+  it('rend le partenaire puis l’exercice suivant dans un superset', () => {
+    const value = treatBefore(draft('A'), 'a-tractions-lestees:accessory:0')
+    render(<SessionFocus {...props(value)} />)
+
+    expect(screen.getByText('SS · Dips lestés')).toBeInTheDocument()
+    expect(screen.getByText('Dips lestés · série 1/3')).toBeInTheDocument()
+  })
+
+  it('permet de passer un palier et un optionnel depuis leur nature réelle', () => {
+    const warmupActions = props()
+    const { unmount } = render(<SessionFocus {...warmupActions} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Passer ce palier' }))
+    expect(warmupActions.onSkip).toHaveBeenCalledOnce()
+    unmount()
+
+    const optional = treatBefore(draft(), 'c-elevations:accessory:0')
+    const optionalActions = props(optional)
+    render(<SessionFocus {...optionalActions} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Sauter — optionnel' }))
+    expect(optionalActions.onSkip).toHaveBeenCalledOnce()
+  })
+
+  it('offre une relecture précédente puis un retour explicite à la série courante', () => {
+    let value = draft()
+    const first = buildSessionQueue(value)[0]!.set.id
+    const second = buildSessionQueue(value)[1]!.set.id
+    value = withStatus(value, first, 'validated')
+    value = withStatus(value, second, 'validated')
+    render(<SessionFocus {...props(value)} />)
+
+    const canonicalName = screen.getByRole('article').getAttribute('aria-label')
+    fireEvent.click(screen.getByRole('button', { name: 'Précédente' }))
+    expect(screen.getByRole('article')).not.toHaveAttribute('aria-label', canonicalName)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retour à la série courante' }))
+    expect(screen.getByRole('article')).toHaveAttribute('aria-label', canonicalName)
+  })
+
+  it('garde la carte et bloque ses actions pendant une écriture en échec', () => {
+    const actions = props()
+    render(<SessionFocus {...actions} writing errorMessage="Sauvegarde impossible. Réessayer." />)
+
+    const card = screen.getByRole('article')
+    expect(card).toHaveAttribute('aria-busy', 'true')
+    expect(within(card).getByRole('alert')).toHaveTextContent('Sauvegarde impossible. Réessayer.')
+    expect(screen.getByRole('button', { name: 'Sauvegarde…' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Passer ce palier' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Quitter la vue' })).toBeDisabled()
+  })
+
+  it('affiche le chrono actif au même emplacement', () => {
+    render(
+      <SessionFocus
+        {...props()}
+        timer={{
+          endsAt: Date.now() + 60_000,
+          label: 'Récup top set',
+          onAdjust: vi.fn(),
+          onStop: vi.fn(),
+        }}
+      />,
+    )
+
+    expect(screen.getByRole('timer')).toBeInTheDocument()
+    expect(screen.getByText('Récup top set')).toBeInTheDocument()
+    expect(screen.queryByText('Repos libre')).not.toBeInTheDocument()
+  })
+})
