@@ -11,9 +11,26 @@ export type DraftPort = Pick<CarnetStore, 'loadDraft' | 'saveDraft'>
 
 type SetPatch = Partial<Pick<SetLog, 'weight' | 'reps' | 'rpe'>>
 type SetValue = Pick<SetLog, 'weight' | 'reps' | 'rpe' | 'status'>
+type TimerIntent = { seconds: number; label: string } | null
 
 function asError(error: unknown): Error {
   return error instanceof Error ? error : new Error('Échec de sauvegarde du brouillon')
+}
+
+function withValidatedSet(
+  current: Draft,
+  setId: string,
+  value: SetValue,
+  timer: TimerIntent,
+  now: number,
+): Draft {
+  return {
+    ...current,
+    sets: current.sets.map((set) =>
+      set.id === setId ? { ...set, ...value, status: 'validated' } : set,
+    ),
+    ...(timer === null ? {} : { timerEndsAt: now + timer.seconds * 1000, timerLabel: timer.label }),
+  }
 }
 
 /** La série dont la charge pilote les paliers de son exercice. */
@@ -144,6 +161,31 @@ export function useDraftEditor(store: DraftPort, initialDraft?: Draft) {
     [persist],
   )
 
+  /**
+   * Écrit avant de publier le nouvel état local. Le focus l'utilise pour que la carte
+   * courante ne change jamais sur la simple intention d'écrire.
+   */
+  const commitAfterPersist = useCallback(
+    async (update: (current: Draft) => Draft) => {
+      const current = draftRef.current
+      if (!current) throw new Error('Brouillon introuvable')
+      const next = { ...update(current), updatedAt: Date.now() }
+      const pending = saveQueue.current.catch(() => undefined).then(() => store.saveDraft(next))
+      saveQueue.current = pending
+      try {
+        await pending
+      } catch (error) {
+        const failure = asError(error)
+        setSaveError(failure)
+        throw failure
+      }
+      draftRef.current = next
+      setDraft(next)
+      setSaveError(undefined)
+    },
+    [store],
+  )
+
   const changeSet = useCallback(
     (setId: string, patch: SetPatch) => {
       commit((current) => ({
@@ -249,18 +291,28 @@ export function useDraftEditor(store: DraftPort, initialDraft?: Draft) {
    * retirerait son repos ; en créer une lui en donnerait un qu'il n'a pas demandé.
    */
   const validateSet = useCallback(
-    (setId: string, value: SetValue, timer: { seconds: number; label: string } | null) => {
-      commit((current) => ({
-        ...current,
-        sets: current.sets.map((set) =>
-          set.id === setId ? { ...set, ...value, status: 'validated' } : set,
-        ),
-        ...(timer === null
-          ? {}
-          : { timerEndsAt: Date.now() + timer.seconds * 1000, timerLabel: timer.label }),
-      }))
+    (setId: string, value: SetValue, timer: TimerIntent) => {
+      const now = Date.now()
+      commit((current) => withValidatedSet(current, setId, value, timer, now))
     },
     [commit],
+  )
+
+  const validateSetAfterPersist = useCallback(
+    (setId: string, value: SetValue, timer: TimerIntent) => {
+      const now = Date.now()
+      return commitAfterPersist((current) => withValidatedSet(current, setId, value, timer, now))
+    },
+    [commitAfterPersist],
+  )
+
+  const skipSetAfterPersist = useCallback(
+    (setId: string) =>
+      commitAfterPersist((current) => ({
+        ...current,
+        sets: current.sets.map((set) => (set.id === setId ? { ...set, status: 'skipped' } : set)),
+      })),
+    [commitAfterPersist],
   )
 
   const adjustTimer = useCallback(
@@ -291,7 +343,9 @@ export function useDraftEditor(store: DraftPort, initialDraft?: Draft) {
     updateNotes,
     updateKeepAwake,
     validateSet,
+    validateSetAfterPersist,
     skipSet: (setId: string) => setStatus(setId, 'skipped'),
+    skipSetAfterPersist,
     editSet: (setId: string) => setStatus(setId, 'entered'),
     adjustTimer,
     stopTimer,

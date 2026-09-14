@@ -205,6 +205,7 @@ export function SessionFocus({
             label={timer.label}
             onAdjust={timer.onAdjust}
             onStop={timer.onStop}
+            disabled={writing}
           />
         ) : (
           <aside className="flex min-h-[11rem] items-center justify-center rounded-2xl border border-line bg-surface p-3 text-center">

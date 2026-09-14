@@ -219,6 +219,58 @@ describe('useDraftEditor', () => {
     await waitFor(() => expect(result.current.saveError?.message).toBe('quota'))
   })
 
+  it('ne publie la validation focus qu’après la réussite de l’écriture', async () => {
+    let release!: () => void
+    const persisted = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const initial = draftFixture()
+    const store: DraftPort = {
+      loadDraft: vi.fn().mockResolvedValue(initial),
+      saveDraft: vi.fn().mockReturnValue(persisted),
+    }
+    const { result } = renderHook(() => useDraftEditor(store, initial))
+
+    let validation!: Promise<void>
+    act(() => {
+      validation = result.current.validateSetAfterPersist(
+        'set-1',
+        { weight: 75, reps: 4, rpe: 8, status: 'validated' },
+        { seconds: 150, label: 'Récup Squat' },
+      )
+    })
+
+    expect(result.current.draft?.sets[0]?.status).toBe('planned')
+    expect(result.current.draft?.timerEndsAt).toBeNull()
+
+    release()
+    await act(() => validation)
+
+    expect(result.current.draft?.sets[0]).toMatchObject({ status: 'validated', rpe: 8 })
+    expect(result.current.draft?.timerLabel).toBe('Récup Squat')
+  })
+
+  it('garde la série focus courante lorsque son écriture échoue', async () => {
+    const initial = draftFixture()
+    const store: DraftPort = {
+      loadDraft: vi.fn().mockResolvedValue(initial),
+      saveDraft: vi.fn().mockRejectedValue(new Error('quota')),
+    }
+    const { result } = renderHook(() => useDraftEditor(store, initial))
+
+    await expect(
+      result.current.validateSetAfterPersist(
+        'set-1',
+        { weight: 75, reps: 4, rpe: 8, status: 'validated' },
+        { seconds: 150, label: 'Récup Squat' },
+      ),
+    ).rejects.toThrow('quota')
+
+    expect(result.current.draft?.sets[0]?.status).toBe('planned')
+    expect(result.current.draft?.timerEndsAt).toBeNull()
+    await waitFor(() => expect(result.current.saveError?.message).toBe('quota'))
+  })
+
   it('écrit la valeur complète renvoyée par une carte de série', async () => {
     const saveDraft = vi.fn<(draft: Draft) => Promise<void>>().mockResolvedValue(undefined)
     const store: DraftPort = {
