@@ -32,6 +32,14 @@ describe('ce que le maximum estimé refuse de calculer', () => {
     expect(e1rm(top({ rpe: null }))).toBeNull()
   })
 
+  it('ne rend rien pour le développé volume, même noté avec un RPE', () => {
+    // P1 de Codex sur #58. `Seance.tops.benchVol` porte la **plus légère** des trois
+    // séries de volume, agrégée par `deriveSeance` et non mesurée. Le schéma d'export
+    // accepte parfaitement un RPE dessus — seule son absence habituelle masquait le
+    // chemin, et une absence de donnée ne fait pas respecter une règle.
+    expect(e1rm(top({ lift: 'benchVol', weight: 60, reps: 8, rpe: 8 }))).toBeNull()
+  })
+
   it('ne rend rien sur une charge qui n’est pas à la barre', () => {
     // « +20 kg » de lest n'est le maximum de rien tant que l'app ignore le poids de
     // corps d'Ugo, et elle l'ignore.

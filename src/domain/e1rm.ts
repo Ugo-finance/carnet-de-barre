@@ -29,6 +29,11 @@
  * progrès, et la carte annoncerait un exploit qui n'a pas eu lieu. L'absence se propage,
  * comme partout ailleurs dans ce projet.
  *
+ * **Pas d'e1RM hors d'un top set.** Le développé volume en est exclu : son entrée dans
+ * `Seance.tops` porte la **plus légère** des trois séries, agrégée par `deriveSeance` et
+ * non mesurée. En tirer un record estimerait une force depuis la moins bonne série du
+ * jour.
+ *
  * **Pas d'e1RM hors charge à la barre.** Les tractions lestées se notent en lest ajouté :
  * « +20 kg » n'est le maximum de rien tant que l'app ignore le poids de corps d'Ugo, et
  * elle l'ignore. Cinq top sets de plus qui n'en auront pas.
@@ -39,7 +44,34 @@
  * mêmes jours.
  */
 
+import { SEANCES } from './program.ts'
 import type { LiftKey, SetLog } from './types.ts'
+
+/**
+ * Les lifts dont un maximum estimé a un sens — P1 de Codex sur #58.
+ *
+ * Dérivé de la table du programme plutôt qu'écrit à la main : un lift qui changerait de
+ * nature d'exercice entrerait ou sortirait tout seul, au lieu de laisser une liste
+ * mentir en silence.
+ *
+ * **Seuls les `topset`**, et le développé volume en est donc exclu. Ce n'est pas une
+ * question de répétitions — huit répétitions estiment très bien un maximum — mais de ce
+ * que le chiffre **est** : `Seance.tops.benchVol` porte la **plus légère** des trois
+ * séries de volume, une valeur agrégée par `deriveSeance` et non un effort mesuré. En
+ * tirer un record reviendrait à estimer une force depuis la moins bonne série du jour.
+ *
+ * La règle vivait jusqu'ici dans le choix de lire `Seance.tops`, ce qui ne la tenait
+ * pas : le schéma d'export accepte parfaitement un `tops.benchVol` portant un RPE, et
+ * le record apparaissait alors. Seule l'absence habituelle de RPE sur le volume masquait
+ * le chemin.
+ */
+const LIFTS_A_TOP_SET: ReadonlySet<LiftKey> = new Set(
+  Object.values(SEANCES).flatMap((seance) =>
+    seance.exercises
+      .filter((exercise) => exercise.kind === 'topset' && exercise.lift)
+      .map((exercise) => exercise.lift as LiftKey),
+  ),
+)
 
 /** Ce qu'il faut d'une série pour en tirer quoi que ce soit. */
 export interface PerformanceTop {
@@ -47,6 +79,8 @@ export interface PerformanceTop {
   reps: number | null
   rpe: number | null
   loadKind: SetLog['loadKind']
+  /** Le lift concerné : il décide si la performance vient d'un top set. */
+  lift: LiftKey
 }
 
 /**
@@ -56,7 +90,8 @@ export interface PerformanceTop {
  * cas — charge hors barre, répétitions inconnues, RPE absent.
  */
 export function e1rm(performance: PerformanceTop): number | null {
-  const { weight, reps, rpe, loadKind } = performance
+  const { weight, reps, rpe, loadKind, lift } = performance
+  if (!LIFTS_A_TOP_SET.has(lift)) return null
   if (loadKind !== 'barTotal') return null
   if (weight == null || weight <= 0) return null
   if (reps == null || reps <= 0) return null
@@ -73,7 +108,6 @@ export function e1rm(performance: PerformanceTop): number | null {
 export interface TopPasse extends PerformanceTop {
   /** Date civile de la séance, `AAAA-MM-JJ`. */
   date: string
-  lift: LiftKey
 }
 
 export interface Record {

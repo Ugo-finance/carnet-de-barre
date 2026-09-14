@@ -305,6 +305,31 @@ describe('la progression', () => {
     expect(tractions?.recordE1RM).toBeNull()
   })
 
+  it('ne fabrique aucun record de force depuis le développé volume', () => {
+    // Le chemin complet, jusqu'au sélecteur : une séance historique dont le développé
+    // volume porte un RPE ne doit produire aucun maximum estimé — mais bien un record
+    // de charge, puisque « ai-je soulevé plus lourd » reste une question valide.
+    const historique: Seance[] = [
+      {
+        id: 's1',
+        date: '2026-09-08',
+        type: 'A',
+        lines: [],
+        tops: { benchVol: { w: 60, reps: 8, rpe: 8 } },
+        notes: '',
+      },
+    ]
+
+    const ligne = resumeProgression({
+      targets: CIBLES,
+      draft: undefined,
+      seances: historique,
+    }).lignes.find((candidate) => candidate.lift === 'benchVol')
+
+    expect(ligne?.recordE1RM).toBeNull()
+    expect(ligne?.recordCharge).toEqual({ valeur: 60, date: '2026-09-08' })
+  })
+
   it('ne rend aucun record sans historique', () => {
     const lignes = resumeProgression({ targets: CIBLES, draft: undefined }).lignes
     expect(lignes.every((ligne) => ligne.recordCharge === null)).toBe(true)
