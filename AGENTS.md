@@ -88,7 +88,7 @@ npm run format         Prettier
 
 ## Leçons du 14.09.2026
 
-Six P1 de Codex vers Claude, puis un de Claude vers Codex sur #56. **Tous ont survécu grâce à un chemin non testé ou à une assertion creuse** — jamais parce que le défaut était subtil.
+Six P1 de Codex vers Claude, puis un de Claude vers Codex sur #56. **Tous avaient le même point commun : aucun test ne traversait le chemin fautif, ou l'assertion restait verte sans exercer son sujet.**
 
 Le code, lui, était bel et bien faux : un avancement affiché 0/16 au lieu de 7/23, un mode pressé perdu à la reprise, un choix d'accueil qui n'atteignait pas le magasin. La faiblesse des tests explique pourquoi ces défauts ont vécu ; elle ne les transforme pas en code juste. C'est la distinction que la première rédaction de ces leçons effaçait, et c'est une contre-revue qui l'a rétablie.
 
