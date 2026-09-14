@@ -89,6 +89,23 @@ export interface PerformanceTop {
  * `null` n'est pas un échec : c'est la réponse exacte. Voir l'en-tête pour les trois
  * cas — charge hors barre, répétitions inconnues, RPE absent.
  */
+/**
+ * Ce lift porte-t-il un top set quelque part dans le programme ?
+ *
+ * Exporté parce qu'un écran doit pouvoir dire **pourquoi** un maximum estimé manque,
+ * et qu'il y a deux raisons qu'on ne peut pas confondre sans mentir : « il n'y a pas
+ * de top set ici » est définitif, « aucun top set ne porte de RPE » se corrige en
+ * notant un RPE. La première livraison de l'écran Progression séparait bien deux
+ * messages, mais sur `loadKind`, qui n'est pas le bon discriminant : le développé
+ * couché **volume** est en `barTotal` sans avoir le moindre top set, et recevait donc
+ * « note un RPE sur un top set » — une consigne qu'aucun RPE n'aurait satisfaite.
+ *
+ * La règle vit ici, à côté de celle qu'elle sert, plutôt que recopiée dans l'écran.
+ */
+export function aUnTopSet(lift: LiftKey): boolean {
+  return LIFTS_A_TOP_SET.has(lift)
+}
+
 export function e1rm(performance: PerformanceTop): number | null {
   const { weight, reps, rpe, loadKind, lift } = performance
   if (!LIFTS_A_TOP_SET.has(lift)) return null

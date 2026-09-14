@@ -21,6 +21,7 @@ import { BottomSheet } from '../../components/BottomSheet.tsx'
 import { formatDate, formatKg, formatLoad } from '../../domain/format.ts'
 import { LIFTS } from '../../domain/program.ts'
 import { resumeProgression, type LigneProgression } from '../../db/selectors.ts'
+import { aUnTopSet } from '../../domain/e1rm.ts'
 import type { TargetPatch } from '../../db/targets.ts'
 import type { Draft, LiftKey, Seance, Targets } from '../../domain/types.ts'
 
@@ -115,20 +116,27 @@ function LigneLift({
           absence="Aucun top set enregistré."
         />
         {/*
-         * Le maximum estimé manque pour deux motifs qu'il ne faut pas confondre, et
-         * c'est la formule de CB-13 qui les sépare : les tractions n'en ont jamais,
-         * leur lest n'estimant rien sans le poids de corps ; les autres n'en ont pas
-         * tant qu'aucun top set ne porte de RPE. Dire « — » dans les deux cas ferait
-         * croire à Ugo qu'il suffit de noter un RPE sur ses tractions.
+         * Le maximum estimé manque pour **trois** motifs qu'il ne faut pas confondre,
+         * et c'est la formule de CB-13 qui les sépare. Deux sont définitifs — le
+         * développé volume n'a aucun top set, les tractions n'estiment rien sans le
+         * poids de corps — et un seul se corrige, en notant un RPE.
+         *
+         * Une première version discriminait sur `loadKind`, ce qui envoyait au
+         * développé volume, en `barTotal`, la consigne « note un RPE sur un top set ».
+         * Aucun RPE ne l'aurait satisfaite : l'exercice est en `kind: 'volume'` et
+         * n'entre jamais dans `LIFTS_A_TOP_SET`. Dire à Ugo de faire une chose qui ne
+         * marchera jamais est pire qu'un tiret.
          */}
         <Record
           titre="Max estimé"
           record={ligne.recordE1RM}
           rendu={formatKg}
           absence={
-            definition.loadKind === 'barTotal'
-              ? 'Note un RPE sur un top set.'
-              : 'Non estimable sans ton poids de corps.'
+            !aUnTopSet(ligne.lift)
+              ? 'Pas de top set sur cet exercice.'
+              : definition.loadKind === 'barTotal'
+                ? 'Note un RPE sur un top set.'
+                : 'Non estimable sans ton poids de corps.'
           }
         />
       </dl>
