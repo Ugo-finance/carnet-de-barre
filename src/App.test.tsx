@@ -11,12 +11,37 @@
  */
 
 import 'fake-indexeddb/auto'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { store } from './db/store'
 
+/**
+ * Mardi — donc **séance A**, celle qui contient le squat.
+ *
+ * Le fichier montait `<App />` sur l'horloge réelle, et l'app propose une séance
+ * différente selon le jour : dimanche C, mardi A, jeudi B. Les tests passaient donc en
+ * fonction du jour où on les lançait, et `atteint l'écran des cibles` est tombé le lundi
+ * 14.09.2026 sur une CI verte la veille — l'écran de séance reste monté derrière celui
+ * des cibles, et « Squat » s'y trouvait deux fois.
+ *
+ * Le jour est donc figé, et figé sur **le cas qui cassait** plutôt que sur celui qui
+ * passait : un test de rotation pris un seul jour ne prouve rien des six autres.
+ */
+const MARDI = new Date('2026-09-15T08:00:00+02:00')
+
 describe('navigation depuis le point d’entrée réel', () => {
+  beforeEach(() => {
+    // `Date` seulement : figer aussi les minuteurs suspend `fake-indexeddb`, et les
+    // onze tests du fichier expirent au premier `findBy`.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(MARDI)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('ouvre la séance par défaut', async () => {
     render(<App />)
     // C'est le seul écran qu'Ugo ouvre les mains sur une barre : il doit être là sans
@@ -31,7 +56,11 @@ describe('navigation depuis le point d’entrée réel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cibles' }))
 
     expect(await screen.findByRole('heading', { name: 'Cibles' })).toBeInTheDocument()
-    await waitFor(() => expect(screen.getByText('Squat')).toBeInTheDocument())
+    // Cherché **dans la liste des cibles**, et non dans le document entier : l'écran de
+    // séance reste monté derrière celui-ci, et il porte lui aussi le mot « Squat » les
+    // jours de séance A. La requête large trouvait alors deux éléments et le test tombait.
+    const liste = await screen.findByRole('list')
+    await waitFor(() => expect(within(liste).getByText('Squat')).toBeInTheDocument())
   })
 
   it('atteint l’écran d’export', async () => {
@@ -119,8 +148,11 @@ describe('navigation depuis le point d’entrée réel', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Cibles' }))
 
-    await waitFor(() => expect(screen.getByText('Squat')).toBeInTheDocument())
-    expect(screen.getByText('75 kg')).toBeInTheDocument()
+    // Même cadrage que ci-dessus, et pour la même raison : « Squat » **et** « 75 kg »
+    // figurent tous deux sur l'écran de séance resté monté, les jours de séance A.
+    const liste = await screen.findByRole('list')
+    await waitFor(() => expect(within(liste).getByText('Squat')).toBeInTheDocument())
+    expect(within(liste).getByText('75 kg')).toBeInTheDocument()
   })
 
   it('atteint l’historique et y montre les séances de départ', async () => {
