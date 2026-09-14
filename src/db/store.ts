@@ -32,7 +32,7 @@ import {
   db as defaultDb,
   ensureSeeded,
 } from './database.ts'
-import { buildDraft, hydrateDraft, isBlankDraft } from './draft.ts'
+import { buildDraft, hydrateDraft, isDraftActive, reutilisable, startDraft } from './draft.ts'
 import { applyProgression, draftToSeance, targetsDiverged } from './derive.ts'
 import { applyTargetPatch, type TargetPatch } from './targets.ts'
 import { seanceSchema } from '../domain/schema.ts'
@@ -68,6 +68,7 @@ export type DraftStore = Pick<
   | 'getSeance'
   | 'loadDraft'
   | 'openDraft'
+  | 'startSession'
   | 'saveDraft'
   | 'clearDraft'
   | 'finalizeSeance'
@@ -124,6 +125,52 @@ export class DexieStore implements DraftStore {
     // Une ligne écrite avant l'ajout d'un champ n'en a pas : on la complète ici, au
     // seul point où les brouillons entrent dans l'app.
     return hydrateDraft(recent)
+  }
+
+  /**
+   * Le démarrage, en une transaction — CB-62.
+   *
+   * Tout se joue **dedans** : la relecture du brouillon stocké, sa construction s'il
+   * n'existe pas, la pose de `startedAt` et l'écriture. Aucun objet venu de l'appelant
+   * n'entre ici, et c'est la raison d'être de la méthode — une copie tenue par l'écran
+   * d'accueil peut avoir été rendue périmée par un ajustement de cible, et la réécrire
+   * ressusciterait ses anciennes `baseTargets`.
+   *
+   * `seances` et `targets` sont lues dans la même transaction plutôt que par
+   * `listSeances()` / `getTargets()`, qui en ouvriraient une seconde et rouvriraient la
+   * fenêtre qu'on ferme.
+   */
+  async startSession(type: SeanceType, date: string, now = Date.now()): Promise<Draft> {
+    return this.database.transaction(
+      'rw',
+      this.database.drafts,
+      this.database.targets,
+      this.database.seances,
+      async () => {
+        const stocke = await this.database.drafts.toCollection().first()
+        const existant = stocke ? hydrateDraft(stocke) : undefined
+        const draft =
+          existant && reutilisable(existant, type, date)
+            ? existant
+            : await this.construireDansTransaction(type, date)
+
+        // Idempotent : une séance déjà démarrée garde son instant. Reprendre après un
+        // rechargement ne redémarre pas le compteur.
+        const demarre = startDraft(draft, now)
+        await this.database.drafts.clear()
+        await this.database.drafts.put({ ...demarre, updatedAt: now })
+        return { ...demarre, updatedAt: now }
+      },
+    )
+  }
+
+  /** Construit un brouillon neuf **sans ouvrir de transaction** : l'appelant en tient une. */
+  private async construireDansTransaction(type: SeanceType, date: string): Promise<Draft> {
+    const row = await this.database.targets.get(TARGETS_KEY)
+    if (!row) throw new StoreError('storage-unavailable', 'Cibles introuvables.')
+    const { key: _key, ...targets } = row
+    const seances = await this.database.seances.toArray()
+    return buildDraft(type, date, targets, { id: crypto.randomUUID(), seances })
   }
 
   /**
@@ -275,7 +322,7 @@ export class DexieStore implements DraftStore {
         // cibles, dans cette même transaction : il ne portait aucune information.
         const stockeExistant = await this.database.drafts.toCollection().first()
         const existant = stockeExistant ? hydrateDraft(stockeExistant) : undefined
-        if (existant && !isBlankDraft(existant)) {
+        if (existant && isDraftActive(existant)) {
           throw new StoreError(
             'draft-in-progress',
             'Une séance est en cours. Termine-la avant d’ajuster une cible.',

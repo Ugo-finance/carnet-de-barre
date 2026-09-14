@@ -168,6 +168,17 @@ export interface Seance {
   /** Séries détaillées. Absentes sur les séances legacy. */
   sets?: SetLog[]
   accessories?: AccessoryLog[]
+  /**
+   * Instant du **démarrage explicite** de la séance (epoch ms) — CB-62.
+   *
+   * Absent quand la séance vient du carnet papier, et quand elle a été enregistrée
+   * avant que le démarrage explicite n'existe. `completedAt - startedAt` est donc une
+   * durée **parfois inconnue**, jamais une durée fausse : c'est exactement l'arbitrage
+   * du contrat, une métrique indéfinie se masque et ne s'invente pas.
+   */
+  startedAt?: number
+  /** Instant de la finalisation (epoch ms). Absent sur les séances du carnet papier. */
+  completedAt?: number
   /** Instant technique d'enregistrement (epoch ms). */
   ts?: number
 }
@@ -208,6 +219,26 @@ export interface Draft {
    * fondé sur des cibles devenues obsolètes (ajustement manuel entre-temps).
    */
   baseTargets: Targets
+  /**
+   * Instant où Ugo a **démarré** la séance, ou `null` — CB-62.
+   *
+   * `createdAt` ne mesure rien : l'app ouvre un brouillon au simple affichage de
+   * l'accueil, y compris juste après une finalisation. Une durée calculée depuis lui
+   * compterait le temps passé dans les transports. `startedAt` n'est posé que par un
+   * geste explicite, et il est **immuable** une fois posé : reprendre une séance après
+   * un rechargement ne redémarre pas le compteur.
+   *
+   * Le champ dit aussi, seul, ce que cinq appels à `isBlankDraft` disaient jusqu'ici de
+   * façon détournée — voir `isDraftActive`.
+   *
+   * **Il reste `null` sur un brouillon écrit avant son existence**, et ce n'est pas une
+   * lacune à combler. Dater ce démarrage depuis `createdAt` transformerait une heure
+   * qu'on sait fausse en heure réelle, alors que la seule chose qu'on ait à protéger —
+   * qu'une séance en cours ne se fasse pas reconstruire — l'est déjà par le repli
+   * d'`isDraftActive`. Sa séance finale n'aura donc pas de durée : inconnue, jamais
+   * inventée. P1 de Codex sur #54, et son argument était meilleur que le mien.
+   */
+  startedAt: number | null
   createdAt: number
   updatedAt: number
 }

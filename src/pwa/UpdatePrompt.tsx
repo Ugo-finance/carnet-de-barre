@@ -1,6 +1,6 @@
 import { useState, useSyncExternalStore } from 'react'
 import type { CarnetStore } from '../db/contracts'
-import { isBlankDraft } from '../db/draft'
+import { isDraftActive } from '../db/draft'
 import { pwaUpdates, type PwaUpdateController } from './register'
 
 export type UpdateStore = Pick<CarnetStore, 'loadDraft'>
@@ -34,7 +34,7 @@ export function UpdatePrompt({
     setMessage(undefined)
     try {
       const draft = await store.loadDraft()
-      if (draft && !isBlankDraft(draft)) {
+      if (draft && isDraftActive(draft)) {
         setMessage("Termine ta séance avant d'appliquer la mise à jour.")
         return
       }

@@ -169,6 +169,8 @@ export function buildDraft(
     timerLabel: null,
     keepAwake: false,
     baseTargets: structuredClone(targets),
+    // Ouvrir n'est pas démarrer : l'accueil construit un brouillon au simple affichage.
+    startedAt: null,
     createdAt: now,
     updatedAt: now,
   }
@@ -181,7 +183,8 @@ export function buildDraft(
  * ajouté est donc absent de toute ligne déjà en base, y compris celle d'une séance
  * ouverte au moment de la mise à jour.
  */
-export type StoredDraft = Omit<Draft, 'keepAwake'> & Partial<Pick<Draft, 'keepAwake'>>
+export type StoredDraft = Omit<Draft, 'keepAwake' | 'startedAt'> &
+  Partial<Pick<Draft, 'keepAwake' | 'startedAt'>>
 
 /**
  * Complète une ligne relue avec les champs apparus depuis qu'elle a été écrite.
@@ -195,6 +198,7 @@ export function hydrateDraft(row: StoredDraft): Draft {
   return {
     ...row,
     keepAwake: row.keepAwake ?? false,
+    startedAt: row.startedAt ?? null,
     notes: fusionnerAccessoires(row),
     accessories: [],
   }
@@ -244,10 +248,69 @@ function fusionnerAccessoires(row: StoredDraft): string {
  * depuis. Mieux vaut refuser à tort que reconstruire une séance réelle.
  */
 export function isBlankDraft(draft: Draft): boolean {
-  return (
-    draft.sets.every((set) => set.status === 'planned') &&
-    draft.accessories.every((accessory) => !accessory.done && accessory.note.trim() === '') &&
-    draft.notes.trim() === '' &&
-    draft.timerEndsAt === null
+  return !porteUneInformation(draft)
+}
+
+/** Ce que `isBlankDraft` nie, sur la forme minimale qui suffit à en juger. */
+function porteUneInformation(
+  porteur: Pick<Draft, 'sets' | 'accessories' | 'notes' | 'timerEndsAt'>,
+): boolean {
+  return !(
+    porteur.sets.every((set) => set.status === 'planned') &&
+    porteur.accessories.every((accessory) => !accessory.done && accessory.note.trim() === '') &&
+    porteur.notes.trim() === '' &&
+    porteur.timerEndsAt === null
   )
+}
+
+/**
+ * Marque la séance comme **démarrée**, une fois pour toutes — CB-62.
+ *
+ * Idempotente : reprendre une séance après un rechargement, ou taper deux fois sur
+ * « Démarrer », ne redate rien. Le premier instant est le bon, et un second geste ne
+ * peut que raccourcir une durée réelle.
+ */
+export function startDraft(draft: Draft, now = Date.now()): Draft {
+  if (draft.startedAt !== null) return draft
+  return { ...draft, startedAt: now }
+}
+
+/**
+ * « Une séance est-elle en cours ? » — la question unique, à un seul endroit.
+ *
+ * Cinq appelants y répondaient par `!isBlankDraft(...)`, c'est-à-dire par « ce
+ * brouillon porte-t-il une information ? ». C'était un détour : un brouillon
+ * **démarré** mais dont rien n'est encore validé est une séance en cours, et l'ancien
+ * critère répondait non. Ugo debout devant la barre, l'app se croyait libre de
+ * reconstruire son brouillon sur de nouvelles cibles.
+ *
+ * Les deux critères sont gardés, et c'est délibéré. `startedAt` est la vérité, mais
+ * rien ne le pose encore — le démarrage explicite arrive avec l'accueil v2 (CB-63).
+ * Retirer le repli maintenant rendrait toute séance en cours invisible d'ici là. Une
+ * fois CB-63 livré, le repli ne couvre plus que les brouillons ouverts avant.
+ */
+/**
+ * Ce brouillon-là sert-il la demande de démarrage ? — CB-62a.
+ *
+ * Deux cas, et ils ne se ressemblent pas.
+ *
+ * Un brouillon **actif** gagne toujours : D9 dit que rien ne se perd, et démarrer une
+ * séance ne doit jamais effacer une saisie en cours. Demander A pendant qu'une C est
+ * commencée rend la C — c'est à l'interface de proposer explicitement de l'abandonner.
+ *
+ * Un brouillon **vierge** ne porte aucune information, donc rien à protéger. Le
+ * réutiliser quand même annulerait le choix manuel : Ugo sélectionne B, l'app démarre
+ * A — celle que l'accueil avait construite toute seule en s'affichant — et sa date avec.
+ * Il n'est donc réutilisable que s'il sert déjà le type **et** la date demandés.
+ *
+ * P1 de Codex sur #54, reproduit : `openDraft('A', 15.09)` puis
+ * `startSession('B', 17.09)` rendait A au 15.
+ */
+export function reutilisable(draft: Draft, type: SeanceType, date: string): boolean {
+  if (isDraftActive(draft)) return true
+  return draft.type === type && draft.date === date
+}
+
+export function isDraftActive(draft: Draft): boolean {
+  return draft.startedAt !== null || porteUneInformation(draft)
 }

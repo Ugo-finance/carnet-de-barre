@@ -16,7 +16,7 @@ import { SessionHome } from './features/session/SessionHome'
 import { ExportPanel } from './features/export/ExportPanel'
 import { TargetsPanel } from './features/history/TargetsPanel'
 import { HistoryPanel } from './features/history/HistoryPanel'
-import { isBlankDraft } from './db/draft'
+import { isDraftActive } from './db/draft'
 import { UpdatePrompt } from './pwa/UpdatePrompt'
 import type { Seance, Targets } from './domain/types'
 
@@ -54,7 +54,7 @@ function CiblesTab({ onAdjusted }: { onAdjusted: () => void }) {
         // Un brouillon **vierge** n'est pas une séance : l'écran d'accueil en ouvre un
         // dès l'affichage, y compris juste après une finalisation. Le magasin sait le
         // reconstruire sur les nouvelles cibles ; verrouiller ici l'en empêcherait.
-        setVerrouille(brouillon !== undefined && !isBlankDraft(brouillon))
+        setVerrouille(brouillon !== undefined && isDraftActive(brouillon))
       },
       (cause: unknown) =>
         actif && setErreur(cause instanceof Error ? cause.message : 'Lecture impossible.'),
