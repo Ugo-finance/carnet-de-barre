@@ -213,7 +213,10 @@ export class DexieStore implements DraftStore {
       id: crypto.randomUUID(),
       seances,
       // Le choix de l'accueil l'emporte sur la préférence, qui n'est qu'un défaut.
-      preferences: { ...preferences, modePresseParDefaut: rushed ?? preferences.modePresseParDefaut },
+      preferences: {
+        ...preferences,
+        modePresseParDefaut: rushed ?? preferences.modePresseParDefaut,
+      },
     })
   }
 
