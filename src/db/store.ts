@@ -165,6 +165,9 @@ export class DexieStore implements DraftStore {
       this.database.drafts,
       this.database.targets,
       this.database.seances,
+      // `meta` porte les réglages, lus par la construction. Une table hors portée fait
+      // lever Dexie au premier démarrage sans brouillon — donc en salle, pas en test.
+      this.database.meta,
       async () => {
         const stocke = await this.database.drafts.toCollection().first()
         const existant = stocke ? hydrateDraft(stocke) : undefined
@@ -183,13 +186,24 @@ export class DexieStore implements DraftStore {
     )
   }
 
-  /** Construit un brouillon neuf **sans ouvrir de transaction** : l'appelant en tient une. */
+  /**
+   * Construit un brouillon neuf **sans ouvrir de transaction** : l'appelant en tient une.
+   *
+   * Les réglages voyagent ici comme dans `openDraft` : une séance démarrée depuis
+   * l'accueil et une séance démarrée depuis le sélecteur doivent s'ouvrir dans le même
+   * état. Les oublier ferait de `startSession` le seul chemin qui ignore le mode pressé.
+   */
   private async construireDansTransaction(type: SeanceType, date: string): Promise<Draft> {
     const row = await this.database.targets.get(TARGETS_KEY)
     if (!row) throw new StoreError('storage-unavailable', 'Cibles introuvables.')
     const { key: _key, ...targets } = row
     const seances = await this.database.seances.toArray()
-    return buildDraft(type, date, targets, { id: crypto.randomUUID(), seances })
+    const reglages = await this.database.meta.get(PREFERENCES_KEY)
+    return buildDraft(type, date, targets, {
+      id: crypto.randomUUID(),
+      seances,
+      preferences: readPreferences(reglages?.value),
+    })
   }
 
   /**

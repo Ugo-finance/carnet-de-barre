@@ -168,6 +168,19 @@ describe('ce que les réglages changent réellement', () => {
     expect(draft.rushed).toBe(true)
   })
 
+  it('démarre aussi la séance dans l’état réglé', async () => {
+    // `startSession` est un second chemin de construction, et il aurait pu être le seul
+    // à ignorer les réglages — le genre d'oubli qui ne se voit qu'en salle, un mode
+    // pressé actif à l'accueil et inactif après le tap sur « Démarrer ».
+    const { store } = magasin()
+    await store.ready()
+    await store.savePreferences({ modePresseParDefaut: true, ecranAllume: true })
+
+    const demarre = await store.startSession('B', '2026-09-17', 5000)
+    expect(demarre.rushed).toBe(true)
+    expect(demarre.keepAwake).toBe(true)
+  })
+
   it('n’impose rien quand rien n’a été réglé', async () => {
     // Le défaut du mode pressé est `false` : il ampute l'affichage, personne ne doit le
     // subir sans l'avoir demandé.

@@ -118,6 +118,7 @@ export class MemoryStore implements DraftStore {
         : buildDraft(type, date, await this.getTargets(), {
             id: crypto.randomUUID(),
             seances: this.seances,
+            preferences: await this.getPreferences(),
           })
     this.draft = { ...startDraft(draft, now), updatedAt: now }
     return structuredClone(this.draft)
