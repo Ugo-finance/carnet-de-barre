@@ -17,6 +17,12 @@
  */
 
 import { LIFTS, RUSHED_EXERCISE_COUNT, SEANCES } from '../domain/program.ts'
+import {
+  recordCharge,
+  recordE1RM,
+  type Record as RecordLift,
+  type TopPasse,
+} from '../domain/e1rm.ts'
 import { currentSession, describeWhen, todayInZurich } from '../domain/schedule.ts'
 import type { ExerciseDef } from '../domain/program.ts'
 import type { Draft, Seance, SeanceType, SetLog, Targets } from '../domain/types.ts'
@@ -242,21 +248,35 @@ export interface MetriqueDifferee {
  */
 export const metriquesDifferees: readonly MetriqueDifferee[] = [
   {
-    cle: 'e1rm',
-    label: 'Max estimé',
-    motif: 'Formule non arrêtée — CB-13. Les top sets existent, la conversion non.',
-  },
-  {
     cle: 'tonnage',
     label: 'Tonnage',
-    motif: 'Le chariot de la presse et le poids du corps ne sont pas comptés — CB-13.',
-  },
-  {
-    cle: 'record',
-    label: 'Record',
-    motif: 'Dépend de la formule d’e1RM, qui n’est pas arrêtée — CB-13.',
+    // Le chariot de la presse 45° pèse 75,7 kg et n'entre pas dans la charge saisie ;
+    // les tractions et les dips se font au poids du corps, qu'Ugo n'a jamais donné à
+    // l'app. C'est une donnée manquante, pas une formule manquante — d'où le seul
+    // rescapé de cette liste depuis CB-13.
+    motif: 'Le chariot de la presse et le poids du corps ne sont pas comptés.',
   },
 ]
+
+/**
+ * L'historique des top sets, dans la forme que les records lisent — CB-13.
+ *
+ * La nature de charge vient de la **table du programme** et non de la séance : les
+ * séances enregistrées ne la portent pas sur leurs tops, et c'est elle qui décide si un
+ * maximum estimé a un sens. Les tractions se notent en lest ajouté, donc jamais.
+ */
+export function topsPasses(seances: readonly Seance[]): TopPasse[] {
+  return seances.flatMap((seance) =>
+    Object.entries(seance.tops ?? {}).map(([lift, top]) => ({
+      date: seance.date,
+      lift: lift as LigneProgression['lift'],
+      weight: top.w,
+      reps: top.reps,
+      rpe: top.rpe,
+      loadKind: LIFTS[lift as LigneProgression['lift']].loadKind,
+    })),
+  )
+}
 
 export interface LigneProgression {
   lift: keyof Omit<Targets, 'updatedAt'>
@@ -265,6 +285,15 @@ export interface LigneProgression {
   cible: number
   /** Échec en attente à cette charge, ou `null`. */
   echecEnAttente: number | null
+  /** Le plus lourd top set jamais fait sur ce lift, avec sa date. */
+  recordCharge: RecordLift | null
+  /**
+   * Le meilleur maximum estimé, ou `null` — CB-13.
+   *
+   * `null` sur les tractions, dont le lest ajouté n'estime aucun maximum sans le poids
+   * de corps, et sur tout lift dont aucun top set ne porte de RPE.
+   */
+  recordE1RM: RecordLift | null
 }
 
 /**
@@ -274,13 +303,18 @@ export interface LigneProgression {
  * séance active est une règle du magasin (`StoreError('draft-in-progress')`), et un
  * bouton actif qui échouera au clic est pire qu'un bouton désactivé.
  */
-export function resumeProgression(entree: { targets: Targets; draft: Draft | undefined }): {
+export function resumeProgression(entree: {
+  targets: Targets
+  draft: Draft | undefined
+  seances?: readonly Seance[]
+}): {
   lignes: LigneProgression[]
   ajustable: boolean
   differees: readonly MetriqueDifferee[]
 } {
   const { targets, draft } = entree
   const lifts = ['squat', 'bench', 'deadlift', 'tractions', 'benchVol'] as const
+  const tops = topsPasses(entree.seances ?? [])
 
   return {
     lignes: lifts.map((lift) => ({
@@ -288,6 +322,8 @@ export function resumeProgression(entree: { targets: Targets; draft: Draft | und
       label: LIFTS[lift].label,
       cible: targets[lift].w,
       echecEnAttente: targets[lift].fail,
+      recordCharge: recordCharge(tops, lift),
+      recordE1RM: recordE1RM(tops, lift),
     })),
     ajustable: !(draft && isDraftActive(draft)),
     differees: metriquesDifferees,
