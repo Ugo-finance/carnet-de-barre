@@ -85,13 +85,16 @@ export function SessionSummary({
         <section className="grid gap-3" aria-label="Records de la séance">
           {records.map((record) => (
             <article key={record.lift} className="rounded-2xl border border-warn/60 bg-surface p-4">
-              <p className="text-xs font-bold uppercase tracking-wide text-warn">Nouveau record</p>
+              <p className="text-xs font-bold uppercase tracking-wide text-warn">
+                {record.chargeBeaten || record.e1rmBeaten ? 'Nouveau record' : 'Records actuels'}
+              </p>
               <h2 className="mt-1 text-lg font-bold">{record.label}</h2>
-              <p className="mt-1 text-xs text-muted">{formatDate(result.seance.date)}</p>
               <dl className="mt-3 grid grid-cols-2 gap-2">
                 {record.charge === null ? null : (
                   <div className="rounded-xl bg-bg p-3">
-                    <dt className="text-xs text-muted">Charge</dt>
+                    <dt className="text-xs text-muted">
+                      Charge · {formatDate(record.charge.date)}
+                    </dt>
                     <dd className="num mt-1 font-bold">
                       {formatLoad(record.charge.valeur, record.loadKind)}
                     </dd>
@@ -99,7 +102,7 @@ export function SessionSummary({
                 )}
                 {record.e1rm === null ? null : (
                   <div className="rounded-xl bg-bg p-3">
-                    <dt className="text-xs text-muted">e1RM</dt>
+                    <dt className="text-xs text-muted">e1RM · {formatDate(record.e1rm.date)}</dt>
                     <dd className="num mt-1 font-bold">{formatKg(record.e1rm.valeur)}</dd>
                   </div>
                 )}

@@ -10,14 +10,16 @@ export interface SessionRecord {
   loadKind: LoadKind
   charge: LiftRecord | null
   e1rm: LiftRecord | null
+  chargeBeaten: boolean
+  e1rmBeaten: boolean
 }
 
 /**
- * Les records établis par la séance qui vient d'être finalisée.
+ * Les records des lifts travaillés dans la séance qui vient d'être finalisée.
  *
- * La comparaison se fait contre l'historique antérieur. Inclure d'abord la séance
- * courante dans le record global puis comparer sa date ne suffirait pas : deux séances
- * le même jour peuvent exister, et un record égalé n'est pas un record battu.
+ * Leur valeur et leur date viennent du record global, tandis que le badge de nouveauté
+ * se compare à l'historique antérieur. Comparer seulement les dates ne suffirait pas :
+ * deux séances le même jour peuvent exister, et un record égalé n'est pas battu.
  */
 export function sessionRecords(
   result: FinalizeResult,
@@ -33,18 +35,18 @@ export function sessionRecords(
 
   return currentTops.flatMap((candidate) => {
     const beaten = batLeRecord(previousTops, candidate)
-    if (!beaten.charge && !beaten.e1rm) return []
-
     const line = progression.find(({ lift }) => lift === candidate.lift)
-    if (!line) return []
+    if (!line || (!line.recordCharge && !line.recordE1RM)) return []
 
     return [
       {
         lift: candidate.lift,
         label: line.label,
         loadKind: LIFTS[candidate.lift].loadKind,
-        charge: beaten.charge ? line.recordCharge : null,
-        e1rm: beaten.e1rm ? line.recordE1RM : null,
+        charge: line.recordCharge,
+        e1rm: line.recordE1RM,
+        chargeBeaten: beaten.charge,
+        e1rmBeaten: beaten.e1rm,
       },
     ]
   })

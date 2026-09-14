@@ -161,13 +161,15 @@ describe('SessionSummary', () => {
     )
 
     const records = screen.getByRole('region', { name: 'Records de la séance' })
+    expect(within(records).getByText('Nouveau record')).toBeInTheDocument()
     expect(within(records).getByText('Soulevé de terre')).toBeInTheDocument()
     expect(within(records).getByText('97,5 kg')).toBeInTheDocument()
     expect(within(records).getByText('113,8 kg')).toBeInTheDocument()
-    expect(within(records).getByText('20.09.2026')).toBeInTheDocument()
+    expect(within(records).getByText('Charge · 20.09.2026')).toBeInTheDocument()
+    expect(within(records).getByText('e1RM · 20.09.2026')).toBeInTheDocument()
   })
 
-  it('ne célèbre pas un e1RM seulement calculable pour la première fois', () => {
+  it('affiche un premier e1RM calculable sans le célébrer comme un record battu', () => {
     const result = resultWith([])
     result.seance = {
       ...result.seance,
@@ -191,7 +193,40 @@ describe('SessionSummary', () => {
       />,
     )
 
-    expect(screen.queryByRole('region', { name: 'Records de la séance' })).not.toBeInTheDocument()
+    const records = screen.getByRole('region', { name: 'Records de la séance' })
+    expect(within(records).getByText('Records actuels')).toBeInTheDocument()
+    expect(within(records).getByText('e1RM · 20.09.2026')).toBeInTheDocument()
+    expect(within(records).queryByText('Nouveau record')).not.toBeInTheDocument()
+  })
+
+  it('porte la vraie date d’un record antérieur que la séance n’a pas battu', () => {
+    const result = resultWith([])
+    result.seance = {
+      ...result.seance,
+      tops: { deadlift: { w: 90, reps: 3, rpe: 8 } },
+    }
+
+    render(
+      <SessionSummary
+        result={result}
+        previousSeances={[
+          {
+            id: 'previous',
+            date: '2026-09-06',
+            type: 'C',
+            lines: [],
+            tops: { deadlift: { w: 97.5, reps: 3, rpe: 8 } },
+            notes: '',
+          },
+        ]}
+        next={{ type: 'A', scheduledDate: '2026-09-22', inDays: 2, isToday: false }}
+      />,
+    )
+
+    const records = screen.getByRole('region', { name: 'Records de la séance' })
+    expect(within(records).getByText('Charge · 06.09.2026')).toBeInTheDocument()
+    expect(within(records).getByText('e1RM · 06.09.2026')).toBeInTheDocument()
+    expect(within(records).queryByText('Nouveau record')).not.toBeInTheDocument()
   })
 
   it('relie les deux sorties explicites', () => {
