@@ -198,28 +198,10 @@ export function hydrateDraft(row: StoredDraft): Draft {
   return {
     ...row,
     keepAwake: row.keepAwake ?? false,
-    startedAt: row.startedAt ?? repriseStartedAt(row),
+    startedAt: row.startedAt ?? null,
     notes: fusionnerAccessoires(row),
     accessories: [],
   }
-}
-
-/**
- * Le `startedAt` d'une ligne écrite avant que le champ n'existe — CB-62.
- *
- * Une séance réellement en cours au moment de la mise à jour ne doit pas se retrouver
- * « non démarrée » : elle redeviendrait reconstructible sur de nouvelles cibles, et
- * l'écran de mise à jour s'autoriserait à recharger en pleine salle. On repose donc
- * l'ancien critère — le brouillon porte-t-il une information ? — et on date le
- * démarrage de sa création.
- *
- * C'est une **approximation assumée et bornée** : elle ne concerne que les brouillons
- * ouverts avant ce lot, elle ne peut que surestimer la durée, et elle disparaît à la
- * première séance suivante. L'alternative — laisser `null` — perdrait une séance en
- * cours, ce qui est la seule perte que le projet refuse absolument.
- */
-function repriseStartedAt(row: StoredDraft): number | null {
-  return porteUneInformation(row) ? row.createdAt : null
 }
 
 /**

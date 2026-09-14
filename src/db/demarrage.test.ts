@@ -70,11 +70,14 @@ describe('un brouillon écrit avant que le champ existe', () => {
     return sans
   }
 
-  it('reste une séance en cours s’il portait une information', () => {
-    // La seule perte que le projet refuse absolument : faire disparaître une séance
-    // réelle à la faveur d'une mise à jour.
+  it('reste une séance en cours sans qu’on lui invente une heure de départ', () => {
+    // La seule perte que le projet refuse absolument — faire disparaître une séance
+    // réelle à la faveur d'une mise à jour — est évitée par le **repli** du prédicat,
+    // pas par une date fabriquée. Une première version datait le démarrage depuis
+    // `createdAt` : P1 de Codex sur #54, fondé. `createdAt` est l'instant où l'accueil
+    // s'est affiché, et une carte de durée l'aurait présenté comme réel.
     const relu = hydrateDraft(stocke({ notes: 'Dos chargé' }))
-    expect(relu.startedAt).toBe(1000)
+    expect(relu.startedAt).toBeNull()
     expect(isDraftActive(relu)).toBe(true)
   })
 
@@ -91,7 +94,7 @@ describe('un brouillon écrit avant que le champ existe', () => {
     const relu = hydrateDraft(
       stocke({ accessories: [{ exerciseId: 'a-curls', done: false, note: '12 kg' }] }),
     )
-    expect(relu.startedAt).toBe(1000)
+    expect(relu.startedAt).toBeNull()
     expect(isDraftActive(relu)).toBe(true)
     // Et la note, elle, a bien été rapatriée.
     expect(relu.notes).toBe('Curls : 12 kg')

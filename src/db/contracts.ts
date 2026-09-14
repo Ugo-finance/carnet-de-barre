@@ -84,6 +84,25 @@ export interface CarnetStore {
   openDraft(type: SeanceType, date: string): Promise<Draft>
 
   /**
+   * Démarre la séance : relit ou crée le brouillon canonique, lui pose `startedAt`, et
+   * écrit le tout **dans une seule transaction** — CB-62.
+   *
+   * Il n'existe pas de version décomposée de ce geste, et c'est le point. Une séquence
+   * `openDraft()` puis `saveDraft(startDraft(copie))` réécrit la copie que l'appelant
+   * tenait en main : si une cible a été ajustée entre les deux, le brouillon stocké
+   * avait été reconstruit sur les nouvelles cibles et la réécriture y remet les
+   * anciennes `baseTargets`. La séance démarre alors condamnée — `finalizeSeance` la
+   * refusera par `stale-targets`, en salle, après le travail.
+   *
+   * C'est le défaut déjà payé sur `adjustTarget`, déplacé au démarrage. Le contrôle
+   * vit donc au point d'écriture. P1 de Codex sur #54.
+   *
+   * **Idempotente** : reprendre une séance déjà démarrée rend la même, `startedAt`
+   * inchangé. Un second tap ne peut pas raccourcir une durée réelle.
+   */
+  startSession(type: SeanceType, date: string, now?: number): Promise<Draft>
+
+  /**
    * Écrit le brouillon. Appelé à chaque changement : saisie, validation, note,
    * démarrage du chrono. Doit rester peu coûteux.
    */

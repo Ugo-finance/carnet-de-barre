@@ -230,6 +230,13 @@ export interface Draft {
    *
    * Le champ dit aussi, seul, ce que cinq appels à `isBlankDraft` disaient jusqu'ici de
    * façon détournée — voir `isDraftActive`.
+   *
+   * **Il reste `null` sur un brouillon écrit avant son existence**, et ce n'est pas une
+   * lacune à combler. Dater ce démarrage depuis `createdAt` transformerait une heure
+   * qu'on sait fausse en heure réelle, alors que la seule chose qu'on ait à protéger —
+   * qu'une séance en cours ne se fasse pas reconstruire — l'est déjà par le repli
+   * d'`isDraftActive`. Sa séance finale n'aura donc pas de durée : inconnue, jamais
+   * inventée. P1 de Codex sur #54, et son argument était meilleur que le mien.
    */
   startedAt: number | null
   createdAt: number
