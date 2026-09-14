@@ -329,17 +329,23 @@ export const SEANCES: Record<SeanceType, SeanceDef> = {
         kind: 'accessory',
         optional: true,
         loadKind: 'machine',
-        scheme: '2×12–15',
+        scheme: '2×12–20',
         sets: 2,
         reps: null,
-        // Arbitrage d'Ugo du 13.09.2026, en réponse à la question posée. La maquette les
-        // annonçait « hors moteur (poulie) » : à 2×15 fermes, sans fourchette, rien ne
-        // pouvait déclencher une montée et la proposition serait restée à 25 kg même
-        // après une séance à 30 — la forme exacte du défaut vu en salle le 12.09.
-        // Sa réponse : « non il faut progresser ». La fourchette 12–15 garde 15 comme
-        // haut, c'est-à-dire ce que la maquette demandait, et ouvre en dessous la marge
-        // dont la double progression a besoin.
-        repsRange: [12, 15],
+        // Deux arbitrages d'Ugo, distincts, et c'est Codex qui a exigé le second.
+        //
+        // 13.09.2026 — la maquette les annonçait « hors moteur (poulie) » : à 2×15
+        // fermes, sans fourchette, rien ne pouvait déclencher une montée et la
+        // proposition serait restée à 25 kg même après une séance à 30, la forme exacte
+        // du défaut vu en salle le 12.09. Sa réponse : « non il faut progresser ».
+        //
+        // 14.09.2026 — cette réponse fait entrer les face pulls dans le moteur, elle ne
+        // dit pas avec quelle fourchette. J'avais écrit 12–15 en la présentant comme une
+        // conséquence de son arbitrage : P1 de Codex, fondé. Question reposée, les trois
+        // rampes sous les yeux. Réponse : **12–20, comme les élévations**. Le motif est
+        // celui du coach — la poulie avance de 5 kg, soit +20 % à 25 kg, et une
+        // fourchette étroite ferait sauter la charge trop souvent.
+        repsRange: [12, 20],
         suggestedWeight: 25,
         restSeconds: REST.superset,
       },

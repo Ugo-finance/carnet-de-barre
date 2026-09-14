@@ -144,8 +144,9 @@ describe('la double progression des optionnels', () => {
     // Arbitrage d'Ugo du 13.09.2026 : « non il faut progresser ». La maquette les disait
     // « hors moteur (poulie) », ce qui revenait à oublier ce qu'il avait tiré — une
     // séance à 30 laissait la proposition à 25, indéfiniment. Ils ont donc une
-    // fourchette, et le pas de la colonne est celui du matériel : 5 kg.
-    const apres = brouillon('B', [{ ...faite('b-face-pulls', 25, [15, 15]), type: 'B' as const }])
+    // fourchette, **12–20 comme les élévations** (arbitrage du 14.09.2026), et le pas de
+    // la colonne est celui du matériel : 5 kg.
+    const apres = brouillon('B', [{ ...faite('b-face-pulls', 25, [20, 20]), type: 'B' as const }])
     expect(travail(apres, 'b-face-pulls').map((set) => [set.weight, set.reps])).toEqual([
       [30, 12],
       [30, 12],

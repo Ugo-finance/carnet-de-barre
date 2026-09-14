@@ -35,15 +35,24 @@ Ce classement a servi deux fois. Les deux fois, la règle écrite avait raison c
    séance tirée à 30 kg laissait la proposition à 25, indéfiniment. C'est la forme exacte du
    défaut qu'Ugo a vu en salle le 12.09, son incliné affichant 20 pendant qu'il en tirait 24.
    Question posée le 13.09.2026 : veut-il que la charge suive ce qu'il a noté, sans progresser
-   pour autant ? Réponse : « non il faut progresser ». Ils reçoivent donc une fourchette
-   **12–15**, qui garde 15 comme haut — ce que demandait la maquette — et ouvre en dessous la
-   marge dont la double progression a besoin. Le pas reste celui du matériel, 5 kg.
+   pour autant ? Réponse : **« non il faut progresser »**.
 
    Les abdos roulette restent en dehors, et c'est délibéré : au poids du corps il n'y a aucune
    charge à faire monter, et la double progression déplace une charge, pas des répétitions.
 
    Le pas de la colonne reste celui des machines, 5 kg. Question posée à Ugo, réponse du
    13.09.2026 : c'est un détail, il corrigera à la main le jour où ça le gênera.
+6. **Fourchette des face pulls : 12–20**, comme les élévations latérales. L'arbitrage 5 fait
+   entrer les face pulls dans le moteur ; il ne dit pas avec quelle fourchette. Une première
+   version de ce document écrivait **12–15** en le présentant comme une conséquence de la
+   réponse d'Ugo — P1 de Codex, fondé, et la même faute que l'arbitrage 4 : la démonstration
+   établit qu'un arbitrage est nécessaire, jamais lequel.
+
+   Question reposée le 14.09.2026, les trois rampes sous les yeux : à 25 kg de départ et un
+   pas de 5 kg, quelle fourchette avant de monter ? Réponse : **12–20**, le motif étant celui
+   que son coach a appliqué aux élévations — la poulie saute de +20 % à cette charge, et une
+   fourchette étroite la ferait monter trop souvent. Retour au bas de la fourchette après une
+   montée, comme le défaut.
 
 ## 2. Arbitrages des agents
 
