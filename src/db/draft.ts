@@ -16,6 +16,7 @@ import { warmupPlan } from '../domain/warmup.ts'
 import type { AccessoryPlan } from '../domain/accessory.ts'
 import { backoffWeight } from '../domain/progression.ts'
 import type { Draft, Seance, SeanceType, SetLog, Targets } from '../domain/types.ts'
+import type { Preferences } from '../domain/preferences.ts'
 
 /**
  * Identifiant de série, déterministe et unique dans la séance.
@@ -142,7 +143,18 @@ export function buildDraft(
   type: SeanceType,
   date: string,
   targets: Targets,
-  options: { id: string; now?: number; seances?: readonly Seance[] } = {
+  options: {
+    id: string
+    now?: number
+    seances?: readonly Seance[]
+    /**
+     * Les réglages d'Ugo, qui décident de l'**état d'ouverture** de la séance — CB-62.
+     *
+     * Absents, on retombe sur le comportement d'avant : écran non maintenu, affichage
+     * complet. Un défaut muet plutôt qu'un défaut inventé.
+     */
+    preferences?: Pick<Preferences, 'ecranAllume' | 'modePresseParDefaut'>
+  } = {
     id: crypto.randomUUID(),
   },
 ): Draft {
@@ -164,10 +176,10 @@ export function buildDraft(
     // qui en portent et dont le résumé se relit avec la fonction qui l'a produit.
     accessories: [],
     notes: '',
-    rushed: false,
+    rushed: options.preferences?.modePresseParDefaut ?? false,
     timerEndsAt: null,
     timerLabel: null,
-    keepAwake: false,
+    keepAwake: options.preferences?.ecranAllume ?? false,
     baseTargets: structuredClone(targets),
     // Ouvrir n'est pas démarrer : l'accueil construit un brouillon au simple affichage.
     startedAt: null,

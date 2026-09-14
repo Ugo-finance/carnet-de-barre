@@ -28,6 +28,12 @@ import { StoreError, type FinalizeResult, type ImportPreview } from './contracts
 import { seanceSchema } from '../domain/schema.ts'
 import { loadSeed } from './seed.ts'
 import { buildDraft, isDraftActive, reutilisable, startDraft } from './draft.ts'
+import {
+  readPreferences,
+  writePreferences,
+  type Preferences,
+  type StoredPreferences,
+} from '../domain/preferences.ts'
 import { applyProgression, draftToSeance, targetsDiverged } from './derive.ts'
 import { buildExport, describeImport, validateImport } from './exchange.ts'
 import type { DraftStore } from './store.ts'
@@ -37,6 +43,8 @@ export class MemoryStore implements DraftStore {
   private targets: Targets | null = null
   private draft: Draft | undefined
   private seeded = false
+  /** Stockée sous sa forme **écrite**, pour que la relecture traverse le même chemin. */
+  private preferences: StoredPreferences | undefined
   /** Journal des événements de progression, par séance. Local, jamais exporté. */
   private readonly events = new Map<string, ProgressionEvent[]>()
   private readonly adjustments: TargetAdjustment[] = []
@@ -91,6 +99,7 @@ export class MemoryStore implements DraftStore {
     const draft = buildDraft(type, date, await this.getTargets(), {
       id: crypto.randomUUID(),
       seances: this.seances,
+      preferences: await this.getPreferences(),
     })
     this.draft = draft
     return structuredClone(draft)
@@ -157,6 +166,21 @@ export class MemoryStore implements DraftStore {
     }
   }
 
+  /**
+   * Même comportement que l'adaptateur Dexie, défauts compris. Deux implémentations du
+   * même contrat qui répondent différemment sont un piège pour le prochain test écrit
+   * contre la mauvaise — c'est déjà la raison d'être du garde d'`adjustTarget`.
+   */
+  async getPreferences(): Promise<Preferences> {
+    return readPreferences(this.preferences)
+  }
+
+  async savePreferences(patch: Partial<Preferences>): Promise<Preferences> {
+    const fusion = { ...readPreferences(this.preferences), ...patch }
+    this.preferences = writePreferences(fusion)
+    return fusion
+  }
+
   async adjustTarget(lift: LiftKey, patch: TargetPatch): Promise<Targets> {
     // Même invariant que l'adaptateur Dexie, reconstruction comprise. Deux
     // implémentations du même contrat qui répondent différemment sont un piège pour
@@ -182,6 +206,7 @@ export class MemoryStore implements DraftStore {
         this.draft = buildDraft(this.draft.type, this.draft.date, targets, {
           id: this.draft.id,
           seances: this.seances,
+          preferences: await this.getPreferences(),
         })
       }
     }

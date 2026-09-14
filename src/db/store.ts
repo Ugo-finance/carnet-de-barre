@@ -33,6 +33,12 @@ import {
   ensureSeeded,
 } from './database.ts'
 import { buildDraft, hydrateDraft, isDraftActive, reutilisable, startDraft } from './draft.ts'
+import {
+  PREFERENCES_PAR_DEFAUT,
+  readPreferences,
+  writePreferences,
+  type Preferences,
+} from '../domain/preferences.ts'
 import { applyProgression, draftToSeance, targetsDiverged } from './derive.ts'
 import { applyTargetPatch, type TargetPatch } from './targets.ts'
 import { seanceSchema } from '../domain/schema.ts'
@@ -57,6 +63,17 @@ const eventsKey = (seanceId: string): string => `events:${seanceId}`
 const ADJUSTMENTS_KEY = 'target-adjustments'
 
 /**
+ * Les réglages vivent dans `meta`, comme le journal d'ajustements.
+ *
+ * Pas dans une table à eux : ils forment une seule ligne, et une table entière pour un
+ * enregistrement unique ajouterait une version Dexie à rejouer sur le téléphone d'Ugo
+ * sans rien apporter. `meta` survit par ailleurs à un effacement volontaire de
+ * l'historique, ce qui est le bon comportement — effacer ses séances n'est pas
+ * réinitialiser ses réglages.
+ */
+const PREFERENCES_KEY = 'preferences'
+
+/**
  * La part du contrat implémentée à ce stade : lecture de l'historique et cycle de vie
  * complet d'une séance, de l'ouverture du brouillon à sa finalisation. L'édition de
  * l'historique et l'échange JSON arrivent avec CB-33 et CB-40.
@@ -73,6 +90,8 @@ export type DraftStore = Pick<
   | 'clearDraft'
   | 'finalizeSeance'
   | 'adjustTarget'
+  | 'getPreferences'
+  | 'savePreferences'
   | 'exportAll'
   | 'previewImport'
   | 'importReplace'
@@ -212,7 +231,14 @@ export class DexieStore implements DraftStore {
     // Sans lui, l'app reproposerait indéfiniment la valeur de la table — le défaut
     // qu'Ugo a vu en salle le 12.09.
     const seances = await this.listSeances()
-    const draft = buildDraft(type, date, targets, { id: crypto.randomUUID(), seances })
+    // Les réglages décident de l'état d'ouverture — écran maintenu, mode pressé. Lus
+    // ici et pas dans `buildDraft` : la fonction reste pure, le magasin fait l'entrée.
+    const preferences = await this.getPreferences()
+    const draft = buildDraft(type, date, targets, {
+      id: crypto.randomUUID(),
+      seances,
+      preferences,
+    })
     await this.database.transaction('rw', this.database.drafts, async () => {
       await this.database.drafts.clear()
       await this.database.drafts.put(draft)
@@ -363,6 +389,11 @@ export class DexieStore implements DraftStore {
             // remet les charges à jour, elle n'a aucune raison de rallumer ou d'éteindre
             // l'écran d'Ugo à son insu.
             keepAwake: existant.keepAwake,
+            // Le mode pressé relève exactement du même raisonnement, et il y échappait :
+            // il repartait du défaut à chaque reconstruction. Depuis CB-62 ce défaut
+            // vient d'un réglage, ce qui rendrait la perte plus visible — un ajustement
+            // de cible rouvrirait la séance repliée alors qu'Ugo l'avait dépliée.
+            rushed: existant.rushed,
           })
         }
         return targets
@@ -424,6 +455,37 @@ export class DexieStore implements DraftStore {
   }
 
   // ---- échange ----
+
+  /**
+   * Ne lève pas, volontairement, et c'est une exception assumée à la règle du projet.
+   *
+   * Partout ailleurs une lecture qui échoue doit se voir. Ici l'appelant est l'écran de
+   * réglages, et la seule alternative à un défaut serait de ne rien afficher : une base
+   * indisponible n'empêche pas Ugo de vouloir couper la vibration, et son geste sera
+   * refusé — bruyamment, lui — au moment de l'écriture.
+   */
+  async getPreferences(): Promise<Preferences> {
+    try {
+      const row = await this.database.meta.get(PREFERENCES_KEY)
+      return readPreferences(row?.value)
+    } catch {
+      return { ...PREFERENCES_PAR_DEFAUT }
+    }
+  }
+
+  /**
+   * Lecture et écriture dans la **même** transaction : deux onglets qui basculent
+   * chacun un interrupteur doivent se cumuler, pas s'écraser. Sans la transaction, le
+   * second lirait l'état d'avant le premier et le réécrirait tel quel.
+   */
+  async savePreferences(patch: Partial<Preferences>): Promise<Preferences> {
+    return this.database.transaction('rw', this.database.meta, async () => {
+      const row = await this.database.meta.get(PREFERENCES_KEY)
+      const fusion = { ...readPreferences(row?.value), ...patch }
+      await this.database.meta.put({ key: PREFERENCES_KEY, value: writePreferences(fusion) })
+      return fusion
+    })
+  }
 
   async exportAll(): Promise<ExportFile> {
     return buildExport(this)

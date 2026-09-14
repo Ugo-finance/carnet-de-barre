@@ -22,6 +22,7 @@ import type {
   Targets,
 } from '../domain/types.ts'
 import type { ExportFile } from '../domain/schema.ts'
+import type { Preferences } from '../domain/preferences.ts'
 
 /** Échec attendu et nommé, par opposition à une exception de stockage. */
 export type StoreErrorCode =
@@ -154,6 +155,26 @@ export interface CarnetStore {
    * il n'entre pas dans le format d'échange, et le moteur ne le lit jamais.
    */
   listTargetAdjustments(): Promise<TargetAdjustment[]>
+
+  // ---- réglages locaux ----
+
+  /**
+   * Les quatre réglages d'Ugo, complétés par leurs défauts — CB-62.
+   *
+   * Ne lève jamais : une ligne absente, abîmée ou écrite par une version inconnue rend
+   * les défauts plutôt qu'une erreur. Un réglage n'a pas assez de valeur pour empêcher
+   * l'app de s'ouvrir.
+   */
+  getPreferences(): Promise<Preferences>
+
+  /**
+   * Écrit les réglages modifiés et rend l'état complet qui en résulte.
+   *
+   * Un correctif partiel, et jamais un remplacement : deux onglets qui règlent chacun
+   * un interrupteur ne doivent pas s'effacer l'un l'autre. La version du format est
+   * écrite avec, pour que la ligne dise ce qu'elle savait.
+   */
+  savePreferences(patch: Partial<Preferences>): Promise<Preferences>
 
   // ---- échange ----
 
