@@ -176,7 +176,7 @@ describe('le magasin en mémoire répond comme celui du téléphone', () => {
     await store.ready()
     await store.openDraft('A', '2026-09-15')
 
-    const demarre = await store.startSession('B', '2026-09-17', 5000)
+    const demarre = await store.startSession('B', '2026-09-17', { now: 5000 })
     expect(demarre.type).toBe('B')
     expect(demarre.date).toBe('2026-09-17')
   })
@@ -185,12 +185,37 @@ describe('le magasin en mémoire répond comme celui du téléphone', () => {
     // D9 : rien ne se perd. C'est à l'interface de proposer explicitement d'abandonner.
     const store = new MemoryStore()
     await store.ready()
-    const draft = await store.startSession('C', '2026-09-20', 5000)
+    const draft = await store.startSession('C', '2026-09-20', { now: 5000 })
     await store.saveDraft({ ...draft, notes: 'Dos chargé' })
 
-    const reprise = await store.startSession('A', '2026-09-21', 9000)
+    const reprise = await store.startSession('A', '2026-09-21', { now: 9000 })
     expect(reprise.type).toBe('C')
     expect(reprise.notes).toBe('Dos chargé')
     expect(reprise.startedAt).toBe(5000)
+  })
+})
+
+describe('le mode pressé au démarrage, en mémoire', () => {
+  it('applique le choix de l’accueil à un brouillon vierge', async () => {
+    // Les deux magasins doivent répondre pareil : un test écrit contre celui-ci doit
+    // rester vrai contre celui qui tourne sur le téléphone d'Ugo.
+    const store = new MemoryStore()
+    await store.ready()
+    const ouvert = await store.openDraft('A', '2026-09-15')
+    expect(ouvert.rushed).toBe(false)
+
+    const demarre = await store.startSession('A', '2026-09-15', { now: 5000, rushed: true })
+    expect(demarre.rushed).toBe(true)
+    expect(demarre.id).toBe(ouvert.id)
+  })
+
+  it('garde le mode d’une séance déjà commencée', async () => {
+    const store = new MemoryStore()
+    await store.ready()
+    const demarre = await store.startSession('A', '2026-09-15', { now: 5000, rushed: true })
+    await store.saveDraft({ ...demarre, rushed: false })
+
+    const reprise = await store.startSession('A', '2026-09-15', { now: 9000, rushed: true })
+    expect(reprise.rushed).toBe(false)
   })
 })

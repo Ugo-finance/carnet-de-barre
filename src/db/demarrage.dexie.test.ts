@@ -39,7 +39,7 @@ describe('démarrer une séance', () => {
     await store.adjustTarget('squat', { w: 80 })
 
     // 3. L'accueil démarre. Par l'intention de magasin, et non en réécrivant sa copie.
-    const demarre = await store.startSession('A', '2026-09-15', 5000)
+    const demarre = await store.startSession('A', '2026-09-15', { now: 5000 })
 
     expect(demarre.startedAt).toBe(5000)
     // La séance démarre sur les cibles **courantes**, pas sur celles que l'accueil avait
@@ -75,7 +75,7 @@ describe('démarrer une séance', () => {
     const store = await magasin()
     await store.adjustTarget('squat', { w: 80 })
 
-    const demarre = await store.startSession('A', '2026-09-15', 5000)
+    const demarre = await store.startSession('A', '2026-09-15', { now: 5000 })
     expect(demarre.baseTargets.squat.w).toBe(80)
     expect(demarre.sets.find((set) => set.id === 'a-squat:top:0')?.weight).toBe(80)
     expect(demarre.startedAt).toBe(5000)
@@ -83,8 +83,8 @@ describe('démarrer une séance', () => {
 
   it('ne redate pas une séance déjà démarrée', async () => {
     const store = await magasin()
-    const premier = await store.startSession('A', '2026-09-15', 5000)
-    const second = await store.startSession('A', '2026-09-15', 9000)
+    const premier = await store.startSession('A', '2026-09-15', { now: 5000 })
+    const second = await store.startSession('A', '2026-09-15', { now: 9000 })
 
     expect(second.startedAt).toBe(5000)
     expect(second.id).toBe(premier.id)
@@ -97,7 +97,7 @@ describe('démarrer une séance', () => {
     const store = await magasin()
     await store.openDraft('A', '2026-09-15')
 
-    const demarre = await store.startSession('B', '2026-09-17', 5000)
+    const demarre = await store.startSession('B', '2026-09-17', { now: 5000 })
 
     expect(demarre.type).toBe('B')
     expect(demarre.date).toBe('2026-09-17')
@@ -114,7 +114,7 @@ describe('démarrer une séance', () => {
     const store = await magasin()
     await store.openDraft('A', '2026-09-15')
 
-    const demarre = await store.startSession('A', '2026-09-16', 5000)
+    const demarre = await store.startSession('A', '2026-09-16', { now: 5000 })
     expect(demarre.date).toBe('2026-09-16')
   })
 
@@ -124,17 +124,17 @@ describe('démarrer une séance', () => {
     const store = await magasin()
     const ouvert = await store.openDraft('A', '2026-09-15')
 
-    const demarre = await store.startSession('A', '2026-09-15', 5000)
+    const demarre = await store.startSession('A', '2026-09-15', { now: 5000 })
     expect(demarre.id).toBe(ouvert.id)
   })
 
   it('reprend la séance en cours plutôt que d’en ouvrir une autre', async () => {
     // Le sélecteur A/B/C reste libre, mais démarrer ne détruit jamais une saisie : D9.
     const store = await magasin()
-    const draft = await store.startSession('C', '2026-09-20', 5000)
+    const draft = await store.startSession('C', '2026-09-20', { now: 5000 })
     await store.saveDraft({ ...draft, notes: 'Dos chargé' })
 
-    const reprise = await store.startSession('A', '2026-09-21', 9000)
+    const reprise = await store.startSession('A', '2026-09-21', { now: 9000 })
     expect(reprise.type).toBe('C')
     expect(reprise.notes).toBe('Dos chargé')
     expect(reprise.startedAt).toBe(5000)

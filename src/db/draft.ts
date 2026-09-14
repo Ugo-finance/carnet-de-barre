@@ -16,6 +16,7 @@ import { warmupPlan } from '../domain/warmup.ts'
 import type { AccessoryPlan } from '../domain/accessory.ts'
 import { backoffWeight } from '../domain/progression.ts'
 import type { Draft, Seance, SeanceType, SetLog, Targets } from '../domain/types.ts'
+import type { Preferences } from '../domain/preferences.ts'
 
 /**
  * Identifiant de série, déterministe et unique dans la séance.
@@ -142,7 +143,18 @@ export function buildDraft(
   type: SeanceType,
   date: string,
   targets: Targets,
-  options: { id: string; now?: number; seances?: readonly Seance[] } = {
+  options: {
+    id: string
+    now?: number
+    seances?: readonly Seance[]
+    /**
+     * Les réglages d'Ugo, qui décident de l'**état d'ouverture** de la séance — CB-62.
+     *
+     * Absents, on retombe sur le comportement d'avant : écran non maintenu, affichage
+     * complet. Un défaut muet plutôt qu'un défaut inventé.
+     */
+    preferences?: Pick<Preferences, 'ecranAllume' | 'modePresseParDefaut'>
+  } = {
     id: crypto.randomUUID(),
   },
 ): Draft {
@@ -164,10 +176,10 @@ export function buildDraft(
     // qui en portent et dont le résumé se relit avec la fonction qui l'a produit.
     accessories: [],
     notes: '',
-    rushed: false,
+    rushed: options.preferences?.modePresseParDefaut ?? false,
     timerEndsAt: null,
     timerLabel: null,
-    keepAwake: false,
+    keepAwake: options.preferences?.ecranAllume ?? false,
     baseTargets: structuredClone(targets),
     // Ouvrir n'est pas démarrer : l'accueil construit un brouillon au simple affichage.
     startedAt: null,
@@ -276,20 +288,6 @@ export function startDraft(draft: Draft, now = Date.now()): Draft {
 }
 
 /**
- * « Une séance est-elle en cours ? » — la question unique, à un seul endroit.
- *
- * Cinq appelants y répondaient par `!isBlankDraft(...)`, c'est-à-dire par « ce
- * brouillon porte-t-il une information ? ». C'était un détour : un brouillon
- * **démarré** mais dont rien n'est encore validé est une séance en cours, et l'ancien
- * critère répondait non. Ugo debout devant la barre, l'app se croyait libre de
- * reconstruire son brouillon sur de nouvelles cibles.
- *
- * Les deux critères sont gardés, et c'est délibéré. `startedAt` est la vérité, mais
- * rien ne le pose encore — le démarrage explicite arrive avec l'accueil v2 (CB-63).
- * Retirer le repli maintenant rendrait toute séance en cours invisible d'ici là. Une
- * fois CB-63 livré, le repli ne couvre plus que les brouillons ouverts avant.
- */
-/**
  * Ce brouillon-là sert-il la demande de démarrage ? — CB-62a.
  *
  * Deux cas, et ils ne se ressemblent pas.
@@ -311,6 +309,39 @@ export function reutilisable(draft: Draft, type: SeanceType, date: string): bool
   return draft.type === type && draft.date === date
 }
 
+/**
+ * Le brouillon repris, avec le mode pressé choisi sur l'accueil — CB-62b.
+ *
+ * Les deux sortes de brouillon réutilisable ne se traitent pas pareil, et c'est le
+ * dernier endroit où l'oubli était possible :
+ *
+ * - **actif** : son mode est celui qu'Ugo a réglé en salle. Reprendre n'est pas
+ *   recommencer, et l'accueil ne rouvre pas une file qu'il a repliée ;
+ * - **vierge** : il ne porte aucune information, seulement une identité. Le choix de
+ *   l'accueil s'y applique — sans quoi un brouillon laissé par un affichage antérieur,
+ *   ou par l'ancienne interface sur le téléphone, imposerait son mode au démarrage.
+ *
+ * Option absente : on ne décide rien, le mode courant reste. P1 de Codex sur #55.
+ */
+export function reprendreAvecMode(draft: Draft, rushed: boolean | undefined): Draft {
+  if (rushed === undefined || isDraftActive(draft)) return draft
+  return { ...draft, rushed }
+}
+
+/**
+ * « Une séance est-elle en cours ? » — la question unique, à un seul endroit.
+ *
+ * Cinq appelants y répondaient par `!isBlankDraft(...)`, c'est-à-dire par « ce
+ * brouillon porte-t-il une information ? ». C'était un détour : un brouillon
+ * **démarré** mais dont rien n'est encore validé est une séance en cours, et l'ancien
+ * critère répondait non. Ugo debout devant la barre, l'app se croyait libre de
+ * reconstruire son brouillon sur de nouvelles cibles.
+ *
+ * Les deux critères sont gardés, et c'est délibéré. `startedAt` est la vérité, mais
+ * rien ne le pose encore — le démarrage explicite arrive avec l'accueil v2 (CB-63).
+ * Retirer le repli maintenant rendrait toute séance en cours invisible d'ici là. Une
+ * fois CB-63 livré, le repli ne couvre plus que les brouillons ouverts avant.
+ */
 export function isDraftActive(draft: Draft): boolean {
   return draft.startedAt !== null || porteUneInformation(draft)
 }
