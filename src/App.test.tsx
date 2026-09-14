@@ -148,8 +148,11 @@ describe('navigation depuis le point d’entrée réel', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Cibles' }))
 
-    await waitFor(() => expect(screen.getByText('Squat')).toBeInTheDocument())
-    expect(screen.getByText('75 kg')).toBeInTheDocument()
+    // Même cadrage que ci-dessus, et pour la même raison : « Squat » **et** « 75 kg »
+    // figurent tous deux sur l'écran de séance resté monté, les jours de séance A.
+    const liste = await screen.findByRole('list')
+    await waitFor(() => expect(within(liste).getByText('Squat')).toBeInTheDocument())
+    expect(within(liste).getByText('75 kg')).toBeInTheDocument()
   })
 
   it('atteint l’historique et y montre les séances de départ', async () => {
