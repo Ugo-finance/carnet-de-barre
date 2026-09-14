@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Button } from '../../components/Button'
 import type { SeanceType } from '../../domain/types'
 
@@ -48,8 +49,73 @@ export function SessionLanding({
   onRushedChange,
   onStart,
 }: SessionLandingProps) {
+  const [page, setPage] = useState<'accueil' | 'cibles'>('accueil')
+
+  if (page === 'cibles') {
+    return (
+      <main className="mx-auto flex min-h-[calc(100dvh-3.25rem)] w-full max-w-md flex-col gap-4 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+        <header className="knurled rounded-2xl border border-line bg-surface p-4">
+          <p className="text-xs font-bold tracking-[0.14em] text-accent-readable uppercase">
+            Séance {selectedType}
+          </p>
+          <h1 className="display mt-2 text-4xl text-fg">Cibles du jour</h1>
+          <p className="mt-2 text-sm text-muted">{scheduleLabel}</p>
+        </header>
+
+        <section
+          className="rounded-2xl border border-line bg-surface px-4 py-2"
+          aria-labelledby="today-title"
+        >
+          <h2 className="sr-only" id="today-title">
+            Contenu de la séance {selectedType}
+          </h2>
+          {exercises.length > 0 ? (
+            <ul
+              className="divide-y divide-line"
+              aria-label={`Contenu de la séance ${selectedType}`}
+            >
+              {exercises.map((exercise) => (
+                <li
+                  className="flex min-h-11 items-center justify-between gap-3 py-2"
+                  key={exercise.id}
+                >
+                  <span className="font-semibold text-fg">{exercise.name}</span>
+                  <span className="num text-right text-sm text-muted">{exercise.prescription}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="py-3 text-sm text-muted">Aucun exercice prévu.</p>
+          )}
+        </section>
+
+        {errorMessage ? (
+          <p
+            className="rounded-xl border border-bad/60 bg-bad/10 px-4 py-3 text-sm text-bad"
+            role="alert"
+          >
+            {errorMessage}
+          </p>
+        ) : null}
+
+        <div className="mt-auto grid grid-cols-[auto_1fr] gap-2 pt-2">
+          <Button variant="ghost" disabled={starting} onClick={() => setPage('accueil')}>
+            Retour
+          </Button>
+          <Button
+            className="w-full py-4 text-base tracking-[0.06em] uppercase"
+            disabled={starting}
+            onClick={onStart}
+          >
+            {starting ? 'Démarrage…' : 'C’est parti'}
+          </Button>
+        </div>
+      </main>
+    )
+  }
+
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col gap-4 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+    <main className="mx-auto flex min-h-[calc(100dvh-3.25rem)] w-full max-w-md flex-col gap-4 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
       <header className="knurled rounded-2xl border border-line bg-surface p-4">
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs font-bold tracking-[0.14em] text-accent-readable uppercase">
@@ -95,33 +161,6 @@ export function SessionLanding({
         </div>
       </section>
 
-      <section
-        className="rounded-2xl border border-line bg-surface p-4"
-        aria-labelledby="today-title"
-      >
-        <h2 className="text-xs font-bold tracking-[0.12em] text-muted uppercase" id="today-title">
-          Cibles du jour
-        </h2>
-        {exercises.length > 0 ? (
-          <ul
-            className="mt-2 divide-y divide-line"
-            aria-label={`Contenu de la séance ${selectedType}`}
-          >
-            {exercises.map((exercise) => (
-              <li
-                className="flex min-h-11 items-center justify-between gap-3 py-2"
-                key={exercise.id}
-              >
-                <span className="font-semibold text-fg">{exercise.name}</span>
-                <span className="num text-right text-sm text-muted">{exercise.prescription}</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="mt-3 text-sm text-muted">Aucun exercice prévu.</p>
-        )}
-      </section>
-
       <div className="grid gap-2 sm:grid-cols-2">
         <p className="flex min-h-11 items-center rounded-full border border-line bg-surface px-4 text-sm text-muted">
           {warmupLabel(warmupCount)}
@@ -158,9 +197,9 @@ export function SessionLanding({
         <Button
           className="w-full py-4 text-base tracking-[0.06em] uppercase"
           disabled={starting}
-          onClick={onStart}
+          onClick={() => setPage('cibles')}
         >
-          {starting ? 'Démarrage…' : `Démarrer la séance ${selectedType}`}
+          {`Voir les cibles de la séance ${selectedType}`}
         </Button>
       </div>
     </main>

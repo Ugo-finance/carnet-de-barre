@@ -111,6 +111,16 @@ async function resumeSession() {
   fireEvent.click(await screen.findByRole('button', { name: 'Reprendre la séance' }))
 }
 
+function advanceSummaryTo(heading: string): void {
+  for (let index = 0; index < 20; index += 1) {
+    if (screen.queryByRole('heading', { name: heading })) return
+    const next = screen.queryByRole('button', { name: 'Suivant' })
+    if (!next) break
+    fireEvent.click(next)
+  }
+  throw new Error(`Page de récapitulatif introuvable : ${heading}`)
+}
+
 const SUNDAY = new Date('2026-09-20T14:00:00Z')
 
 describe('SessionHome', () => {
@@ -126,7 +136,10 @@ describe('SessionHome', () => {
     expect(screen.getByText("Aujourd'hui")).toBeInTheDocument()
     expect(store.startSession).not.toHaveBeenCalled()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Démarrer la séance C' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Voir les cibles de la séance C' }))
+
+    expect(store.startSession).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'C’est parti' }))
 
     await waitFor(() =>
       expect(store.startSession).toHaveBeenCalledWith('C', '2026-09-20', { rushed: false }),
@@ -143,8 +156,9 @@ describe('SessionHome', () => {
     expect(screen.getByText('Séance manuelle')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('switch', { name: 'Mode pressé' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Voir les cibles de la séance A' }))
     expect(screen.getByRole('list', { name: 'Contenu de la séance A' }).children).toHaveLength(2)
-    fireEvent.click(screen.getByRole('button', { name: 'Démarrer la séance A' }))
+    fireEvent.click(screen.getByRole('button', { name: 'C’est parti' }))
 
     await waitFor(() =>
       expect(store.startSession).toHaveBeenCalledWith('A', '2026-09-20', { rushed: true }),
@@ -156,12 +170,13 @@ describe('SessionHome', () => {
     vi.mocked(store.startSession).mockRejectedValueOnce(new Error('quota dépassé'))
     render(<SessionHome store={store} now={SUNDAY} />)
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Démarrer la séance C' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Voir les cibles de la séance C' }))
+    fireEvent.click(screen.getByRole('button', { name: 'C’est parti' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Démarrage impossible : quota dépassé',
     )
-    expect(screen.getByRole('button', { name: 'Démarrer la séance C' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'C’est parti' })).toBeEnabled()
   })
 
   it('propose la séance suivante mais date le brouillon du jour réel', async () => {
@@ -307,6 +322,7 @@ describe('SessionHome', () => {
     await resumeSession()
 
     fireEvent.click(screen.getByRole('button', { name: 'Augmenter Poids de 2,5' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Actions' }))
     fireEvent.click(screen.getByRole('button', { name: 'Quitter la vue' }))
     expect(screen.queryByRole('button', { name: 'Reprendre la séance' })).not.toBeInTheDocument()
 
@@ -345,7 +361,9 @@ describe('SessionHome', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Confirmer l’abandon' }))
 
     await waitFor(() => expect(store.clearDraft).toHaveBeenCalledOnce())
-    expect(screen.getByRole('button', { name: 'Démarrer la séance C' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Voir les cibles de la séance C' }),
+    ).toBeInTheDocument()
     expect(store.clearDraft).toHaveBeenCalledOnce()
   })
 
@@ -415,7 +433,10 @@ describe('SessionHome', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: 'Terminer la séance' }))
 
-    expect(await screen.findByText('Soulevé de terre → 97,5 kg')).toBeInTheDocument()
+    await screen.findByText('Séance enregistrée')
+    advanceSummaryTo('Cibles recalculées')
+    expect(screen.getByText('Soulevé de terre → 97,5 kg')).toBeInTheDocument()
+    advanceSummaryTo('Prochaine séance · A')
     expect(screen.getByRole('heading', { name: 'Prochaine séance · A' })).toBeInTheDocument()
     expect(screen.getByText('22.09.2026')).toBeInTheDocument()
     expect(store.saveDraft).toHaveBeenCalledWith(expect.objectContaining({ notes: 'Solide' }))
@@ -435,7 +456,9 @@ describe('SessionHome', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Terminer la séance' }))
 
-    expect(await screen.findByRole('heading', { name: 'Prochaine séance · A' })).toBeInTheDocument()
+    await screen.findByText('Séance enregistrée')
+    advanceSummaryTo('Prochaine séance · A')
+    expect(screen.getByRole('heading', { name: 'Prochaine séance · A' })).toBeInTheDocument()
     expect(screen.getByText('15.09.2026')).toBeInTheDocument()
   })
 
@@ -488,6 +511,8 @@ describe('SessionHome', () => {
     await resumeSession()
     fireEvent.click(screen.getByRole('button', { name: 'Terminer la séance' }))
 
+    await screen.findByText('Séance enregistrée')
+    advanceSummaryTo('Prochaine séance · A')
     fireEvent.click(await screen.findByRole('button', { name: 'Retour à l’accueil' }))
 
     expect(await screen.findByRole('heading', { name: 'Séance A' })).toBeInTheDocument()
@@ -501,6 +526,8 @@ describe('SessionHome', () => {
     await resumeSession()
     fireEvent.click(screen.getByRole('button', { name: 'Terminer la séance' }))
 
+    await screen.findByText('Séance enregistrée')
+    advanceSummaryTo('Prochaine séance · A')
     fireEvent.click(await screen.findByRole('button', { name: 'Voir dans l’historique' }))
 
     expect(onViewHistory).toHaveBeenCalledOnce()
@@ -527,6 +554,7 @@ describe('SessionHome', () => {
     render(<SessionHome store={store} now={SUNDAY} />)
     await resumeSession()
 
+    fireEvent.click(screen.getByRole('button', { name: 'Actions' }))
     fireEvent.click(screen.getByRole('button', { name: 'Terminer la séance' }))
     const dialog = screen.getByRole('dialog', { name: 'Séance incomplète' })
     expect(within(dialog).getByText(/1 série n’est pas validée/)).toBeInTheDocument()
@@ -537,6 +565,7 @@ describe('SessionHome', () => {
     expect(screen.queryByRole('dialog', { name: 'Séance incomplète' })).not.toBeInTheDocument()
     expect(store.finalizeSeance).not.toHaveBeenCalled()
 
+    fireEvent.click(screen.getByRole('button', { name: 'Actions' }))
     fireEvent.click(screen.getByRole('button', { name: 'Terminer la séance' }))
     fireEvent.click(
       within(screen.getByRole('dialog', { name: 'Séance incomplète' })).getByRole('button', {

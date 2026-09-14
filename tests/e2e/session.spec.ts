@@ -8,7 +8,8 @@ async function openSunday(page: Page, start = true): Promise<void> {
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Séance C' })).toBeVisible()
   if (!start) return
-  await page.getByRole('button', { name: 'Démarrer la séance C' }).click()
+  await page.getByRole('button', { name: 'Voir les cibles de la séance C' }).click()
+  await page.getByRole('button', { name: 'C’est parti' }).click()
   await expect(page.getByRole('article', { name: 'Soulevé de terre · palier 1' })).toBeVisible()
 }
 
@@ -127,6 +128,7 @@ async function validateDeadliftTop(page: Page): Promise<void> {
 }
 
 async function finishTwice(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Actions' }).click()
   await page.getByRole('button', { name: 'Terminer la séance' }).click()
   const confirm = page.getByRole('button', { name: 'Terminer quand même' })
   await expect(confirm).toBeVisible()
@@ -137,12 +139,29 @@ async function finishTwice(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: 'Séance C terminée' })).toBeVisible()
 }
 
+async function advanceSummaryTo(page: Page, heading: string): Promise<void> {
+  for (let index = 0; index < 20; index += 1) {
+    if (
+      await page
+        .getByRole('heading', { name: heading })
+        .isVisible()
+        .catch(() => false)
+    )
+      return
+    const next = page.getByRole('button', { name: 'Suivant' })
+    if (!(await next.isVisible().catch(() => false))) break
+    await next.click()
+  }
+  throw new Error(`Page de récapitulatif introuvable : ${heading}`)
+}
+
 test('parcours réel, reprise et double finalisation', async ({ page }) => {
   await openSunday(page)
   await validateDeadliftTop(page)
 
   await page.reload()
   await resumeActiveSession(page)
+  await page.getByRole('button', { name: 'Actions' }).click()
   await page.getByRole('button', { name: 'Précédente' }).click()
   const top = page.getByRole('article', { name: 'Soulevé de terre · série de travail' })
   await expect(top).toBeVisible()
@@ -150,18 +169,22 @@ test('parcours réel, reprise et double finalisation', async ({ page }) => {
     'aria-pressed',
     'true',
   )
+  await page.getByRole('button', { name: 'Actions' }).click()
   await expect(page.getByRole('button', { name: 'Retour à la série courante' })).toBeVisible()
   await expect(page.getByRole('timer')).toBeVisible()
   await page.getByRole('button', { name: 'Retour à la série courante' }).click()
 
   await finishTwice(page)
-  await expect(page.getByText('Soulevé de terre → 97,5 kg')).toBeVisible()
   const summary = page.getByRole('heading', { name: 'Travail validé' }).locator('..')
   await expect(summary.getByText('Séries validées')).toBeVisible()
   await expect(summary.getByText('Soulevé de terre : 92,5×3 @8')).toBeVisible()
+  await advanceSummaryTo(page, 'Notes')
   await expect(page.getByRole('heading', { name: 'Notes' }).locator('..')).toContainText(
     'Aucune note.',
   )
+  await advanceSummaryTo(page, 'Cibles recalculées')
+  await expect(page.getByText('Soulevé de terre → 97,5 kg')).toBeVisible()
+  await advanceSummaryTo(page, 'Prochaine séance · A')
 
   await page.getByRole('button', { name: 'Voir dans l’historique' }).click()
   await expect(page.getByText(/^13 séances enregistrées, sur \d+ semaines\.$/)).toBeVisible()
@@ -222,6 +245,7 @@ test('les paliers survivent à la reprise sans chrono et restent hors progressio
     initialHeight,
   )
   await finishTwice(page)
+  await advanceSummaryTo(page, 'Cibles recalculées')
   await expect(page.getByText('Soulevé de terre → 97,5 kg')).toBeVisible()
 
   const exported = await copiedExport(page)
@@ -289,14 +313,15 @@ test('ouverture, saisie et finalisation restent disponibles hors ligne', async (
   await expect(page.getByRole('heading', { name: 'Séance C' })).toBeVisible()
   await resumeActiveSession(page)
 
-  await page.getByText('Notes de séance (facultatif)', { exact: true }).click()
+  await page.getByRole('button', { name: 'Actions' }).click()
   const notes = page.getByLabel('Notes de séance (facultatif)')
   await notes.fill('Recette hors ligne')
   await expect.poll(async () => (await storedDraft(page))?.notes).toBe('Recette hors ligne')
   await page.reload({ waitUntil: 'domcontentloaded' })
   await resumeActiveSession(page)
-  await page.getByText('Notes de séance (facultatif)', { exact: true }).click()
+  await page.getByRole('button', { name: 'Actions' }).click()
   await expect(page.getByLabel('Notes de séance (facultatif)')).toHaveValue('Recette hors ligne')
+  await page.getByRole('button', { name: 'Fermer' }).click()
 
   await validateDeadliftTop(page)
   await finishTwice(page)

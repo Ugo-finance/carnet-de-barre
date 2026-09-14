@@ -15,7 +15,8 @@ async function openSession(page: Page): Promise<void> {
   await page.clock.setFixedTime(DIMANCHE)
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Séance C' })).toBeVisible()
-  await page.getByRole('button', { name: 'Démarrer la séance C' }).click()
+  await page.getByRole('button', { name: 'Voir les cibles de la séance C' }).click()
+  await page.getByRole('button', { name: 'C’est parti' }).click()
   await expect(page.getByRole('article', { name: 'Soulevé de terre · palier 1' })).toBeVisible()
 }
 

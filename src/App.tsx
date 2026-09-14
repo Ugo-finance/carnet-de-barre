@@ -143,7 +143,7 @@ export default function App() {
   }, [])
 
   return (
-    <div className="min-h-dvh">
+    <div className={sessionActive ? 'h-dvh overflow-hidden' : 'min-h-dvh'}>
       {sessionActive ? null : (
         <>
           <nav

@@ -27,7 +27,7 @@ export function RpeChips({ value, onChange, disabled = false }: RpeChipsProps) {
   return (
     <fieldset className="min-w-0">
       <legend className="mb-1.5 text-sm font-medium text-muted">RPE</legend>
-      <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-6">
+      <div className="grid grid-cols-6 gap-1">
         {RPE_VALUES.map((option) => {
           const selected = value === option
           const meaning = rpeMeaning(option)
@@ -36,7 +36,7 @@ export function RpeChips({ value, onChange, disabled = false }: RpeChipsProps) {
             <button
               key={option}
               type="button"
-              className={`min-h-11 rounded-lg border bg-bg px-2 text-sm font-semibold ${rpeTone(option)} ${selected ? 'ring-2 ring-current ring-offset-1 ring-offset-surface' : ''}`}
+              className={`min-h-11 min-w-11 rounded-lg border bg-bg px-1 text-xs font-semibold ${rpeTone(option)} ${selected ? 'ring-2 ring-current ring-offset-1 ring-offset-surface' : ''}`}
               aria-label={`RPE ${formatRpe(option)} — ${meaning}`}
               aria-pressed={selected}
               onClick={() => onChange(selected ? null : option)}
