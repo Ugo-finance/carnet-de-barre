@@ -87,4 +87,31 @@ describe('carte de série focus', () => {
     expect(onSkip).toHaveBeenCalledOnce()
     expect(onPrimary).toHaveBeenCalledOnce()
   })
+
+  it('garde l’erreur sur la carte et bloque les actions pendant l’écriture', () => {
+    const onPrimary = vi.fn()
+    const onSkip = vi.fn()
+    render(
+      <FocusSetCard
+        role="warmup"
+        exercise="Squat"
+        seriesLabel="palier 1"
+        load="20"
+        unit="kg"
+        skipLabel="Passer ce palier"
+        busy
+        errorMessage="Sauvegarde impossible."
+        onPrimary={onPrimary}
+        onSkip={onSkip}
+      />,
+    )
+
+    expect(screen.getByRole('article', { name: 'Squat · palier 1' })).toHaveAttribute(
+      'aria-busy',
+      'true',
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent('Sauvegarde impossible.')
+    expect(screen.getByRole('button', { name: 'Passer ce palier' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Valider la série' })).toBeDisabled()
+  })
 })

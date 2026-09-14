@@ -7,9 +7,10 @@ type TimerCardProps = {
   label: string
   onAdjust: (deltaMs: number) => void
   onStop: () => void
+  disabled?: boolean
 }
 
-export function TimerCard({ endsAt, label, onAdjust, onStop }: TimerCardProps) {
+export function TimerCard({ endsAt, label, onAdjust, onStop, disabled = false }: TimerCardProps) {
   const notify = useCallback(() => notifyTimerDone(), [])
   const remaining = useRecoveryTimer(endsAt, notify)
 
@@ -25,6 +26,7 @@ export function TimerCard({ endsAt, label, onAdjust, onStop }: TimerCardProps) {
         <div className="grid grid-cols-2 gap-1">
           <button
             type="button"
+            disabled={disabled}
             className="min-h-11 rounded-xl border border-line px-3 font-semibold text-fg"
             onClick={() => onAdjust(-30_000)}
           >
@@ -32,6 +34,7 @@ export function TimerCard({ endsAt, label, onAdjust, onStop }: TimerCardProps) {
           </button>
           <button
             type="button"
+            disabled={disabled}
             className="min-h-11 rounded-xl border border-line px-3 font-semibold text-fg"
             onClick={() => onAdjust(30_000)}
           >
@@ -43,6 +46,7 @@ export function TimerCard({ endsAt, label, onAdjust, onStop }: TimerCardProps) {
       <div className="mt-2">
         <button
           type="button"
+          disabled={disabled}
           className="min-h-11 w-full rounded-xl border border-line px-3 text-sm font-medium text-muted"
           onClick={onStop}
         >

@@ -10,7 +10,7 @@
  * regarde. Elle reste à un pouce de distance en remontant.
  */
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { store } from './db/store'
 import { SessionHome } from './features/session/SessionHome'
 import { ExportPanel } from './features/export/ExportPanel'
@@ -135,33 +135,42 @@ function HistoriqueTab() {
 export default function App() {
   const [onglet, setOnglet] = useState<Onglet>('seance')
   const [generationSeance, setGenerationSeance] = useState(0)
+  const [sessionActive, setSessionActive] = useState(false)
+  const handleSessionActiveChange = useCallback((active: boolean) => {
+    setSessionActive(active)
+    if (active) setOnglet('seance')
+  }, [])
 
   return (
     <div className="min-h-dvh">
-      <nav
-        className="mx-auto flex w-full max-w-md gap-1 px-3 pt-[max(0.5rem,env(safe-area-inset-top))]"
-        aria-label="Sections"
-      >
-        {ONGLETS.map(({ id, label }) => (
-          <button
-            key={id}
-            type="button"
-            aria-current={onglet === id ? 'page' : undefined}
-            className={`min-h-11 flex-1 rounded-xl px-3 text-sm font-semibold ${
-              onglet === id
-                ? 'bg-accent text-bg'
-                : 'border border-line text-muted hover:text-fg focus:text-fg'
-            }`}
-            onClick={() => setOnglet(id)}
+      {sessionActive ? null : (
+        <>
+          <nav
+            className="mx-auto flex w-full max-w-md gap-1 px-3 pt-[max(0.5rem,env(safe-area-inset-top))]"
+            aria-label="Sections"
           >
-            {label}
-          </button>
-        ))}
-      </nav>
+            {ONGLETS.map(({ id, label }) => (
+              <button
+                key={id}
+                type="button"
+                aria-current={onglet === id ? 'page' : undefined}
+                className={`min-h-11 flex-1 rounded-xl px-3 text-sm font-semibold ${
+                  onglet === id
+                    ? 'bg-accent text-bg'
+                    : 'border border-line text-muted hover:text-fg focus:text-fg'
+                }`}
+                onClick={() => setOnglet(id)}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
 
-      <div className="px-3">
-        <UpdatePrompt store={store} />
-      </div>
+          <div className="px-3">
+            <UpdatePrompt store={store} />
+          </div>
+        </>
+      )}
 
       <div className="px-3">
         {/*
@@ -172,7 +181,11 @@ export default function App() {
           série perdue au milieu d'une séance.
         */}
         <div hidden={onglet !== 'seance'}>
-          <SessionHome key={generationSeance} store={store} />
+          <SessionHome
+            key={generationSeance}
+            store={store}
+            onSessionActiveChange={handleSessionActiveChange}
+          />
         </div>
         {/*
           Les deux autres se remontent à chaque ouverture, et c'est voulu : leurs

@@ -9,12 +9,12 @@ async function openSunday(page: Page, start = true): Promise<void> {
   await expect(page.getByRole('heading', { name: 'Séance C' })).toBeVisible()
   if (!start) return
   await page.getByRole('button', { name: 'Démarrer la séance C' }).click()
-  await expect(page.getByLabel('Notes de séance (facultatif)')).toBeVisible()
+  await expect(page.getByRole('article', { name: 'Soulevé de terre · palier 1' })).toBeVisible()
 }
 
 async function resumeActiveSession(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Reprendre la séance' }).click()
-  await expect(page.getByLabel('Notes de séance (facultatif)')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Soulevé de terre' })).toBeVisible()
 }
 
 async function storedDraft(page: Page): Promise<{
@@ -107,11 +107,19 @@ async function copiedExport(
 }
 
 async function validateDeadliftTop(page: Page): Promise<void> {
-  const deadlift = page.getByRole('article', { name: 'Soulevé de terre' })
-  const top = deadlift.getByRole('article', { name: 'Top set' })
+  for (const index of [1, 2, 3]) {
+    const warmup = page.getByRole('article', { name: `Soulevé de terre · palier ${index}` })
+    if (await warmup.isVisible()) {
+      await warmup.getByRole('button', { name: 'Valider' }).click()
+      await expect(warmup).toHaveCount(0)
+    }
+  }
+
+  const top = page.getByRole('article', { name: 'Soulevé de terre · série de travail' })
+  await expect(top).toBeVisible()
   await top.getByRole('button', { name: 'RPE 8 — effort cible' }).click()
   await top.getByRole('button', { name: 'Valider' }).click()
-  await expect(top.getByText('Validée')).toBeVisible()
+  await expect(top).toHaveCount(0)
   await expect(page.getByRole('timer')).toBeVisible()
   await expect
     .poll(async () => (await storedDraft(page))?.sets.find((set) => set.role === 'top')?.status)
@@ -135,12 +143,16 @@ test('parcours réel, reprise et double finalisation', async ({ page }) => {
 
   await page.reload()
   await resumeActiveSession(page)
-  const top = page
-    .getByRole('article', { name: 'Soulevé de terre' })
-    .getByRole('article', { name: 'Top set' })
-  await expect(top.getByText('Validée')).toBeVisible()
-  await expect(top.getByRole('button', { name: 'Modifier' })).toBeVisible()
+  await page.getByRole('button', { name: 'Précédente' }).click()
+  const top = page.getByRole('article', { name: 'Soulevé de terre · série de travail' })
+  await expect(top).toBeVisible()
+  await expect(top.getByRole('button', { name: 'RPE 8 — effort cible' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await expect(page.getByRole('button', { name: 'Retour à la série courante' })).toBeVisible()
   await expect(page.getByRole('timer')).toBeVisible()
+  await page.getByRole('button', { name: 'Retour à la série courante' }).click()
 
   await finishTwice(page)
   await expect(page.getByText('Soulevé de terre → 97,5 kg')).toBeVisible()
@@ -168,13 +180,11 @@ test('les paliers survivent à la reprise sans chrono et restent hors progressio
   await openSunday(page)
   const slot = page.getByRole('region', { name: 'Chronomètre' })
   const initialHeight = await slot.evaluate((element) => element.getBoundingClientRect().height)
-  const deadlift = page.getByRole('article', { name: 'Soulevé de terre' })
-  const warmup = deadlift.getByRole('region', { name: 'Échauffement · Soulevé de terre' })
 
-  for (const label of ['Palier 1', 'Palier 2']) {
-    const step = warmup.getByRole('article', { name: label })
+  for (const index of [1, 2]) {
+    const step = page.getByRole('article', { name: `Soulevé de terre · palier ${index}` })
     await step.getByRole('button', { name: 'Valider' }).click()
-    await expect(step.getByText('Validée')).toBeVisible()
+    await expect(step).toHaveCount(0)
     await expect(page.getByRole('timer')).toHaveCount(0)
     await expect(slot.getByText('Repos libre')).toBeVisible()
     expect(await slot.evaluate((element) => element.getBoundingClientRect().height)).toBe(
@@ -191,15 +201,14 @@ test('les paliers survivent à la reprise sans chrono et restent hors progressio
 
   await page.reload()
   await resumeActiveSession(page)
-  const restored = page
-    .getByRole('article', { name: 'Soulevé de terre' })
-    .getByRole('region', { name: 'Échauffement · Soulevé de terre' })
-  await expect(
-    restored.getByRole('article', { name: 'Palier 1' }).getByText('Validée'),
-  ).toBeVisible()
-  await expect(
-    restored.getByRole('article', { name: 'Palier 2' }).getByText('Validée'),
-  ).toBeVisible()
+  await expect(page.getByRole('article', { name: 'Soulevé de terre · palier 3' })).toBeVisible()
+  await expect
+    .poll(async () =>
+      (await storedDraft(page))?.sets
+        .filter((set) => set.id.startsWith('c-deadlift:warmup:'))
+        .map((set) => set.status),
+    )
+    .toEqual(['validated', 'validated', 'planned'])
   await expect(page.getByRole('timer')).toHaveCount(0)
 
   await validateDeadliftTop(page)
@@ -217,9 +226,10 @@ test('les paliers survivent à la reprise sans chrono et restent hors progressio
     current?.sets
       ?.filter((set) => set.id.startsWith('c-deadlift:warmup:'))
       .map((set) => set.status),
-  ).toEqual(['validated', 'validated'])
+  ).toEqual(['validated', 'validated', 'validated'])
   expect(current?.lines.join(' ')).not.toContain('60×5')
   expect(current?.lines.join(' ')).not.toContain('72,5×3')
+  expect(current?.lines.join(' ')).not.toContain('82,5×1')
 })
 
 test('le même top set produit la même cible dans un brouillon historique sans paliers', async ({
@@ -229,7 +239,10 @@ test('le même top set produit la même cible dans un brouillon historique sans 
   await removeWarmupsFromStoredDraft(page)
   await page.reload()
   await resumeActiveSession(page)
-  await expect(page.getByRole('region', { name: /^Échauffement ·/ })).toHaveCount(0)
+  await expect(page.getByRole('article', { name: /palier/ })).toHaveCount(0)
+  await expect(
+    page.getByRole('article', { name: 'Soulevé de terre · série de travail' }),
+  ).toBeVisible()
 
   await validateDeadliftTop(page)
   await finishTwice(page)
@@ -270,11 +283,13 @@ test('ouverture, saisie et finalisation restent disponibles hors ligne', async (
   await expect(page.getByRole('heading', { name: 'Séance C' })).toBeVisible()
   await resumeActiveSession(page)
 
+  await page.getByText('Notes de séance (facultatif)', { exact: true }).click()
   const notes = page.getByLabel('Notes de séance (facultatif)')
   await notes.fill('Recette hors ligne')
   await expect.poll(async () => (await storedDraft(page))?.notes).toBe('Recette hors ligne')
   await page.reload({ waitUntil: 'domcontentloaded' })
   await resumeActiveSession(page)
+  await page.getByText('Notes de séance (facultatif)', { exact: true }).click()
   await expect(page.getByLabel('Notes de séance (facultatif)')).toHaveValue('Recette hors ligne')
 
   await validateDeadliftTop(page)

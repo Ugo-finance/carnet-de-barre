@@ -31,8 +31,12 @@ type FocusSetCardProps = {
   loadDetail?: string
   barbellTotal?: number
   supersetPartner?: string
+  status?: 'validated' | 'skipped'
   children?: ReactNode
   primaryLabel?: string
+  skipLabel?: string
+  busy?: boolean
+  errorMessage?: string
   onPrimary?: () => void
   onSkip?: () => void
 }
@@ -47,13 +51,21 @@ export function FocusSetCard({
   loadDetail,
   barbellTotal,
   supersetPartner,
+  status,
   children,
   primaryLabel = 'Valider la série',
+  skipLabel = 'Sauter — optionnel',
+  busy = false,
+  errorMessage,
   onPrimary,
   onSkip,
 }: FocusSetCardProps) {
   return (
-    <article className="motion-enter rounded-2xl border border-[#4a4131] bg-surface p-4">
+    <article
+      className="motion-enter rounded-2xl border border-[#4a4131] bg-surface p-4"
+      aria-label={`${exercise} · ${seriesLabel}`}
+      aria-busy={busy}
+    >
       <div className="flex flex-wrap items-center gap-2">
         <span
           className={`rounded-md border border-line bg-surface-2 px-2 py-1 text-[0.6875rem] font-bold uppercase tracking-[0.14em] ${ROLE_TONE[role]}`}
@@ -63,6 +75,11 @@ export function FocusSetCard({
         {supersetPartner ? (
           <span className="rounded-md border border-focus/50 px-2 py-1 text-[0.6875rem] font-semibold tracking-wide text-focus">
             SS · {supersetPartner}
+          </span>
+        ) : null}
+        {status ? (
+          <span className="rounded-md border border-line px-2 py-1 text-[0.6875rem] font-semibold text-muted">
+            Statut : {status === 'validated' ? 'Validée' : 'Sautée'}
           </span>
         ) : null}
       </div>
@@ -79,13 +96,32 @@ export function FocusSetCard({
 
       {children ? <div className="mt-4">{children}</div> : null}
 
+      {errorMessage ? (
+        <p
+          className="mt-4 rounded-xl border border-bad/60 bg-bad/10 p-3 text-sm text-bad"
+          role="alert"
+        >
+          {errorMessage}
+        </p>
+      ) : null}
+
       {onSkip ? (
-        <Button variant="ghost" className="mt-4 w-full border-dashed text-muted" onClick={onSkip}>
-          Sauter — optionnel
+        <Button
+          variant="ghost"
+          className="mt-4 w-full border-dashed text-muted"
+          disabled={busy}
+          onClick={onSkip}
+        >
+          {skipLabel}
         </Button>
       ) : null}
       {onPrimary ? (
-        <Button variant="secondary" className="mt-3 w-full bg-fg text-bg" onClick={onPrimary}>
+        <Button
+          variant="secondary"
+          className="mt-3 w-full bg-fg text-bg"
+          disabled={busy}
+          onClick={onPrimary}
+        >
           {primaryLabel}
         </Button>
       ) : null}
