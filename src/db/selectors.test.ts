@@ -259,14 +259,81 @@ describe('la progression', () => {
     ).toBe(false)
   })
 
-  it('nomme ce qui est différé au lieu de l’omettre', () => {
-    expect(metriquesDifferees.map((metrique) => metrique.cle)).toEqual([
-      'e1rm',
-      'tonnage',
-      'record',
-    ])
-    // Chaque motif dit où la décision manque, pas seulement qu'elle manque.
-    expect(metriquesDifferees.every((metrique) => metrique.motif.includes('CB-13'))).toBe(true)
+  it('ne diffère plus que le tonnage', () => {
+    // CB-13 a arrêté la formule du maximum estimé : e1RM et record sortent de la liste.
+    // Le tonnage y reste pour une raison d'une autre nature — ce n'est pas une formule
+    // qui manque mais une donnée : le chariot de la presse et le poids de corps d'Ugo.
+    expect(metriquesDifferees.map((metrique) => metrique.cle)).toEqual(['tonnage'])
+  })
+
+  it('porte les records de charge et de maximum estimé', () => {
+    const historique: Seance[] = [
+      {
+        id: 's1',
+        date: '2026-09-06',
+        type: 'C',
+        lines: [],
+        tops: { deadlift: { w: 87.5, reps: 3, rpe: 8 } },
+        notes: '',
+      },
+      {
+        id: 's2',
+        date: '2026-07-29',
+        type: 'B',
+        lines: [],
+        // Avec son RPE, et c'est délibéré : une traction sans RPE serait écartée pour
+        // cette raison-là, et le test ne prouverait alors rien sur la nature de charge.
+        // C'est le cas réel du 29.07.
+        tops: { tractions: { w: 15, reps: 4, rpe: 8 } },
+        notes: '',
+      },
+    ]
+
+    const lignes = resumeProgression({
+      targets: CIBLES,
+      draft: undefined,
+      seances: historique,
+    }).lignes
+    const souleve = lignes.find((ligne) => ligne.lift === 'deadlift')
+    const tractions = lignes.find((ligne) => ligne.lift === 'tractions')
+
+    expect(souleve?.recordCharge).toEqual({ valeur: 87.5, date: '2026-09-06' })
+    expect(souleve?.recordE1RM).toEqual({ valeur: 102.1, date: '2026-09-06' })
+    // Le lest ajouté n'estime aucun maximum sans le poids de corps — la charge, si.
+    // Ce top set porte un RPE : seule sa nature de charge peut l'écarter.
+    expect(tractions?.recordCharge).toEqual({ valeur: 15, date: '2026-07-29' })
+    expect(tractions?.recordE1RM).toBeNull()
+  })
+
+  it('ne fabrique aucun record de force depuis le développé volume', () => {
+    // Le chemin complet, jusqu'au sélecteur : une séance historique dont le développé
+    // volume porte un RPE ne doit produire aucun maximum estimé — mais bien un record
+    // de charge, puisque « ai-je soulevé plus lourd » reste une question valide.
+    const historique: Seance[] = [
+      {
+        id: 's1',
+        date: '2026-09-08',
+        type: 'A',
+        lines: [],
+        tops: { benchVol: { w: 60, reps: 8, rpe: 8 } },
+        notes: '',
+      },
+    ]
+
+    const ligne = resumeProgression({
+      targets: CIBLES,
+      draft: undefined,
+      seances: historique,
+    }).lignes.find((candidate) => candidate.lift === 'benchVol')
+
+    expect(ligne?.recordE1RM).toBeNull()
+    expect(ligne?.recordCharge).toEqual({ valeur: 60, date: '2026-09-08' })
+  })
+
+  it('ne rend aucun record sans historique', () => {
+    const lignes = resumeProgression({ targets: CIBLES, draft: undefined }).lignes
+    expect(lignes.every((ligne) => ligne.recordCharge === null)).toBe(true)
+    expect(lignes.every((ligne) => ligne.recordE1RM === null)).toBe(true)
   })
 })
 
