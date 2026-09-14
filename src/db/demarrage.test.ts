@@ -78,6 +78,25 @@ describe('un brouillon écrit avant que le champ existe', () => {
     expect(isDraftActive(relu)).toBe(true)
   })
 
+  it('reste une séance en cours quand sa seule information est une note d’accessoire', () => {
+    // Interaction entre CB-69 et ce lot : les deux agissent au **même point de lecture**,
+    // l'un repliant les accessoires libres dans les notes, l'autre décidant du démarrage.
+    //
+    // L'ordre des deux est indifférent, et je l'ai vérifié plutôt que supposé : décider
+    // après le pliage garde le test vert, la note ayant simplement changé de champ. Ce
+    // que ce test tient vraiment, c'est que le critère continue de **regarder les
+    // accessoires** — l'en retirer le fait tomber. Sans ça, une séance réelle ouverte
+    // avant la mise à jour, et dont Ugo n'a noté que ses curls, redeviendrait
+    // reconstructible sur de nouvelles cibles.
+    const relu = hydrateDraft(
+      stocke({ accessories: [{ exerciseId: 'a-curls', done: false, note: '12 kg' }] }),
+    )
+    expect(relu.startedAt).toBe(1000)
+    expect(isDraftActive(relu)).toBe(true)
+    // Et la note, elle, a bien été rapatriée.
+    expect(relu.notes).toBe('Curls : 12 kg')
+  })
+
   it('reste reconstructible s’il n’en portait aucune', () => {
     const relu = hydrateDraft(stocke())
     expect(relu.startedAt).toBeNull()
