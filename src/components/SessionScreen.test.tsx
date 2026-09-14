@@ -138,6 +138,12 @@ describe('SessionScreen', () => {
     expect(onSelectType).toHaveBeenCalledWith('A')
   })
 
+  it('masque le sélecteur lorsque son action n’est pas fournie', () => {
+    renderSession('C', { onSelectType: undefined })
+
+    expect(screen.queryByRole('navigation', { name: 'Choisir une séance' })).not.toBeInTheDocument()
+  })
+
   it('laisse l’interrupteur d’écran allumé accessible entre deux chronos', () => {
     Object.defineProperty(navigator, 'wakeLock', {
       configurable: true,

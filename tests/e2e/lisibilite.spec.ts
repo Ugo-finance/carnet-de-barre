@@ -7,36 +7,48 @@
  * toute la suite et a été trouvée par Ugo, en salle, sur sa première séance.
  */
 
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
 const DIMANCHE = '2026-09-20T14:00:00.000Z'
 
-test('aucune charge n’est tronquée dans son champ', async ({ page }) => {
+async function openSession(page: Page): Promise<void> {
   await page.clock.setFixedTime(DIMANCHE)
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Séance C' })).toBeVisible()
+  await page.getByRole('button', { name: 'Démarrer la séance C' }).click()
+  await expect(page.getByLabel('Notes de séance (facultatif)')).toBeVisible()
+}
 
-  const tronques = await page.evaluate(() =>
-    Array.from(document.querySelectorAll<HTMLInputElement>('input[inputmode="decimal"]'))
-      .filter((input) => input.scrollWidth > input.clientWidth)
-      .map((input) => ({
-        champ: document.querySelector(`label[for="${input.id}"]`)?.textContent ?? '?',
-        valeur: input.value,
-        disponible: input.clientWidth,
-        necessaire: input.scrollWidth,
-      })),
-  )
+test('aucune charge n’est tronquée dans son champ', async ({ page }) => {
+  await openSession(page)
+
+  const { total, tronques } = await page.evaluate(() => {
+    const champs = Array.from(
+      document.querySelectorAll<HTMLInputElement>('input[inputmode="decimal"]'),
+    )
+    return {
+      total: champs.length,
+      tronques: champs
+        .filter((input) => input.scrollWidth > input.clientWidth)
+        .map((input) => ({
+          champ: document.querySelector(`label[for="${input.id}"]`)?.textContent ?? '?',
+          valeur: input.value,
+          disponible: input.clientWidth,
+          necessaire: input.scrollWidth,
+        })),
+    }
+  })
 
   // Le message porte la mesure : un échec doit dire de combien ça déborde, sinon la
   // prochaine personne qui le voit repart de zéro.
+  expect(total, 'aucun champ de charge sur la page : le test ne vérifie rien').toBeGreaterThan(0)
   expect(tronques, `champs tronqués : ${JSON.stringify(tronques)}`).toEqual([])
 })
 
 test('le top set reste lisible avec une charge à quatre caractères', async ({ page }) => {
   // « 92,5 » est le cas réel du 12.09 : quatre caractères, une décimale. C'est la
   // charge qui a révélé le défaut.
-  await page.clock.setFixedTime(DIMANCHE)
-  await page.goto('/')
+  await openSession(page)
   const top = page
     .getByRole('article', { name: 'Soulevé de terre' })
     .getByRole('article', { name: 'Top set' })

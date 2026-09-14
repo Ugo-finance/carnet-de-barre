@@ -37,12 +37,14 @@ Résultat et notes :
 
 ## Brouillon et mode avion
 
-1. Ouvre la séance proposée et saisis la note `RECETTE HORS LIGNE`.
+1. Sur l’accueil, contrôle la séance proposée, touche **Démarrer la séance**, puis saisis la note
+   `RECETTE HORS LIGNE`.
 2. Modifie une charge ou des répétitions, puis attends que l’indicateur de saisie soit visible.
 3. Ferme complètement l’application, active le mode avion et relance-la depuis l’icône.
 
 - [ ] L’application s’ouvre sans écran d’erreur.
-- [ ] La séance, la note et la valeur modifiée sont restaurées.
+- [ ] L’écran **Ta séance t’attend** apparaît ; touche **Reprendre la séance**.
+- [ ] La séance, la note et la valeur modifiée sont restaurées dans l’éditeur.
 - [ ] Valide un top set : le chrono apparaît.
 - [ ] Termine la séance, confirme les séries incomplètes et vois le récapitulatif.
 - [ ] La séance de recette apparaît dans **Historique**.
@@ -71,11 +73,13 @@ Cette partie se fait sur une séance qui porte des paliers. Elle vérifie ce que
 peut pas décider à la place du téléphone : lisibilité réelle, absence de saut visuel et gestes au
 pouce avec le clavier affiché.
 
-1. Ouvre la séance proposée et relève le nombre annoncé dans « Échauffement · [n] paliers ».
+1. Sur l’accueil, relève le nombre annoncé dans « Échauffement · [n] paliers », puis touche
+   **Démarrer la séance**.
 2. Sur un exercice à la barre, contrôle la charge, les répétitions et le texte « Par côté » de
    chaque palier.
 3. Valide le premier palier, puis ferme et relance l’application.
 
+- [ ] L’écran **Ta séance t’attend** compte le palier validé ; touche **Reprendre la séance**.
 - [ ] Le palier validé reste validé après la relance et les suivants gardent leurs valeurs.
 - [ ] Aucun chrono ne démarre après un palier ; la zone reste sur « Repos libre ».
 - [ ] La zone du chrono garde la même hauteur lorsqu’elle est inactive puis active après une série

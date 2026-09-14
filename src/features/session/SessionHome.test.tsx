@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { FinalizeResult } from '../../db/contracts'
+import { PREFERENCES_PAR_DEFAUT } from '../../domain/preferences'
 import type { Draft, Seance, SeanceType, Targets } from '../../domain/types'
 import { SessionHome, type SessionStore } from './SessionHome'
 
@@ -24,7 +25,7 @@ function draftFor(type: SeanceType, date: string): Draft {
     timerEndsAt: null,
     timerLabel: null,
     keepAwake: false,
-    startedAt: null,
+    startedAt: 1,
     baseTargets: TARGETS,
     createdAt: 1,
     updatedAt: 1,
@@ -40,9 +41,14 @@ function fakeStore(options: { initial?: Draft; seances?: Seance[] } = {}) {
   const store: SessionStore = {
     ready: vi.fn().mockResolvedValue(undefined),
     listSeances: vi.fn().mockResolvedValue(options.seances ?? []),
+    getTargets: vi.fn().mockResolvedValue(TARGETS),
+    getPreferences: vi.fn().mockResolvedValue(PREFERENCES_PAR_DEFAUT),
     loadDraft: vi.fn(async () => active),
-    openDraft: vi.fn(async (type: SeanceType, date: string) => {
-      active ??= draftFor(type, date)
+    startSession: vi.fn(async (type: SeanceType, date: string, startOptions = {}) => {
+      active ??= {
+        ...draftFor(type, date),
+        rushed: startOptions.rushed ?? PREFERENCES_PAR_DEFAUT.modePresseParDefaut,
+      }
       return active
     }),
     saveDraft: vi.fn(async (draft: Draft) => {
@@ -69,6 +75,10 @@ function fakeStore(options: { initial?: Draft; seances?: Seance[] } = {}) {
   return store
 }
 
+async function resumeSession() {
+  fireEvent.click(await screen.findByRole('button', { name: 'Reprendre la séance' }))
+}
+
 const SUNDAY = new Date('2026-09-20T14:00:00Z')
 
 describe('SessionHome', () => {
@@ -76,13 +86,50 @@ describe('SessionHome', () => {
     Reflect.deleteProperty(navigator, 'wakeLock')
   })
 
-  it('ouvre directement la séance C prévue le dimanche', async () => {
+  it('annonce la séance C prévue sans créer de brouillon avant le geste explicite', async () => {
     const store = fakeStore()
     render(<SessionHome store={store} now={SUNDAY} />)
 
     expect(await screen.findByRole('heading', { name: 'Séance C' })).toBeInTheDocument()
     expect(screen.getByText("Aujourd'hui")).toBeInTheDocument()
-    expect(store.openDraft).toHaveBeenCalledWith('C', '2026-09-20')
+    expect(store.startSession).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Démarrer la séance C' }))
+
+    await waitFor(() =>
+      expect(store.startSession).toHaveBeenCalledWith('C', '2026-09-20', { rushed: false }),
+    )
+  })
+
+  it('transmet ensemble la séance manuelle et le mode pressé au démarrage', async () => {
+    const store = fakeStore()
+    render(<SessionHome store={store} now={SUNDAY} />)
+    await screen.findByRole('heading', { name: 'Séance C' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Séance A' }))
+    expect(screen.getByRole('heading', { name: 'Séance A' })).toBeInTheDocument()
+    expect(screen.getByText('Séance manuelle')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Mode pressé' }))
+    expect(screen.getByRole('list', { name: 'Contenu de la séance A' }).children).toHaveLength(2)
+    fireEvent.click(screen.getByRole('button', { name: 'Démarrer la séance A' }))
+
+    await waitFor(() =>
+      expect(store.startSession).toHaveBeenCalledWith('A', '2026-09-20', { rushed: true }),
+    )
+  })
+
+  it('reste sur l’accueil et permet de réessayer si le démarrage échoue', async () => {
+    const store = fakeStore()
+    vi.mocked(store.startSession).mockRejectedValueOnce(new Error('quota dépassé'))
+    render(<SessionHome store={store} now={SUNDAY} />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Démarrer la séance C' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Démarrage impossible : quota dépassé',
+    )
+    expect(screen.getByRole('button', { name: 'Démarrer la séance C' })).toBeEnabled()
   })
 
   it('propose la séance suivante mais date le brouillon du jour réel', async () => {
@@ -90,9 +137,8 @@ describe('SessionHome', () => {
     render(<SessionHome store={store} now={SUNDAY} />)
 
     expect(await screen.findByRole('heading', { name: 'Séance A' })).toBeInTheDocument()
-    // Ce n'est pas une sortie de route : c'est la séance suivante, entamée en avance.
-    expect(screen.getByText("Aujourd'hui · en avance")).toBeInTheDocument()
-    expect(store.openDraft).toHaveBeenCalledWith('A', '2026-09-20')
+    expect(screen.getByText('Mardi')).toBeInTheDocument()
+    expect(store.startSession).not.toHaveBeenCalled()
   })
 
   it('ne repropose pas le dimanche une séance C faite la veille au soir', async () => {
@@ -103,7 +149,7 @@ describe('SessionHome', () => {
     render(<SessionHome store={store} now={SUNDAY} />)
 
     expect(await screen.findByRole('heading', { name: 'Séance A' })).toBeInTheDocument()
-    expect(store.openDraft).toHaveBeenCalledWith('A', '2026-09-20')
+    expect(store.startSession).not.toHaveBeenCalled()
     expect(screen.queryByRole('heading', { name: 'Séance C' })).not.toBeInTheDocument()
   })
 
@@ -122,8 +168,8 @@ describe('SessionHome', () => {
     render(<SessionHome store={store} now={SUNDAY} />)
 
     expect(await screen.findByRole('heading', { name: 'Séance B' })).toBeInTheDocument()
-    expect(screen.getByText('Séance à reprendre')).toBeInTheDocument()
-    expect(store.openDraft).not.toHaveBeenCalled()
+    expect(screen.getByText('Ta séance t’attend')).toBeInTheDocument()
+    expect(store.startSession).not.toHaveBeenCalled()
   })
 
   it('restaure le chrono porté par un brouillon existant', async () => {
@@ -133,6 +179,7 @@ describe('SessionHome', () => {
     const store = fakeStore({ initial })
     render(<SessionHome store={store} now={SUNDAY} />)
 
+    await resumeSession()
     expect(await screen.findByText('Récup Soulevé de terre')).toBeInTheDocument()
     expect(screen.getByRole('timer')).toBeInTheDocument()
   })
@@ -148,28 +195,41 @@ describe('SessionHome', () => {
 
     render(<SessionHome store={store} now={SUNDAY} />)
 
+    await resumeSession()
     await waitFor(() => expect(request).toHaveBeenCalledWith('screen'))
     expect(screen.queryByRole('timer')).not.toBeInTheDocument()
   })
 
-  it('ne remplace une séance en cours qu’après un abandon explicite', async () => {
+  it('abandonne une séance en cours avant de rendre un nouveau démarrage possible', async () => {
     const store = fakeStore({ initial: draftFor('C', '2026-09-20') })
     render(<SessionHome store={store} now={SUNDAY} />)
     await screen.findByRole('heading', { name: 'Séance C' })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Séance A' }))
+    expect(screen.queryByRole('button', { name: 'Séance A' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Abandonner la séance' }))
     const dialog = screen.getByRole('dialog')
-    expect(within(dialog).getByText('Séance C en cours')).toBeInTheDocument()
+    expect(within(dialog).getByText('Abandonner la séance C ?')).toBeInTheDocument()
     expect(store.clearDraft).not.toHaveBeenCalled()
 
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Abandonner et ouvrir A' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Confirmer l’abandon' }))
 
-    await waitFor(() =>
-      expect(screen.getByRole('heading', { name: 'Séance A' })).toBeInTheDocument(),
-    )
+    await waitFor(() => expect(store.clearDraft).toHaveBeenCalledOnce())
+    expect(screen.getByRole('button', { name: 'Démarrer la séance C' })).toBeInTheDocument()
     expect(store.clearDraft).toHaveBeenCalledOnce()
-    expect(store.openDraft).toHaveBeenLastCalledWith('A', '2026-09-20')
-    expect(screen.getByText("Aujourd'hui · hors rotation")).toBeInTheDocument()
+  })
+
+  it('conserve l’écran de reprise si l’abandon échoue', async () => {
+    const store = fakeStore({ initial: draftFor('C', '2026-09-20') })
+    vi.mocked(store.clearDraft).mockRejectedValueOnce(new Error('écriture refusée'))
+    render(<SessionHome store={store} now={SUNDAY} />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Abandonner la séance' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmer l’abandon' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Abandon impossible : écriture refusée',
+    )
+    expect(screen.getByRole('button', { name: 'Reprendre la séance' })).toBeInTheDocument()
   })
 
   it('explique une erreur d’initialisation sans écran vide', async () => {
@@ -177,9 +237,20 @@ describe('SessionHome', () => {
     vi.mocked(store.ready).mockRejectedValueOnce(new Error('IndexedDB refusée'))
     render(<SessionHome store={store} now={SUNDAY} />)
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Carnet indisponible : IndexedDB refusée',
-    )
+    expect(await screen.findByRole('heading', { name: 'Carnet indisponible' })).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent('IndexedDB refusée')
+  })
+
+  it('relit le carnet après une erreur d’initialisation', async () => {
+    const store = fakeStore()
+    vi.mocked(store.ready).mockRejectedValueOnce(new Error('IndexedDB refusée'))
+    render(<SessionHome store={store} now={SUNDAY} />)
+    await screen.findByRole('heading', { name: 'Carnet indisponible' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }))
+
+    expect(await screen.findByRole('heading', { name: 'Séance C' })).toBeInTheDocument()
+    expect(store.ready).toHaveBeenCalledTimes(2)
   })
 
   it('sauvegarde les notes avant de finaliser et affiche la prochaine séance', async () => {
@@ -206,7 +277,7 @@ describe('SessionHome', () => {
       applied: true,
     }))
     render(<SessionHome store={store} now={SUNDAY} />)
-    await screen.findByRole('heading', { name: 'Séance C' })
+    await resumeSession()
 
     fireEvent.change(screen.getByRole('textbox', { name: /Notes de séance/ }), {
       target: { value: 'Solide' },
@@ -229,7 +300,7 @@ describe('SessionHome', () => {
     const SAMEDI = new Date('2026-09-12T16:00:00Z')
     const store = fakeStore({ initial: draftFor('C', '2026-09-12') })
     render(<SessionHome store={store} now={SAMEDI} />)
-    await screen.findByRole('heading', { name: 'Séance C' })
+    await resumeSession()
 
     fireEvent.click(screen.getByRole('button', { name: 'Terminer la séance' }))
 
@@ -246,7 +317,7 @@ describe('SessionHome', () => {
     const store = fakeStore({ initial })
     vi.mocked(store.finalizeSeance).mockReturnValueOnce(pending)
     render(<SessionHome store={store} now={SUNDAY} />)
-    await screen.findByRole('heading', { name: 'Séance C' })
+    await resumeSession()
 
     const finish = screen.getByRole('button', { name: 'Terminer la séance' })
     fireEvent.click(finish)
@@ -281,7 +352,7 @@ describe('SessionHome', () => {
     ]
     const store = fakeStore({ initial })
     render(<SessionHome store={store} now={SUNDAY} />)
-    await screen.findByRole('heading', { name: 'Séance C' })
+    await resumeSession()
 
     fireEvent.click(screen.getByRole('button', { name: 'Terminer la séance' }))
     const dialog = screen.getByRole('dialog', { name: 'Séance incomplète' })
@@ -309,7 +380,7 @@ describe('SessionHome', () => {
     const store = fakeStore({ initial: draftFor('C', '2026-09-20') })
     vi.mocked(store.saveDraft).mockReturnValueOnce(saving)
     render(<SessionHome store={store} now={SUNDAY} />)
-    await screen.findByRole('heading', { name: 'Séance C' })
+    await resumeSession()
 
     fireEvent.change(screen.getByRole('textbox', { name: /Notes de séance/ }), {
       target: { value: 'Dernière note' },
@@ -327,7 +398,7 @@ describe('SessionHome', () => {
     const store = fakeStore({ initial })
     vi.mocked(store.finalizeSeance).mockRejectedValueOnce(new Error('quota dépassé'))
     render(<SessionHome store={store} now={SUNDAY} />)
-    await screen.findByRole('heading', { name: 'Séance C' })
+    await resumeSession()
 
     fireEvent.click(screen.getByRole('button', { name: 'Terminer la séance' }))
 
