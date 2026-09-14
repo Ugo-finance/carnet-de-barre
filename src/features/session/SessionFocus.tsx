@@ -28,10 +28,13 @@ type SessionFocusProps = {
   elapsedLabel: string
   writing?: boolean
   errorMessage?: string
+  finishing?: boolean
+  finishErrorMessage?: string
   timer?: RecoveryTimer
   onSetChange: (setId: string, value: EditableSet) => void
   onValidate: (setId: string, value: EditableSet) => void
   onSkip: (setId: string, value: EditableSet) => void
+  onFinish: () => void
   onExit: () => void
 }
 
@@ -92,10 +95,13 @@ export function SessionFocus({
   elapsedLabel,
   writing = false,
   errorMessage,
+  finishing = false,
+  finishErrorMessage,
   timer,
   onSetChange,
   onValidate,
   onSkip,
+  onFinish,
   onExit,
 }: SessionFocusProps) {
   const [viewedSetId, setViewedSetId] = useState<string | null>(null)
@@ -110,10 +116,27 @@ export function SessionFocus({
 
   if (!visible) {
     return (
-      <main className="mx-auto flex min-h-dvh w-full max-w-md items-center justify-center py-5">
-        <p role="status" className="text-sm font-semibold text-muted">
-          Toutes les séries sont traitées.
-        </p>
+      <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center gap-4 py-5">
+        <section className="rounded-2xl border border-line bg-surface p-5 text-center">
+          <h1 className="display text-4xl text-fg">Toutes les séries sont traitées</h1>
+          <p className="mt-2 text-sm text-muted">
+            Enregistre la séance pour appliquer la progression et fermer le brouillon.
+          </p>
+        </section>
+        {finishErrorMessage ? (
+          <p
+            className="rounded-xl border border-bad/60 bg-bad/10 p-3 text-sm text-bad"
+            role="alert"
+          >
+            {finishErrorMessage}
+          </p>
+        ) : null}
+        <Button className="w-full py-4" disabled={finishing} onClick={onFinish}>
+          {finishing ? 'Enregistrement…' : 'Terminer la séance'}
+        </Button>
+        <Button variant="ghost" className="w-full" disabled={finishing} onClick={onExit}>
+          Quitter la vue
+        </Button>
       </main>
     )
   }

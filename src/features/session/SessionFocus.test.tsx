@@ -23,6 +23,7 @@ function callbacks() {
     onSetChange: vi.fn(),
     onValidate: vi.fn(),
     onSkip: vi.fn(),
+    onFinish: vi.fn(),
     onExit: vi.fn(),
   }
 }
@@ -179,6 +180,38 @@ describe('SessionFocus', () => {
     expect(screen.getByRole('button', { name: 'Sauvegarde…' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Passer ce palier' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Quitter la vue' })).toBeDisabled()
+  })
+
+  it('offre la finalisation quand toute la file est traitée', () => {
+    const value = {
+      ...draft(),
+      sets: draft().sets.map((set) => ({ ...set, status: 'validated' as const })),
+    }
+    const actions = props(value)
+    render(<SessionFocus {...actions} />)
+
+    expect(
+      screen.getByRole('heading', { name: 'Toutes les séries sont traitées' }),
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Terminer la séance' }))
+    expect(actions.onFinish).toHaveBeenCalledOnce()
+  })
+
+  it('reste finalisable après une erreur d’enregistrement', () => {
+    const base = draft()
+    const value = {
+      ...base,
+      sets: base.sets.map((set) => ({ ...set, status: 'skipped' as const })),
+    }
+    const actions = props(value)
+    const { rerender } = render(<SessionFocus {...actions} finishing />)
+
+    expect(screen.getByRole('button', { name: 'Enregistrement…' })).toBeDisabled()
+    rerender(
+      <SessionFocus {...actions} finishErrorMessage="Enregistrement impossible : quota dépassé" />,
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent('Enregistrement impossible : quota dépassé')
+    expect(screen.getByRole('button', { name: 'Terminer la séance' })).toBeEnabled()
   })
 
   it('affiche le chrono actif au même emplacement', () => {
