@@ -3,10 +3,18 @@ import { expect, test, type Page } from '@playwright/test'
 
 const SUNDAY = '2026-09-20T14:00:00.000Z'
 
-async function openSunday(page: Page): Promise<void> {
+async function openSunday(page: Page, start = true): Promise<void> {
   await page.clock.setFixedTime(SUNDAY)
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Séance C' })).toBeVisible()
+  if (!start) return
+  await page.getByRole('button', { name: 'Démarrer la séance C' }).click()
+  await expect(page.getByLabel('Notes de séance (facultatif)')).toBeVisible()
+}
+
+async function resumeActiveSession(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Reprendre la séance' }).click()
+  await expect(page.getByLabel('Notes de séance (facultatif)')).toBeVisible()
 }
 
 async function storedDraft(page: Page): Promise<{
@@ -79,34 +87,6 @@ async function removeWarmupsFromStoredDraft(page: Page): Promise<void> {
   )
 }
 
-async function clearStoredDraft(page: Page): Promise<void> {
-  await page.evaluate(
-    () =>
-      new Promise<void>((resolve, reject) => {
-        const open = indexedDB.open('carnet')
-        open.addEventListener(
-          'success',
-          () => {
-            const database = open.result
-            const transaction = database.transaction('drafts', 'readwrite')
-            transaction.objectStore('drafts').clear()
-            transaction.addEventListener(
-              'complete',
-              () => {
-                database.close()
-                resolve()
-              },
-              { once: true },
-            )
-            transaction.addEventListener('error', () => reject(transaction.error), { once: true })
-          },
-          { once: true },
-        )
-        open.addEventListener('error', () => reject(open.error), { once: true })
-      }),
-  )
-}
-
 async function copiedExport(
   page: Page,
   expectedCount = 13,
@@ -154,6 +134,7 @@ test('parcours réel, reprise et double finalisation', async ({ page }) => {
   await validateDeadliftTop(page)
 
   await page.reload()
+  await resumeActiveSession(page)
   const top = page
     .getByRole('article', { name: 'Soulevé de terre' })
     .getByRole('article', { name: 'Top set' })
@@ -209,6 +190,7 @@ test('les paliers survivent à la reprise sans chrono et restent hors progressio
     .toEqual(['validated', 'validated', 'planned'])
 
   await page.reload()
+  await resumeActiveSession(page)
   const restored = page
     .getByRole('article', { name: 'Soulevé de terre' })
     .getByRole('region', { name: 'Échauffement · Soulevé de terre' })
@@ -246,6 +228,7 @@ test('le même top set produit la même cible dans un brouillon historique sans 
   await openSunday(page)
   await removeWarmupsFromStoredDraft(page)
   await page.reload()
+  await resumeActiveSession(page)
   await expect(page.getByRole('region', { name: /^Échauffement ·/ })).toHaveCount(0)
 
   await validateDeadliftTop(page)
@@ -256,13 +239,9 @@ test('le même top set produit la même cible dans un brouillon historique sans 
 })
 
 test('importe le format historique puis le réexporte en version 2', async ({ page }) => {
-  await openSunday(page)
+  await openSunday(page, false)
   const seed = await readFile(new URL('../../src/domain/seed.json', import.meta.url), 'utf8')
-  // CB-63 supprimera l'ouverture automatique du brouillon depuis l'accueil. En attendant,
-  // le prérequis « aucune séance en cours » est posé directement dans IndexedDB : le but
-  // de ce parcours est la chaîne UI → validation historique → transaction → export v2,
-  // tandis que le refus avec brouillon actif a déjà sa propre preuve Dexie.
-  await clearStoredDraft(page)
+  expect(await storedDraft(page)).toBeNull()
 
   await page.getByRole('button', { name: 'Export' }).click()
   await page.getByRole('textbox', { name: 'Contenu de l’export' }).fill(seed)
@@ -289,11 +268,13 @@ test('ouverture, saisie et finalisation restent disponibles hors ligne', async (
   await context.setOffline(true)
   await page.reload({ waitUntil: 'domcontentloaded' })
   await expect(page.getByRole('heading', { name: 'Séance C' })).toBeVisible()
+  await resumeActiveSession(page)
 
   const notes = page.getByLabel('Notes de séance (facultatif)')
   await notes.fill('Recette hors ligne')
   await expect.poll(async () => (await storedDraft(page))?.notes).toBe('Recette hors ligne')
   await page.reload({ waitUntil: 'domcontentloaded' })
+  await resumeActiveSession(page)
   await expect(page.getByLabel('Notes de séance (facultatif)')).toHaveValue('Recette hors ligne')
 
   await validateDeadliftTop(page)

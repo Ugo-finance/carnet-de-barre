@@ -20,7 +20,8 @@ const SET_ROLE_LABELS: Record<SetLog['role'], string> = {
 type SessionScreenProps = {
   draft: Draft
   whenLabel: string
-  onSelectType: (type: SeanceType) => void
+  /** Héritage de l'ancien accueil ; absent pendant une séance active depuis CB-63. */
+  onSelectType?: (type: SeanceType) => void
   onSetChange: (setId: string, value: EditableSet) => void
   onSetValidate: (
     setId: string,
@@ -193,27 +194,29 @@ export function SessionScreen({
           </p>
         ) : null}
 
-        <nav
-          className="mt-4 grid grid-cols-3 gap-1 rounded-xl border border-line bg-surface p-1"
-          aria-label="Choisir une séance"
-        >
-          {TYPES.map((type) => {
-            const selected = type === draft.type
-            return (
-              <button
-                key={type}
-                type="button"
-                className={`min-h-11 rounded-lg px-3 font-semibold ${
-                  selected ? 'bg-accent-action text-white' : 'text-muted'
-                }`}
-                aria-pressed={selected}
-                onClick={() => onSelectType(type)}
-              >
-                Séance {type}
-              </button>
-            )
-          })}
-        </nav>
+        {onSelectType ? (
+          <nav
+            className="mt-4 grid grid-cols-3 gap-1 rounded-xl border border-line bg-surface p-1"
+            aria-label="Choisir une séance"
+          >
+            {TYPES.map((type) => {
+              const selected = type === draft.type
+              return (
+                <button
+                  key={type}
+                  type="button"
+                  className={`min-h-11 rounded-lg px-3 font-semibold ${
+                    selected ? 'bg-accent-action text-white' : 'text-muted'
+                  }`}
+                  aria-pressed={selected}
+                  onClick={() => onSelectType(type)}
+                >
+                  Séance {type}
+                </button>
+              )
+            })}
+          </nav>
+        ) : null}
         <button
           type="button"
           className="mt-2 min-h-11 w-full rounded-xl border border-line px-3 text-sm font-medium text-muted disabled:opacity-50"

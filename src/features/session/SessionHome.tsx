@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { SessionScreen } from '../../components/SessionScreen'
 import type { CarnetStore, FinalizeResult } from '../../db/contracts'
+import { apercuSeance, resumeAccueil, type ResumeAccueil } from '../../db/selectors'
+import { formatDate } from '../../domain/format'
+import type { Preferences } from '../../domain/preferences'
 import {
   currentSession,
   describeWhen,
@@ -8,14 +11,24 @@ import {
   todayInZurich,
   type UpcomingSession,
 } from '../../domain/schedule'
-import type { Draft, SeanceType } from '../../domain/types'
+import type { Draft, Seance, SeanceType, Targets } from '../../domain/types'
 import { useDraftEditor } from './useDraftEditor'
 import { unlockTimerAudio, useWakeLock } from './timer'
+import { SessionEntryStatus } from './SessionEntryStatus'
+import { SessionLanding } from './SessionLanding'
+import { SessionResume } from './SessionResume'
 import { SessionSummary } from './SessionSummary'
 
 export type SessionStore = Pick<
   CarnetStore,
-  'listSeances' | 'loadDraft' | 'openDraft' | 'saveDraft' | 'clearDraft' | 'finalizeSeance'
+  | 'getTargets'
+  | 'listSeances'
+  | 'loadDraft'
+  | 'startSession'
+  | 'saveDraft'
+  | 'clearDraft'
+  | 'finalizeSeance'
+  | 'getPreferences'
 > & { ready(): Promise<void> }
 
 type ReadyState = {
@@ -31,8 +44,30 @@ type ReadyState = {
   seances: SeanceFaite[]
 }
 
+type EntryData = {
+  draft: Draft | undefined
+  seances: Seance[]
+  targets: Targets
+  preferences: Preferences
+  resume: ResumeAccueil
+}
+
 function messageFor(error: unknown): string {
   return error instanceof Error ? error.message : "L'accès au carnet a échoué."
+}
+
+function StatusScreen({ message, error = false }: { message: string; error?: boolean }) {
+  return (
+    <main className="mx-auto flex min-h-dvh w-full max-w-md items-center justify-center py-6">
+      <div
+        className="w-full rounded-2xl border border-line bg-surface p-5"
+        role={error ? 'alert' : 'status'}
+      >
+        <h1 className="text-xl font-bold">Carnet de barre</h1>
+        <p className={`mt-2 text-sm ${error ? 'text-bad' : 'text-muted'}`}>{message}</p>
+      </div>
+    </main>
+  )
 }
 
 function whenLabel(draft: Draft, suggestion: UpcomingSession, today: string): string {
@@ -51,17 +86,12 @@ function SessionEditor({
   state,
   store,
   now,
-  onReplace,
 }: {
   state: ReadyState
   store: SessionStore
   now: Date
-  onReplace: (type: SeanceType) => Promise<void>
 }) {
   const editor = useDraftEditor(store, state.draft)
-  const [pendingType, setPendingType] = useState<SeanceType>()
-  const [switching, setSwitching] = useState(false)
-  const [switchError, setSwitchError] = useState<string>()
   const [finalizing, setFinalizing] = useState(false)
   const [finalizeError, setFinalizeError] = useState<string>()
   const [result, setResult] = useState<FinalizeResult>()
@@ -83,19 +113,6 @@ function SessionEditor({
     // est servi, y compris un jour creux où aucune séance n'est prévue.
     const apres = [...state.seances, { date: result.seance.date, type: result.seance.type }]
     return <SessionSummary result={result} next={currentSession(now, apres)} />
-  }
-
-  const replace = async () => {
-    if (!pendingType) return
-    setSwitching(true)
-    setSwitchError(undefined)
-    try {
-      await editor.flush()
-      await onReplace(pendingType)
-    } catch (error) {
-      setSwitchError(messageFor(error))
-      setSwitching(false)
-    }
   }
 
   const finish = async () => {
@@ -127,7 +144,6 @@ function SessionEditor({
       <SessionScreen
         draft={draft}
         whenLabel={whenLabel(draft, state.suggestion, state.today)}
-        onSelectType={(type) => setPendingType(type === draft.type ? undefined : type)}
         onSetChange={editor.updateSet}
         onSetValidate={(setId, value, timer) => {
           unlockTimerAudio()
@@ -148,44 +164,6 @@ function SessionEditor({
           editor.saveError ? `Sauvegarde impossible : ${editor.saveError.message}` : undefined
         }
       />
-
-      {pendingType ? (
-        <div
-          className="fixed inset-x-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-10 mx-auto max-w-sm rounded-2xl border border-line bg-surface p-4 shadow-2xl"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="switch-title"
-        >
-          <h2 className="font-bold" id="switch-title">
-            Séance {draft.type} en cours
-          </h2>
-          <p className="mt-1 text-sm text-muted">
-            Reprends-la, ou abandonne-la explicitement avant d’ouvrir la séance {pendingType}.
-          </p>
-          {switchError ? (
-            <p className="mt-2 text-sm text-bad" role="alert">
-              {switchError}
-            </p>
-          ) : null}
-          <div className="mt-4 grid gap-2">
-            <button
-              type="button"
-              className="min-h-11 rounded-xl bg-accent px-4 font-semibold text-bg"
-              onClick={() => setPendingType(undefined)}
-            >
-              Continuer la séance {draft.type}
-            </button>
-            <button
-              type="button"
-              className="min-h-11 rounded-xl border border-line px-4 font-semibold text-fg"
-              onClick={() => void replace()}
-              disabled={switching}
-            >
-              {switching ? 'Ouverture…' : `Abandonner et ouvrir ${pendingType}`}
-            </button>
-          </div>
-        </div>
-      ) : null}
 
       {confirmFinish ? (
         <div
@@ -228,51 +206,81 @@ function SessionEditor({
   )
 }
 
-function StatusScreen({ message, error = false }: { message: string; error?: boolean }) {
-  return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-md items-center justify-center py-6">
-      <div
-        className="w-full rounded-2xl border border-line bg-surface p-5"
-        role={error ? 'alert' : 'status'}
-      >
-        <h1 className="text-xl font-bold">Carnet de barre</h1>
-        <p className={`mt-2 text-sm ${error ? 'text-bad' : 'text-muted'}`}>{message}</p>
-      </div>
-    </main>
-  )
+function editorState(entry: EntryData, draft: Draft, now: Date): ReadyState {
+  const seances = entry.seances.map(({ date, type }) => ({ date, type }))
+  return {
+    draft,
+    suggestion: currentSession(now, seances),
+    today: todayInZurich(now),
+    seances,
+  }
 }
 
-export function SessionHome({ store, now = new Date() }: { store: SessionStore; now?: Date }) {
-  const [state, setState] = useState<ReadyState>()
+function updatedLabel(timestamp: number): string {
+  const instant = new Date(timestamp)
+  const heure = new Intl.DateTimeFormat('fr-CH', {
+    timeZone: 'Europe/Zurich',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(instant)
+  return `${formatDate(todayInZurich(instant))} à ${heure}`
+}
+
+function SessionHomeAttempt({
+  store,
+  now,
+  onRetry,
+}: {
+  store: SessionStore
+  now: Date
+  onRetry: () => void
+}) {
+  const [entry, setEntry] = useState<EntryData>()
+  const [selectedType, setSelectedType] = useState<SeanceType>()
+  const [rushed, setRushed] = useState(false)
+  const [focusedDraft, setFocusedDraft] = useState<Draft>()
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string>()
-  const boot = useRef<Promise<ReadyState> | undefined>(undefined)
+  const [actionError, setActionError] = useState<string>()
+  const [starting, setStarting] = useState(false)
+  const [abandoning, setAbandoning] = useState(false)
+  const operation = useRef(false)
   const storeValue = useRef(store)
   const nowValue = useRef(now)
 
   useEffect(() => {
     let active = true
-    boot.current ??= (async () => {
+
+    const boot = (async (): Promise<EntryData> => {
       await storeValue.current.ready()
-      const [existing, seances] = await Promise.all([
+      const [draft, seances, targets, preferences] = await Promise.all([
         storeValue.current.loadDraft(),
         storeValue.current.listSeances(),
+        storeValue.current.getTargets(),
+        storeValue.current.getPreferences(),
       ])
-      const today = todayInZurich(nowValue.current)
-      const faites: SeanceFaite[] = seances.map((seance) => ({
-        date: seance.date,
-        type: seance.type,
-      }))
-      const suggestion = currentSession(nowValue.current, faites)
-      const draft = existing ?? (await storeValue.current.openDraft(suggestion.type, today))
-      return { draft, suggestion, today, seances: faites }
+      return {
+        draft,
+        seances,
+        targets,
+        preferences,
+        resume: resumeAccueil({ draft, seances, targets, now: nowValue.current }),
+      }
     })()
 
-    void boot.current.then(
+    void boot.then(
       (ready) => {
-        if (active) setState(ready)
+        if (!active) return
+        setEntry(ready)
+        setSelectedType(ready.resume.type)
+        setRushed(ready.preferences.modePresseParDefaut)
+        setFocusedDraft(undefined)
+        setLoading(false)
       },
       (reason: unknown) => {
-        if (active) setError(messageFor(reason))
+        if (!active) return
+        setError(messageFor(reason))
+        setLoading(false)
       },
     )
     return () => {
@@ -280,16 +288,126 @@ export function SessionHome({ store, now = new Date() }: { store: SessionStore; 
     }
   }, [])
 
-  if (error) return <StatusScreen message={`Carnet indisponible : ${error}`} error />
-  if (!state) return <StatusScreen message="Préparation de ta séance…" />
+  if (loading) return <SessionEntryStatus status="loading" />
+  if (error || !entry) {
+    return (
+      <SessionEntryStatus
+        status="error"
+        message={error ?? "L'accès au carnet a échoué."}
+        onRetry={onRetry}
+      />
+    )
+  }
 
-  const replace = async (type: SeanceType) => {
-    await store.clearDraft()
-    const draft = await store.openDraft(type, state.today)
-    setState((current) => (current ? { ...current, draft } : current))
+  if (focusedDraft) {
+    return (
+      <SessionEditor
+        key={focusedDraft.id}
+        state={editorState(entry, focusedDraft, now)}
+        store={store}
+        now={now}
+      />
+    )
+  }
+
+  if (entry.resume.etat === 'en-cours' && entry.draft) {
+    const resume = entry.resume
+    const abandon = async () => {
+      if (operation.current) return
+      operation.current = true
+      setAbandoning(true)
+      setActionError(undefined)
+      try {
+        await store.clearDraft()
+        const next = resumeAccueil({
+          draft: undefined,
+          seances: entry.seances,
+          targets: entry.targets,
+          now,
+        })
+        setEntry({ ...entry, draft: undefined, resume: next })
+        setSelectedType(next.type)
+        setRushed(entry.preferences.modePresseParDefaut)
+      } catch (reason) {
+        setActionError(`Abandon impossible : ${messageFor(reason)}`)
+      } finally {
+        operation.current = false
+        setAbandoning(false)
+      }
+    }
+
+    return (
+      <SessionResume
+        type={resume.type}
+        date={resume.date}
+        dateLabel={formatDate(resume.date)}
+        completedSets={resume.traitees}
+        totalSets={resume.total}
+        updatedLabel={updatedLabel(resume.misAJourA)}
+        abandoning={abandoning}
+        errorMessage={actionError}
+        onResume={() => setFocusedDraft(entry.draft)}
+        onAbandon={() => void abandon()}
+      />
+    )
+  }
+
+  const resume = entry.resume
+  if (resume.etat !== 'aucune') return <SessionEntryStatus status="loading" />
+  const type = selectedType ?? resume.type
+  const preview = apercuSeance(type, entry.targets, entry.seances, rushed)
+  const start = async () => {
+    if (operation.current) return
+    operation.current = true
+    setStarting(true)
+    setActionError(undefined)
+    try {
+      const draft = await store.startSession(type, resume.date, { rushed })
+      setEntry({
+        ...entry,
+        draft,
+        resume: resumeAccueil({ draft, seances: entry.seances, targets: entry.targets, now }),
+      })
+      setFocusedDraft(draft)
+    } catch (reason) {
+      setActionError(`Démarrage impossible : ${messageFor(reason)}`)
+    } finally {
+      operation.current = false
+      setStarting(false)
+    }
   }
 
   return (
-    <SessionEditor key={state.draft.id} state={state} store={store} now={now} onReplace={replace} />
+    <SessionLanding
+      suggestedType={resume.type}
+      selectedType={type}
+      date={resume.date}
+      dateLabel={formatDate(resume.date)}
+      scheduleLabel={type === resume.type ? resume.quand : "Aujourd'hui · hors rotation"}
+      exercises={preview.exercices.map((exercise) => ({
+        id: exercise.id,
+        name: exercise.label,
+        prescription: exercise.scheme,
+      }))}
+      warmupCount={preview.paliers}
+      rushed={rushed}
+      starting={starting}
+      errorMessage={actionError}
+      onSelectType={setSelectedType}
+      onRushedChange={setRushed}
+      onStart={() => void start()}
+    />
+  )
+}
+
+export function SessionHome({ store, now = new Date() }: { store: SessionStore; now?: Date }) {
+  const [attempt, setAttempt] = useState(0)
+  return (
+    <SessionHomeAttempt
+      key={attempt}
+      store={store}
+      now={now}
+      onRetry={() => setAttempt((value) => value + 1)}
+    />
   )
 }

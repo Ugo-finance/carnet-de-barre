@@ -51,9 +51,8 @@ function CiblesTab({ onAdjusted }: { onAdjusted: () => void }) {
         // ensuite d'écrire, et aucun écran ne sait rebaser un brouillon. Ugo devrait
         // abandonner toute sa saisie pour sortir de l'impasse.
         //
-        // Un brouillon **vierge** n'est pas une séance : l'écran d'accueil en ouvre un
-        // dès l'affichage, y compris juste après une finalisation. Le magasin sait le
-        // reconstruire sur les nouvelles cibles ; verrouiller ici l'en empêcherait.
+        // Un ancien brouillon **vierge** n'est pas une séance. CB-63 n'en crée plus à
+        // l'affichage, mais cette distinction garde les données migrées ajustables.
         setVerrouille(brouillon !== undefined && isDraftActive(brouillon))
       },
       (cause: unknown) =>
@@ -84,11 +83,8 @@ function CiblesTab({ onAdjusted }: { onAdjusted: () => void }) {
       store={{
         adjustTarget: async (lift, patch) => {
           const suivantes = await store.adjustTarget(lift, patch)
-          // Le magasin a pu reconstruire le brouillon vierge. `SessionHome` reste
-          // monté et tient encore l'ancien en mémoire : sans remontage, sa prochaine
-          // sauvegarde réécrirait les anciennes `baseTargets` par-dessus, et la
-          // finalisation lèverait `stale-targets`. Le remonter ne coûte rien —
-          // l'ajustement n'était possible que parce que le brouillon était vierge.
+          // `SessionHome` garde l'aperçu chargé au montage. Le remonter après un
+          // ajustement garantit que le démarrage atomique reçoit les cibles à jour.
           onAdjusted()
           return suivantes
         },

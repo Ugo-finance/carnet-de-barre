@@ -44,9 +44,9 @@ describe('navigation depuis le point d’entrée réel', () => {
 
   it('ouvre la séance par défaut', async () => {
     render(<App />)
-    // C'est le seul écran qu'Ugo ouvre les mains sur une barre : il doit être là sans
-    // qu'il ait à choisir.
+    // L'accueil de séance reste le point d'entrée, avant tout brouillon.
     expect(await screen.findByRole('heading', { name: /Séance [ABC]/ })).toBeInTheDocument()
+    expect(await store.loadDraft()).toBeUndefined()
   })
 
   it('atteint l’écran des cibles', async () => {
@@ -111,13 +111,12 @@ describe('navigation depuis le point d’entrée réel', () => {
   })
 
   it('interdit d’ajuster une cible pendant une séance COMMENCÉE', async () => {
-    // P1 trouvé par Codex après la fusion de la navigation. `SessionHome` ouvre un
-    // brouillon dès le démarrage ; rendre l'onglet Cibles atteignable a du même coup
+    // P1 trouvé par Codex après la fusion de la navigation. Rendre l'onglet Cibles
+    // atteignable a du même coup
     // rendu l'ajustement atteignable pendant une séance. Or `finalizeSeance` refuse
     // d'écrire quand les cibles ont bougé depuis l'ouverture du brouillon, et aucun
     // écran ne sait rebaser un brouillon : Ugo aurait dû abandonner toute sa saisie.
-    // Il faut vraiment commencer : depuis CB-27, un brouillon vierge ne verrouille
-    // plus rien, parce que l'app en ouvre un toute seule à chaque affichage.
+    // Il faut vraiment commencer : un brouillon vierge migré ne verrouille rien.
     await store.ready()
     const commence = await store.openDraft('C', '2026-09-12')
     await store.saveDraft({
@@ -168,9 +167,8 @@ describe('navigation depuis le point d’entrée réel', () => {
   })
 
   it('laisse ajuster une cible quand le brouillon n’a jamais été touché', async () => {
-    // CB-27. L'écran d'accueil ouvre un brouillon dès l'affichage, y compris juste
-    // après une finalisation. Verrouiller là-dessus interdisait l'ajustement au
-    // moment précis où Ugo sort de la salle.
+    // L'accueil est en lecture seule et ne crée plus de brouillon. L'ajustement reste
+    // donc disponible au moment précis où Ugo sort de la salle.
     render(<App />)
     await screen.findByRole('heading', { name: /Séance [ABC]/ })
 
@@ -183,10 +181,9 @@ describe('navigation depuis le point d’entrée réel', () => {
     expect(screen.queryByText(/lecture seule/)).not.toBeInTheDocument()
   })
 
-  it('reporte la cible ajustée dans la séance affichée', async () => {
-    // Le point que Codex a soulevé : `SessionHome` reste monté et tient l'ancien
-    // brouillon. Sans remontage, sa prochaine sauvegarde réécrirait les anciennes
-    // cibles de référence et la finalisation lèverait `stale-targets`.
+  it('démarre la séance sur la cible ajustée sans brouillon intermédiaire', async () => {
+    // `SessionHome` garde son aperçu en mémoire. Le remontage demandé par CiblesTab
+    // doit lui faire relire les cibles avant le démarrage atomique.
     render(<App />)
     await screen.findByRole('heading', { name: /Séance [ABC]/ })
 
@@ -203,8 +200,12 @@ describe('navigation depuis le point d’entrée réel', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Séance' }))
 
-    // Le brouillon relu porte la nouvelle cible : l'écran a bien été remonté.
+    expect(await store.loadDraft()).toBeUndefined()
+    fireEvent.click(await screen.findByRole('button', { name: /Démarrer la séance/ }))
+
+    await waitFor(() => expect(store.loadDraft()).resolves.toBeDefined())
     const brouillon = await store.loadDraft()
     expect(brouillon?.baseTargets.squat.w).toBe(80)
+    await store.clearDraft()
   })
 })
