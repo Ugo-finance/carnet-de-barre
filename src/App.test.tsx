@@ -38,7 +38,8 @@ describe('navigation depuis le point d’entrée réel', () => {
     vi.setSystemTime(MARDI)
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await store.clearDraft()
     vi.useRealTimers()
   })
 
@@ -110,13 +111,9 @@ describe('navigation depuis le point d’entrée réel', () => {
     expect(screen.getByRole('button', { name: 'Séance' })).not.toHaveAttribute('aria-current')
   })
 
-  it('interdit d’ajuster une cible pendant une séance COMMENCÉE', async () => {
-    // P1 trouvé par Codex après la fusion de la navigation. Rendre l'onglet Cibles
-    // atteignable a du même coup
-    // rendu l'ajustement atteignable pendant une séance. Or `finalizeSeance` refuse
-    // d'écrire quand les cibles ont bougé depuis l'ouverture du brouillon, et aucun
-    // écran ne sait rebaser un brouillon : Ugo aurait dû abandonner toute sa saisie.
-    // Il faut vraiment commencer : un brouillon vierge migré ne verrouille rien.
+  it('masque toute la navigation globale pendant une séance commencée', async () => {
+    // L'interdiction d'ajuster reste protégée dans le magasin. À l'écran, le contrat
+    // v2 va plus loin : une séance active retire toutes les sorties concurrentes.
     await store.ready()
     const commence = await store.openDraft('C', '2026-09-12')
     await store.saveDraft({
@@ -129,29 +126,25 @@ describe('navigation depuis le point d’entrée réel', () => {
     render(<App />)
     await screen.findByRole('heading', { name: /Séance [ABC]/ })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Cibles' }))
-    await screen.findByRole('heading', { name: 'Cibles' })
-
-    await waitFor(() => expect(screen.getByText(/lecture seule/)).toBeInTheDocument())
-    expect(screen.queryByRole('button', { name: 'Ajuster' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Repartir à zéro' })).not.toBeInTheDocument()
-
-    await store.clearDraft()
+    expect(screen.queryByRole('navigation', { name: 'Sections' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Reprendre la séance' })).toBeInTheDocument()
   })
 
-  it('laisse quand même consulter les cibles pendant la séance', async () => {
-    // Savoir ce qui est visé pendant qu'on s'entraîne est l'usage légitime de l'écran.
-    // Le verrou porte sur la modification, pas sur la lecture.
+  it('garde la navigation masquée après avoir quitté le focus, puis la rend après abandon', async () => {
     render(<App />)
     await screen.findByRole('heading', { name: /Séance [ABC]/ })
+    fireEvent.click(screen.getByRole('button', { name: /Démarrer la séance/ }))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Cibles' }))
+    expect(await screen.findByRole('button', { name: 'Quitter la vue' })).toBeInTheDocument()
+    expect(screen.queryByRole('navigation', { name: 'Sections' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Quitter la vue' }))
 
-    // Même cadrage que ci-dessus, et pour la même raison : « Squat » **et** « 75 kg »
-    // figurent tous deux sur l'écran de séance resté monté, les jours de séance A.
-    const liste = await screen.findByRole('list')
-    await waitFor(() => expect(within(liste).getByText('Squat')).toBeInTheDocument())
-    expect(within(liste).getByText('75 kg')).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Reprendre la séance' })).toBeInTheDocument()
+    expect(screen.queryByRole('navigation', { name: 'Sections' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Abandonner la séance' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmer l’abandon' }))
+
+    expect(await screen.findByRole('navigation', { name: 'Sections' })).toBeInTheDocument()
   })
 
   it('atteint l’historique et y montre les séances de départ', async () => {

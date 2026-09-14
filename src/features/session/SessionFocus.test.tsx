@@ -23,6 +23,7 @@ function callbacks() {
     onSetChange: vi.fn(),
     onValidate: vi.fn(),
     onSkip: vi.fn(),
+    onNotesChange: vi.fn(),
     onFinish: vi.fn(),
     onExit: vi.fn(),
   }
@@ -33,6 +34,7 @@ function props(value: Draft = draft()) {
     type: value.type,
     queue: buildSessionQueue(value),
     elapsedLabel: '12 min',
+    notes: value.notes,
     ...callbacks(),
   }
 }
@@ -84,6 +86,19 @@ describe('SessionFocus', () => {
     expect(actions.onValidate).toHaveBeenCalledOnce()
     expect(screen.getByRole('article')).toHaveAttribute('aria-label', currentName)
     expect(screen.getByText('Série 1/16')).toBeInTheDocument()
+  })
+
+  it('garde les notes accessibles sans afficher une seconde carte de série', () => {
+    const actions = props()
+    render(<SessionFocus {...actions} />)
+
+    fireEvent.click(screen.getByText('Notes de séance (facultatif)'))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Notes de séance (facultatif)' }), {
+      target: { value: 'Genou stable' },
+    })
+
+    expect(actions.onNotesChange).toHaveBeenCalledWith('Genou stable')
+    expect(screen.getAllByRole('article')).toHaveLength(1)
   })
 
   it('affiche le RPE uniquement sur le top set', () => {
@@ -182,6 +197,17 @@ describe('SessionFocus', () => {
     expect(screen.getByRole('button', { name: 'Quitter la vue' })).toBeDisabled()
   })
 
+  it('nomme explicitement l’action qui retente une sauvegarde échouée', () => {
+    const actions = props()
+    render(<SessionFocus {...actions} errorMessage="Sauvegarde impossible. Réessayer." />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }))
+    expect(actions.onValidate).toHaveBeenCalledWith(
+      actions.queue[0]!.set.id,
+      expect.objectContaining({ status: 'validated' }),
+    )
+  })
+
   it('offre la finalisation quand toute la file est traitée', () => {
     const value = {
       ...draft(),
@@ -195,6 +221,30 @@ describe('SessionFocus', () => {
     ).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Terminer la séance' }))
     expect(actions.onFinish).toHaveBeenCalledOnce()
+  })
+
+  it('permet de saisir les notes avant la finalisation', () => {
+    const base = draft()
+    const value = {
+      ...base,
+      sets: base.sets.map((set) => ({ ...set, status: 'validated' as const })),
+    }
+    const actions = props(value)
+    render(<SessionFocus {...actions} />)
+
+    fireEvent.change(screen.getByRole('textbox', { name: /Notes de séance/ }), {
+      target: { value: 'Solide' },
+    })
+    expect(actions.onNotesChange).toHaveBeenCalledWith('Solide')
+  })
+
+  it('permet de demander une fin incomplète sans quitter la série courante', () => {
+    const actions = props()
+    render(<SessionFocus {...actions} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Terminer la séance' }))
+    expect(actions.onFinish).toHaveBeenCalledOnce()
+    expect(screen.getByRole('heading', { name: 'Soulevé de terre' })).toBeInTheDocument()
   })
 
   it('reste finalisable après une erreur d’enregistrement', () => {

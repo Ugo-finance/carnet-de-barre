@@ -1,12 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { SessionScreen } from '../../components/SessionScreen'
 import type { CarnetStore, FinalizeResult } from '../../db/contracts'
 import { apercuSeance, resumeAccueil, type ResumeAccueil } from '../../db/selectors'
 import { formatDate } from '../../domain/format'
 import type { Preferences } from '../../domain/preferences'
 import {
   currentSession,
-  describeWhen,
   type SeanceFaite,
   todayInZurich,
   type UpcomingSession,
@@ -16,8 +14,10 @@ import { useDraftEditor } from './useDraftEditor'
 import { unlockTimerAudio, useWakeLock } from './timer'
 import { SessionEntryStatus } from './SessionEntryStatus'
 import { SessionLanding } from './SessionLanding'
+import { SessionFocus } from './SessionFocus'
 import { SessionResume } from './SessionResume'
 import { SessionSummary } from './SessionSummary'
+import { buildSessionQueue } from './sessionQueue'
 
 export type SessionStore = Pick<
   CarnetStore,
@@ -70,35 +70,60 @@ function StatusScreen({ message, error = false }: { message: string; error?: boo
   )
 }
 
-function whenLabel(draft: Draft, suggestion: UpcomingSession, today: string): string {
-  if (draft.type === suggestion.type && draft.date === suggestion.scheduledDate)
-    return describeWhen(suggestion)
-  if (draft.date !== today) return 'Séance à reprendre'
-  // Depuis CB-44, l'app propose le créneau suivant dès que celui du jour est servi :
-  // faire mardi un dimanche est devenu le parcours normal, pas une sortie de route.
-  // Le confondre avec « hors rotation » — un type choisi à la main — mentirait sur
-  // ce qu'Ugo est en train de faire.
-  if (draft.type === suggestion.type) return "Aujourd'hui · en avance"
-  return "Aujourd'hui · hors rotation"
+function elapsedLabel(startedAt: number | null, now: number): string {
+  if (startedAt === null) return 'Durée inconnue'
+  const minutes = Math.max(0, Math.floor((now - startedAt) / 60_000))
+  return `${minutes} min`
+}
+
+/** Le temps écoulé reste dérivé de `startedAt` et de l'horloge, jamais stocké. */
+function useElapsedLabel(startedAt: number | null): string {
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    if (startedAt === null) return
+    const interval = window.setInterval(() => setNow(Date.now()), 30_000)
+    return () => window.clearInterval(interval)
+  }, [startedAt])
+
+  return elapsedLabel(startedAt, now)
 }
 
 function SessionEditor({
   state,
   store,
   now,
+  onExit,
+  onFinished,
 }: {
   state: ReadyState
   store: SessionStore
   now: Date
+  onExit: (draft: Draft) => void
+  onFinished: () => void
 }) {
   const editor = useDraftEditor(store, state.draft)
+  const [writing, setWriting] = useState(false)
   const [finalizing, setFinalizing] = useState(false)
   const [finalizeError, setFinalizeError] = useState<string>()
   const [result, setResult] = useState<FinalizeResult>()
   const [confirmFinish, setConfirmFinish] = useState(false)
   const finalizingRef = useRef(false)
+  const writingRef = useRef(false)
+  const returnToSessionRef = useRef<HTMLButtonElement>(null)
   const keepAwake = editor.draft?.keepAwake ?? false
   useWakeLock(keepAwake, Boolean(editor.draft) && !result)
+  const sessionElapsedLabel = useElapsedLabel(editor.draft?.startedAt ?? null)
+
+  useEffect(() => {
+    if (!confirmFinish) return
+    returnToSessionRef.current?.focus()
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setConfirmFinish(false)
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [confirmFinish])
 
   if (editor.loadError) {
     return <StatusScreen message={`Brouillon indisponible : ${editor.loadError.message}`} error />
@@ -106,6 +131,7 @@ function SessionEditor({
   if (editor.loading || !editor.draft) return <StatusScreen message="Chargement de la séance…" />
 
   const draft = editor.draft
+  const queue = buildSessionQueue(draft)
 
   if (result) {
     // La séance qu'on vient d'enregistrer compte, sans attendre un rechargement.
@@ -122,7 +148,9 @@ function SessionEditor({
     setFinalizeError(undefined)
     try {
       await editor.flush()
-      setResult(await store.finalizeSeance(draft.id))
+      const next = await store.finalizeSeance(draft.id)
+      setResult(next)
+      onFinished()
     } catch (error) {
       setFinalizeError(messageFor(error))
     } finally {
@@ -132,7 +160,10 @@ function SessionEditor({
   }
 
   const unfinishedCount = draft.sets.filter(
-    (set) => set.status !== 'validated' && set.status !== 'skipped',
+    (set) =>
+      queue.some(({ set: queued }) => queued.id === set.id) &&
+      set.status !== 'validated' &&
+      set.status !== 'skipped',
   ).length
   const requestFinish = () => {
     if (unfinishedCount > 0) setConfirmFinish(true)
@@ -141,27 +172,85 @@ function SessionEditor({
 
   return (
     <>
-      <SessionScreen
-        draft={draft}
-        whenLabel={whenLabel(draft, state.suggestion, state.today)}
-        onSetChange={editor.updateSet}
-        onSetValidate={(setId, value, timer) => {
-          unlockTimerAudio()
-          editor.validateSet(setId, value, timer)
-        }}
-        onAccessoryChange={editor.updateAccessory}
-        onNotesChange={editor.updateNotes}
-        onTimerAdjust={editor.adjustTimer}
-        keepAwake={keepAwake}
-        onKeepAwakeChange={editor.updateKeepAwake}
-        onTimerStop={editor.stopTimer}
-        onFinish={requestFinish}
+      <SessionFocus
+        type={draft.type}
+        queue={queue}
+        elapsedLabel={sessionElapsedLabel}
+        writing={writing}
         finishing={finalizing}
+        notes={draft.notes}
+        timer={
+          draft.timerEndsAt !== null && draft.timerLabel
+            ? {
+                endsAt: draft.timerEndsAt,
+                label: draft.timerLabel,
+                onAdjust: editor.adjustTimer,
+                onStop: editor.stopTimer,
+              }
+            : undefined
+        }
+        onSetChange={editor.updateSet}
+        onValidate={(setId, value) => {
+          if (writingRef.current) return
+          const item = queue.find(({ set }) => set.id === setId)
+          if (!item) return
+          unlockTimerAudio()
+          writingRef.current = true
+          setWriting(true)
+          void editor
+            .validateSetAfterPersist(
+              setId,
+              value,
+              item.set.role === 'warmup'
+                ? null
+                : {
+                    seconds: item.exercise.restSeconds,
+                    label: `Récup ${item.exercise.label}`,
+                  },
+            )
+            .catch(() => undefined)
+            .finally(() => {
+              writingRef.current = false
+              setWriting(false)
+            })
+        }}
+        onSkip={(setId) => {
+          if (writingRef.current) return
+          writingRef.current = true
+          setWriting(true)
+          void editor
+            .skipSetAfterPersist(setId)
+            .catch(() => undefined)
+            .finally(() => {
+              writingRef.current = false
+              setWriting(false)
+            })
+        }}
+        onNotesChange={editor.updateNotes}
+        onFinish={requestFinish}
+        onExit={() => {
+          if (writingRef.current) return
+          writingRef.current = true
+          setWriting(true)
+          void editor
+            .flush()
+            .then(() => {
+              writingRef.current = false
+              setWriting(false)
+              onExit(draft)
+            })
+            .catch(() => {
+              writingRef.current = false
+              setWriting(false)
+            })
+        }}
         finishErrorMessage={
           finalizeError ? `Enregistrement impossible : ${finalizeError}` : undefined
         }
         errorMessage={
-          editor.saveError ? `Sauvegarde impossible : ${editor.saveError.message}` : undefined
+          editor.saveError
+            ? `Sauvegarde impossible. Ta série reste à confirmer. Réessayer. (${editor.saveError.message})`
+            : undefined
         }
       />
 
@@ -183,6 +272,7 @@ function SessionEditor({
           </p>
           <div className="mt-4 grid gap-2">
             <button
+              ref={returnToSessionRef}
               type="button"
               className="min-h-11 rounded-xl bg-accent px-4 font-semibold text-bg"
               onClick={() => setConfirmFinish(false)}
@@ -230,10 +320,12 @@ function SessionHomeAttempt({
   store,
   now,
   onRetry,
+  onSessionActiveChange,
 }: {
   store: SessionStore
   now: Date
   onRetry: () => void
+  onSessionActiveChange?: (active: boolean) => void
 }) {
   const [entry, setEntry] = useState<EntryData>()
   const [selectedType, setSelectedType] = useState<SeanceType>()
@@ -275,6 +367,7 @@ function SessionHomeAttempt({
         setSelectedType(ready.resume.type)
         setRushed(ready.preferences.modePresseParDefaut)
         setFocusedDraft(undefined)
+        onSessionActiveChange?.(ready.resume.etat === 'en-cours')
         setLoading(false)
       },
       (reason: unknown) => {
@@ -286,7 +379,14 @@ function SessionHomeAttempt({
     return () => {
       active = false
     }
-  }, [])
+  }, [onSessionActiveChange])
+
+  useEffect(
+    () => () => {
+      onSessionActiveChange?.(false)
+    },
+    [onSessionActiveChange],
+  )
 
   if (loading) return <SessionEntryStatus status="loading" />
   if (error || !entry) {
@@ -306,6 +406,20 @@ function SessionHomeAttempt({
         state={editorState(entry, focusedDraft, now)}
         store={store}
         now={now}
+        onExit={(persistedDraft) => {
+          setEntry({
+            ...entry,
+            draft: persistedDraft,
+            resume: resumeAccueil({
+              draft: persistedDraft,
+              seances: entry.seances,
+              targets: entry.targets,
+              now,
+            }),
+          })
+          setFocusedDraft(undefined)
+        }}
+        onFinished={() => onSessionActiveChange?.(false)}
       />
     )
   }
@@ -328,6 +442,7 @@ function SessionHomeAttempt({
         setEntry({ ...entry, draft: undefined, resume: next })
         setSelectedType(next.type)
         setRushed(entry.preferences.modePresseParDefaut)
+        onSessionActiveChange?.(false)
       } catch (reason) {
         setActionError(`Abandon impossible : ${messageFor(reason)}`)
       } finally {
@@ -369,6 +484,7 @@ function SessionHomeAttempt({
         resume: resumeAccueil({ draft, seances: entry.seances, targets: entry.targets, now }),
       })
       setFocusedDraft(draft)
+      onSessionActiveChange?.(true)
     } catch (reason) {
       setActionError(`Démarrage impossible : ${messageFor(reason)}`)
     } finally {
@@ -400,7 +516,15 @@ function SessionHomeAttempt({
   )
 }
 
-export function SessionHome({ store, now = new Date() }: { store: SessionStore; now?: Date }) {
+export function SessionHome({
+  store,
+  now = new Date(),
+  onSessionActiveChange,
+}: {
+  store: SessionStore
+  now?: Date
+  onSessionActiveChange?: (active: boolean) => void
+}) {
   const [attempt, setAttempt] = useState(0)
   return (
     <SessionHomeAttempt
@@ -408,6 +532,7 @@ export function SessionHome({ store, now = new Date() }: { store: SessionStore; 
       store={store}
       now={now}
       onRetry={() => setAttempt((value) => value + 1)}
+      onSessionActiveChange={onSessionActiveChange}
     />
   )
 }

@@ -31,9 +31,11 @@ type SessionFocusProps = {
   finishing?: boolean
   finishErrorMessage?: string
   timer?: RecoveryTimer
+  notes: string
   onSetChange: (setId: string, value: EditableSet) => void
   onValidate: (setId: string, value: EditableSet) => void
   onSkip: (setId: string, value: EditableSet) => void
+  onNotesChange: (notes: string) => void
   onFinish: () => void
   onExit: () => void
 }
@@ -98,9 +100,11 @@ export function SessionFocus({
   finishing = false,
   finishErrorMessage,
   timer,
+  notes,
   onSetChange,
   onValidate,
   onSkip,
+  onNotesChange,
   onFinish,
   onExit,
 }: SessionFocusProps) {
@@ -131,6 +135,16 @@ export function SessionFocus({
             {finishErrorMessage}
           </p>
         ) : null}
+        <label className="text-sm font-medium text-muted">
+          Notes de séance <span className="font-normal">(facultatif)</span>
+          <textarea
+            className="mt-2 min-h-24 w-full resize-y rounded-xl border border-line bg-surface p-3 text-base text-fg outline-none focus:border-accent"
+            value={notes}
+            disabled={finishing}
+            onChange={(event) => onNotesChange(event.target.value)}
+            placeholder="Sensations, durée, matériel, salle…"
+          />
+        </label>
         <Button className="w-full py-4" disabled={finishing} onClick={onFinish}>
           {finishing ? 'Enregistrement…' : 'Terminer la séance'}
         </Button>
@@ -232,7 +246,7 @@ export function SessionFocus({
         }
         barbellTotal={canShowBarbell ? (set.weight ?? undefined) : undefined}
         supersetPartner={visible.supersetPartner}
-        primaryLabel={writing ? 'Sauvegarde…' : 'Valider'}
+        primaryLabel={writing ? 'Sauvegarde…' : errorMessage ? 'Réessayer' : 'Valider'}
         skipLabel={set.role === 'warmup' ? 'Passer ce palier' : 'Sauter — optionnel'}
         busy={writing}
         errorMessage={errorMessage}
@@ -278,6 +292,20 @@ export function SessionFocus({
         </span>
       </p>
 
+      <details className="rounded-xl border border-line bg-surface px-3">
+        <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium text-muted">
+          Notes de séance (facultatif)
+        </summary>
+        <textarea
+          className="mb-3 min-h-24 w-full resize-y rounded-xl border border-line bg-bg p-3 text-base text-fg outline-none focus:border-accent"
+          aria-label="Notes de séance (facultatif)"
+          value={notes}
+          disabled={writing}
+          onChange={(event) => onNotesChange(event.target.value)}
+          placeholder="Sensations, durée, matériel, salle…"
+        />
+      </details>
+
       {reviewing ? (
         <Button
           variant="secondary"
@@ -297,10 +325,13 @@ export function SessionFocus({
         >
           Précédente
         </Button>
-        <Button variant="ghost" disabled={writing} onClick={onExit}>
+        <Button variant="ghost" disabled={writing || finishing} onClick={onExit}>
           Quitter la vue
         </Button>
       </div>
+      <Button variant="ghost" className="w-full" disabled={writing || finishing} onClick={onFinish}>
+        Terminer la séance
+      </Button>
     </main>
   )
 }

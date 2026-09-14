@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { FinalizeResult } from '../../db/contracts'
 import { PREFERENCES_PAR_DEFAUT } from '../../domain/preferences'
-import type { Draft, Seance, SeanceType, Targets } from '../../domain/types'
+import type { Draft, Seance, SeanceType, SetLog, Targets } from '../../domain/types'
 import { SessionHome, type SessionStore } from './SessionHome'
 
 const TARGETS: Targets = {
@@ -29,6 +29,22 @@ function draftFor(type: SeanceType, date: string): Draft {
     baseTargets: TARGETS,
     createdAt: 1,
     updatedAt: 1,
+  }
+}
+
+function deadliftTop(): SetLog {
+  return {
+    id: 'c-deadlift:top:0',
+    exerciseId: 'c-deadlift',
+    role: 'top',
+    index: 0,
+    status: 'planned',
+    loadKind: 'barTotal',
+    weight: 92.5,
+    reps: 3,
+    rpe: null,
+    targetWeight: 92.5,
+    targetReps: 3,
   }
 }
 
@@ -174,6 +190,7 @@ describe('SessionHome', () => {
 
   it('restaure le chrono porté par un brouillon existant', async () => {
     const initial = draftFor('C', '2026-09-20')
+    initial.sets = [deadliftTop()]
     initial.timerEndsAt = Date.now() + 150_000
     initial.timerLabel = 'Récup Soulevé de terre'
     const store = fakeStore({ initial })
@@ -182,6 +199,69 @@ describe('SessionHome', () => {
     await resumeSession()
     expect(await screen.findByText('Récup Soulevé de terre')).toBeInTheDocument()
     expect(screen.getByRole('timer')).toBeInTheDocument()
+  })
+
+  it('n’avance qu’après la réussite de la sauvegarde de la série', async () => {
+    let releaseSave!: () => void
+    const saving = new Promise<void>((resolve) => {
+      releaseSave = resolve
+    })
+    const initial = draftFor('C', '2026-09-20')
+    initial.sets = [deadliftTop()]
+    const store = fakeStore({ initial })
+    vi.mocked(store.saveDraft).mockReturnValueOnce(saving)
+    render(<SessionHome store={store} now={SUNDAY} />)
+    await resumeSession()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Valider' }))
+    expect(screen.getByRole('heading', { name: 'Soulevé de terre' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Sauvegarde…' })).toBeDisabled()
+
+    releaseSave()
+    expect(
+      await screen.findByRole('heading', { name: 'Toutes les séries sont traitées' }),
+    ).toBeInTheDocument()
+  })
+
+  it('reste sur la série à confirmer quand sa sauvegarde échoue', async () => {
+    const initial = draftFor('C', '2026-09-20')
+    initial.sets = [deadliftTop()]
+    const store = fakeStore({ initial })
+    vi.mocked(store.saveDraft).mockRejectedValueOnce(new Error('quota dépassé'))
+    render(<SessionHome store={store} now={SUNDAY} />)
+    await resumeSession()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Valider' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Sauvegarde impossible. Ta série reste à confirmer. Réessayer. (quota dépassé)',
+    )
+    expect(screen.getByRole('heading', { name: 'Soulevé de terre' })).toBeInTheDocument()
+    const retry = screen.getByRole('button', { name: 'Réessayer' })
+    expect(retry).toBeEnabled()
+    fireEvent.click(retry)
+    await waitFor(() => expect(store.saveDraft).toHaveBeenCalledTimes(2))
+  })
+
+  it('attend les écritures puis reprend le brouillon actualisé après avoir quitté le focus', async () => {
+    let releaseSave!: () => void
+    const saving = new Promise<void>((resolve) => {
+      releaseSave = resolve
+    })
+    const initial = draftFor('C', '2026-09-20')
+    initial.sets = [deadliftTop()]
+    const store = fakeStore({ initial })
+    vi.mocked(store.saveDraft).mockReturnValueOnce(saving)
+    render(<SessionHome store={store} now={SUNDAY} />)
+    await resumeSession()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Augmenter Poids de 2,5' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Quitter la vue' }))
+    expect(screen.queryByRole('button', { name: 'Reprendre la séance' })).not.toBeInTheDocument()
+
+    releaseSave()
+    fireEvent.click(await screen.findByRole('button', { name: 'Reprendre la séance' }))
+    expect(screen.getByRole('textbox', { name: 'Poids' })).toHaveValue('95')
   })
 
   it('garde l’écran allumé entre deux chronos pendant la séance', async () => {
@@ -357,9 +437,10 @@ describe('SessionHome', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Terminer la séance' }))
     const dialog = screen.getByRole('dialog', { name: 'Séance incomplète' })
     expect(within(dialog).getByText(/1 série n’est pas validée/)).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: 'Revenir à la séance' })).toHaveFocus()
     expect(store.finalizeSeance).not.toHaveBeenCalled()
 
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Revenir à la séance' }))
+    fireEvent.keyDown(window, { key: 'Escape' })
     expect(screen.queryByRole('dialog', { name: 'Séance incomplète' })).not.toBeInTheDocument()
     expect(store.finalizeSeance).not.toHaveBeenCalled()
 
@@ -405,7 +486,9 @@ describe('SessionHome', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Enregistrement impossible : quota dépassé',
     )
-    expect(screen.getByRole('heading', { name: 'Séance C' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Toutes les séries sont traitées' }),
+    ).toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: /Notes de séance/ })).toHaveValue('À conserver')
   })
 })
