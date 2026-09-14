@@ -9,11 +9,15 @@
  * Ces fonctions sont **pures** : elles prennent ce qui a été lu et rendent ce qui sera
  * affiché. Aucune n'ouvre la base, aucune ne lit l'horloge sans qu'on la lui passe.
  *
- * Ce qu'elles ne calculent **pas**, et pourquoi c'est explicite : e1RM, tonnage et
- * record ont leurs données mais pas leur formule — arbitrage 4 de `00-contrat.md`,
- * formule attendue en CB-13. Plutôt que de les omettre en silence, `metriquesDifferees`
- * les nomme avec leur motif, pour qu'un écran puisse dire « pas encore » au lieu
- * d'afficher un blanc que personne ne sait interpréter.
+ * Depuis CB-13, le maximum estimé et les records **sont** calculés : `resumeProgression`
+ * porte `recordCharge` et `recordE1RM` par lift, avec leur date, et `null` quand il n'y
+ * a rien d'honnête à dire — sans RPE noté, ou hors charge totale à la barre.
+ *
+ * Ce qu'elles ne calculent toujours pas, et pourquoi c'est explicite : le **tonnage**.
+ * Ce n'est pas une formule qui manque mais une donnée — le chariot de la presse 45° et
+ * le poids de corps d'Ugo. Plutôt que de l'omettre en silence, `metriquesDifferees` le
+ * nomme avec son motif, pour qu'un écran puisse dire « pas encore » au lieu d'afficher
+ * un blanc que personne ne sait interpréter.
  */
 
 import { LIFTS, RUSHED_EXERCISE_COUNT, SEANCES } from '../domain/program.ts'

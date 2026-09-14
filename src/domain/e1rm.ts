@@ -114,11 +114,28 @@ function meilleur(
     if (top.lift !== lift) continue
     const valeur = mesure(top)
     if (valeur == null) continue
-    // `>` strict, jamais `>=` : une égalité laisse le record à sa date d'origine.
-    if (record === null || valeur > record.valeur) record = { valeur, date: top.date }
+    if (record === null || valeur > record.valeur || egaliteAncienne(valeur, top.date, record)) {
+      record = { valeur, date: top.date }
+    }
   }
 
   return record
+}
+
+/**
+ * Une égalité départagée par la **date**, et non par l'ordre d'arrivée — P1 de Codex.
+ *
+ * Une première version se contentait de `>` strict, en comptant sur un historique trié
+ * du plus ancien au plus récent. Les deux magasins rendent `listSeances()` dans l'ordre
+ * **inverse** : le record d'un squat à 80 kg fait le 01.09 puis le 08.09 portait donc la
+ * date du 08, c'est-à-dire exactement le contraire de la règle annoncée. Le test le
+ * masquait, sa fixture étant écrite dans l'ordre chronologique.
+ *
+ * Un record égalé n'est pas un record battu : réafficher la date du jour ferait croire
+ * à un progrès qui n'a pas eu lieu.
+ */
+function egaliteAncienne(valeur: number, date: string, record: Record): boolean {
+  return valeur === record.valeur && date < record.date
 }
 
 /**

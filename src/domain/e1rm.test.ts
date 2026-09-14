@@ -98,12 +98,34 @@ const HISTORIQUE: TopPasse[] = [
   { date: '2026-09-10', lift: 'tractions', weight: 20, reps: 3, rpe: null, loadKind: 'added' },
 ]
 
+/**
+ * L'ordre dans lequel les magasins rendent vraiment l'historique : **du plus récent au
+ * plus ancien** (`listSeances()`, Dexie comme mémoire).
+ *
+ * P1 de Codex : la première version de ces tests écrivait `HISTORIQUE` dans l'ordre
+ * chronologique, qui est l'inverse. Elle masquait donc le défaut au lieu de le montrer.
+ */
+const ORDRE_DU_MAGASIN = [...HISTORIQUE].reverse()
+
 describe('les records', () => {
-  it('garde la première date d’un record égalé', () => {
+  it.each([
+    { nom: 'du plus ancien au plus récent', tops: HISTORIQUE },
+    { nom: 'du plus récent au plus ancien, comme le magasin', tops: ORDRE_DU_MAGASIN },
+  ])('garde la première date d’un record égalé, entrée $nom', ({ tops }) => {
     // Le squat à 80 × 4 @9 a été fait le 01.09 puis le 08.09. Un record égalé n'est pas
     // un record battu : réafficher la date du jour ferait croire à un progrès.
-    expect(recordE1RM(HISTORIQUE, 'squat')).toEqual({ valeur: 93.3, date: '2026-09-01' })
-    expect(recordCharge(HISTORIQUE, 'squat')).toEqual({ valeur: 80, date: '2026-09-01' })
+    //
+    // Les deux ordres, parce que le résultat ne doit dépendre que des dates. C'est
+    // exactement ce que la première version ne vérifiait pas.
+    expect(recordE1RM(tops, 'squat')).toEqual({ valeur: 93.3, date: '2026-09-01' })
+    expect(recordCharge(tops, 'squat')).toEqual({ valeur: 80, date: '2026-09-01' })
+  })
+
+  it('rend le même record quel que soit l’ordre d’entrée', () => {
+    for (const lift of ['squat', 'deadlift', 'tractions'] as const) {
+      expect(recordCharge(ORDRE_DU_MAGASIN, lift)).toEqual(recordCharge(HISTORIQUE, lift))
+      expect(recordE1RM(ORDRE_DU_MAGASIN, lift)).toEqual(recordE1RM(HISTORIQUE, lift))
+    }
   })
 
   it('ne retient pour l’e1RM que les séries qui en ont un', () => {
