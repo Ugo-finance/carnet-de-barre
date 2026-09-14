@@ -185,6 +185,7 @@ export default function App() {
             key={generationSeance}
             store={store}
             onSessionActiveChange={handleSessionActiveChange}
+            onViewHistory={() => setOnglet('historique')}
           />
         </div>
         {/*
