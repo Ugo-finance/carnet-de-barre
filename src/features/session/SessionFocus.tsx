@@ -5,6 +5,7 @@ import { ProgressBar } from '../../components/ProgressBar'
 import { RpeChips } from '../../components/RpeChips'
 import { TimerCard } from '../../components/TimerCard'
 import { Button } from '../../components/Button'
+import { BottomSheet } from '../../components/BottomSheet'
 import { formatNumber } from '../../domain/format'
 import { weightStepFor } from '../../domain/program'
 import type { SeanceType, SetLog } from '../../domain/types'
@@ -109,6 +110,7 @@ export function SessionFocus({
   onExit,
 }: SessionFocusProps) {
   const [viewedSetId, setViewedSetId] = useState<string | null>(null)
+  const [showSessionActions, setShowSessionActions] = useState(false)
   const touchStart = useRef<TouchPoint | null>(null)
   const canonical = currentSessionQueueItem(queue)
   const viewedIndex = viewedSetId ? queue.findIndex(({ set }) => set.id === viewedSetId) : -1
@@ -193,13 +195,20 @@ export function SessionFocus({
       onTouchEnd={followSwipe}
     >
       <header className="rounded-2xl border border-line bg-surface p-3">
-        <div className="flex items-baseline justify-between gap-3">
+        <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3">
           <p className="num text-sm font-bold text-fg">
             Série {position}/{queue.length}
           </p>
-          <p className="num text-sm text-muted">{elapsedLabel}</p>
+          <p className="num text-right text-sm text-muted">{elapsedLabel}</p>
+          <Button
+            variant="ghost"
+            className="shrink-0 px-3 text-sm"
+            onClick={() => setShowSessionActions(true)}
+          >
+            Actions
+          </Button>
         </div>
-        <div className="mt-2">
+        <div className="mt-1">
           <ProgressBar
             value={progress.completed}
             max={progress.total}
@@ -207,12 +216,12 @@ export function SessionFocus({
             valueText={valueText}
           />
         </div>
-        <p className="mt-2 text-xs text-muted">
+        <p className="sr-only">
           Séance {type} · Exercice {exercisePosition}/{exerciseIds.length}
         </p>
       </header>
 
-      <section className="min-h-[11rem]" aria-label="Chronomètre">
+      <section aria-label="Chronomètre">
         {timer ? (
           <TimerCard
             endsAt={timer.endsAt}
@@ -222,13 +231,9 @@ export function SessionFocus({
             disabled={writing}
           />
         ) : (
-          <aside className="flex min-h-[11rem] items-center justify-center rounded-2xl border border-line bg-surface p-3 text-center">
-            <div>
-              <p className="num text-3xl font-bold text-muted" aria-hidden="true">
-                —
-              </p>
-              <p className="mt-1 text-sm font-medium text-muted">Repos libre</p>
-            </div>
+          <aside className="flex min-h-[2.875rem] items-center justify-between rounded-xl border border-line bg-surface px-3 text-sm">
+            <span className="font-medium text-muted">Repos libre</span>
+            <span className="text-xs text-faint">Pas de chrono sur un palier</span>
           </aside>
         )}
       </section>
@@ -290,53 +295,79 @@ export function SessionFocus({
         ) : null}
       </FocusSetCard>
 
-      <p className="flex min-h-11 items-center justify-between gap-3 rounded-xl border border-line bg-surface px-3 text-sm">
-        <span className="text-xs font-bold tracking-[0.12em] text-muted uppercase">Ensuite</span>
-        <span className="text-right font-semibold text-fg">
-          {nextLabel(queue[visibleIndex + 1], queue)}
-        </span>
-      </p>
+      <BottomSheet
+        open={showSessionActions}
+        title="Actions de séance"
+        onClose={() => setShowSessionActions(false)}
+      >
+        <p className="flex min-h-11 items-center justify-between gap-3 rounded-xl border border-line bg-bg px-3 text-sm">
+          <span className="text-xs font-bold tracking-[0.12em] text-muted uppercase">Ensuite</span>
+          <span className="text-right font-semibold text-fg">
+            {nextLabel(queue[visibleIndex + 1], queue)}
+          </span>
+        </p>
 
-      <details className="rounded-xl border border-line bg-surface px-3">
-        <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium text-muted">
-          Notes de séance (facultatif)
-        </summary>
-        <textarea
-          className="mb-3 min-h-24 w-full resize-y rounded-xl border border-line bg-bg p-3 text-base text-fg outline-none focus:border-accent"
-          aria-label="Notes de séance (facultatif)"
-          value={notes}
-          disabled={writing}
-          onChange={(event) => onNotesChange(event.target.value)}
-          placeholder="Sensations, durée, matériel, salle…"
-        />
-      </details>
+        <label className="mt-3 block text-sm font-medium text-muted">
+          Notes de séance <span className="font-normal">(facultatif)</span>
+          <textarea
+            className="mt-2 min-h-24 w-full resize-none rounded-xl border border-line bg-bg p-3 text-base text-fg outline-none focus:border-accent"
+            aria-label="Notes de séance (facultatif)"
+            value={notes}
+            disabled={writing}
+            onChange={(event) => onNotesChange(event.target.value)}
+            placeholder="Sensations, durée, matériel, salle…"
+          />
+        </label>
 
-      {reviewing ? (
-        <Button
-          variant="secondary"
-          className="w-full"
-          disabled={writing}
-          onClick={() => setViewedSetId(null)}
-        >
-          Retour à la série courante
-        </Button>
-      ) : null}
-
-      <div className="mt-auto grid grid-cols-2 gap-2 pt-1">
-        <Button
-          variant="ghost"
-          disabled={writing || visibleIndex === 0}
-          onClick={() => moveReviewCursor(-1)}
-        >
-          Précédente
-        </Button>
-        <Button variant="ghost" disabled={writing || finishing} onClick={onExit}>
-          Quitter la vue
-        </Button>
-      </div>
-      <Button variant="ghost" className="w-full" disabled={writing || finishing} onClick={onFinish}>
-        Terminer la séance
-      </Button>
+        <div className="mt-3 grid gap-2">
+          {reviewing ? (
+            <Button
+              variant="secondary"
+              className="w-full"
+              disabled={writing}
+              onClick={() => {
+                setViewedSetId(null)
+                setShowSessionActions(false)
+              }}
+            >
+              Retour à la série courante
+            </Button>
+          ) : null}
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              variant="ghost"
+              disabled={writing || visibleIndex === 0}
+              onClick={() => {
+                moveReviewCursor(-1)
+                setShowSessionActions(false)
+              }}
+            >
+              Précédente
+            </Button>
+            <Button
+              variant="ghost"
+              disabled={writing || finishing}
+              onClick={() => {
+                setShowSessionActions(false)
+                onExit()
+              }}
+            >
+              Quitter la vue
+            </Button>
+          </div>
+          <Button
+            variant="danger"
+            className="w-full"
+            disabled={writing || finishing}
+            onClick={() => {
+              setShowSessionActions(false)
+              onFinish()
+            }}
+          >
+            Terminer la séance
+          </Button>
+        </div>
+      </BottomSheet>
     </main>
   )
 }

@@ -24,6 +24,16 @@ function resultWith(events: ProgressionEvent[]): FinalizeResult {
   return { seance, targets: TARGETS, events, applied: true }
 }
 
+function advanceTo(heading: string): void {
+  for (let index = 0; index < 20; index += 1) {
+    if (screen.queryByRole('heading', { name: heading })) return
+    const next = screen.queryByRole('button', { name: 'Suivant' })
+    if (!next) break
+    fireEvent.click(next)
+  }
+  throw new Error(`Page introuvable : ${heading}`)
+}
+
 describe('SessionSummary', () => {
   it('reprend exactement les messages du moteur, y compris un ajustement à la baisse', () => {
     const message = 'Soulevé de terre → 90 kg (ajusté sous la cible précédente)'
@@ -36,6 +46,7 @@ describe('SessionSummary', () => {
       />,
     )
 
+    advanceTo('Cibles recalculées')
     expect(screen.getByText(message)).toBeInTheDocument()
     expect(screen.queryByText(/hausse/i)).not.toBeInTheDocument()
   })
@@ -48,6 +59,7 @@ describe('SessionSummary', () => {
       />,
     )
 
+    advanceTo('Prochaine séance · A')
     expect(screen.getByRole('heading', { name: 'Prochaine séance · A' })).toBeInTheDocument()
     expect(screen.getByText('22.09.2026')).toBeInTheDocument()
     expect(screen.getByText('75 kg')).toBeInTheDocument()
@@ -118,6 +130,7 @@ describe('SessionSummary', () => {
     expect(within(work).getByText('Séries validées').nextSibling).toHaveTextContent('1')
     expect(within(work).getByText('Paliers validés').nextSibling).toHaveTextContent('1')
     expect(within(work).getByText('Soulevé de terre : 97,5×3 @8')).toBeInTheDocument()
+    advanceTo('Notes')
     expect(screen.getByText(/Bonne vitesse/)).toHaveTextContent('Bonne vitesse Grip à surveiller')
   })
 
@@ -131,6 +144,7 @@ describe('SessionSummary', () => {
 
     expect(screen.queryByText('Durée')).not.toBeInTheDocument()
     expect(screen.getByText('Aucune série de travail validée.')).toBeInTheDocument()
+    advanceTo('Notes')
     expect(screen.getByText('Aucune note.')).toBeInTheDocument()
     expect(screen.queryByText(/tonnage/i)).not.toBeInTheDocument()
   })
@@ -160,6 +174,7 @@ describe('SessionSummary', () => {
       />,
     )
 
+    advanceTo('Soulevé de terre')
     const records = screen.getByRole('region', { name: 'Records de la séance' })
     expect(within(records).getByText('Nouveau record')).toBeInTheDocument()
     expect(within(records).getByText('Soulevé de terre')).toBeInTheDocument()
@@ -193,6 +208,7 @@ describe('SessionSummary', () => {
       />,
     )
 
+    advanceTo('Soulevé de terre')
     const records = screen.getByRole('region', { name: 'Records de la séance' })
     expect(within(records).getByText('Records actuels')).toBeInTheDocument()
     expect(within(records).getByText('e1RM · 20.09.2026')).toBeInTheDocument()
@@ -223,6 +239,7 @@ describe('SessionSummary', () => {
       />,
     )
 
+    advanceTo('Soulevé de terre')
     const records = screen.getByRole('region', { name: 'Records de la séance' })
     expect(within(records).getByText('Charge · 06.09.2026')).toBeInTheDocument()
     expect(within(records).getByText('e1RM · 06.09.2026')).toBeInTheDocument()
@@ -241,6 +258,7 @@ describe('SessionSummary', () => {
       />,
     )
 
+    advanceTo('Prochaine séance · A')
     fireEvent.click(screen.getByRole('button', { name: 'Retour à l’accueil' }))
     fireEvent.click(screen.getByRole('button', { name: 'Voir dans l’historique' }))
     expect(onHome).toHaveBeenCalledOnce()

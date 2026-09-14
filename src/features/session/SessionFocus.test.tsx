@@ -59,6 +59,10 @@ function withStatus(value: Draft, setId: string, status: SetLog['status']): Draf
   }
 }
 
+function openActions(): void {
+  fireEvent.click(screen.getByRole('button', { name: 'Actions' }))
+}
+
 describe('SessionFocus', () => {
   it('ne rend que la série canonique avec l’avancement et le chrono stable', () => {
     render(<SessionFocus {...props()} />)
@@ -92,7 +96,7 @@ describe('SessionFocus', () => {
     const actions = props()
     render(<SessionFocus {...actions} />)
 
-    fireEvent.click(screen.getByText('Notes de séance (facultatif)'))
+    openActions()
     fireEvent.change(screen.getByRole('textbox', { name: 'Notes de séance (facultatif)' }), {
       target: { value: 'Genou stable' },
     })
@@ -114,6 +118,7 @@ describe('SessionFocus', () => {
     render(<SessionFocus {...props(value)} />)
 
     expect(screen.getByText('SS · Dips lestés')).toBeInTheDocument()
+    openActions()
     expect(screen.getByText('Dips lestés · série 1/3')).toBeInTheDocument()
   })
 
@@ -140,9 +145,11 @@ describe('SessionFocus', () => {
     render(<SessionFocus {...props(value)} />)
 
     const canonicalName = screen.getByRole('article').getAttribute('aria-label')
+    openActions()
     fireEvent.click(screen.getByRole('button', { name: 'Précédente' }))
     expect(screen.getByRole('article')).not.toHaveAttribute('aria-label', canonicalName)
 
+    openActions()
     fireEvent.click(screen.getByRole('button', { name: 'Retour à la série courante' }))
     expect(screen.getByRole('article')).toHaveAttribute('aria-label', canonicalName)
   })
@@ -155,6 +162,7 @@ describe('SessionFocus', () => {
     value = withStatus(value, second, 'skipped')
     render(<SessionFocus {...props(value)} />)
 
+    openActions()
     fireEvent.click(screen.getByRole('button', { name: 'Précédente' }))
 
     expect(screen.getByText('Statut : Sautée')).toBeInTheDocument()
@@ -208,6 +216,7 @@ describe('SessionFocus', () => {
     expect(within(card).getByRole('alert')).toHaveTextContent('Sauvegarde impossible. Réessayer.')
     expect(screen.getByRole('button', { name: 'Sauvegarde…' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Passer ce palier' })).toBeDisabled()
+    openActions()
     expect(screen.getByRole('button', { name: 'Quitter la vue' })).toBeDisabled()
   })
 
@@ -256,6 +265,7 @@ describe('SessionFocus', () => {
     const actions = props()
     render(<SessionFocus {...actions} />)
 
+    openActions()
     fireEvent.click(screen.getByRole('button', { name: 'Terminer la séance' }))
     expect(actions.onFinish).toHaveBeenCalledOnce()
     expect(screen.getByRole('heading', { name: 'Soulevé de terre' })).toBeInTheDocument()

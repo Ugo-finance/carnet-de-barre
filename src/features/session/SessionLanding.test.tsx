@@ -29,17 +29,19 @@ describe('SessionLanding', () => {
     expect(screen.getByText('Dimanche · Soulevé de terre + haut du corps')).toBeInTheDocument()
     expect(screen.getByText('20.09.2026')).toHaveAttribute('datetime', '2026-09-20')
 
+    expect(screen.getByText('Échauffement · 4 paliers')).toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: 'Contenu de la séance C' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Voir les cibles de la séance C' }))
     const contenu = screen.getByRole('list', { name: 'Contenu de la séance C' })
     expect(within(contenu).getByText('Soulevé de terre')).toBeInTheDocument()
     expect(within(contenu).getByText('92,5 × 3 @8')).toBeInTheDocument()
-    expect(screen.getByText('Échauffement · 4 paliers')).toBeInTheDocument()
 
     expect(screen.queryByText(/Semaine 1\/8/)).not.toBeInTheDocument()
     expect(screen.queryByText(/tendance/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/min$/)).not.toBeInTheDocument()
   })
 
-  it('garde le choix A/B/C local tant que Démarrer n’est pas pressé', () => {
+  it('garde le choix A/B/C local tant que C’est parti n’est pas pressé', () => {
     const callbacks = props()
     render(<SessionLanding {...callbacks} />)
 
@@ -49,12 +51,16 @@ describe('SessionLanding', () => {
     expect(callbacks.onStart).not.toHaveBeenCalled()
   })
 
-  it('démarre explicitement la séance sélectionnée', () => {
+  it('sépare le choix de séance de la confirmation des cibles', () => {
     const callbacks = props()
     render(<SessionLanding {...callbacks} selectedType="B" />)
 
     expect(screen.getByText('Séance manuelle')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Démarrer la séance B' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Voir les cibles de la séance B' }))
+
+    expect(screen.getByRole('heading', { name: 'Cibles du jour' })).toBeInTheDocument()
+    expect(callbacks.onStart).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'C’est parti' }))
 
     expect(callbacks.onStart).toHaveBeenCalledOnce()
   })
@@ -72,8 +78,10 @@ describe('SessionLanding', () => {
 
   it('bloque les doubles démarrages pendant l’écriture', () => {
     const callbacks = props()
-    render(<SessionLanding {...callbacks} starting />)
+    const { rerender } = render(<SessionLanding {...callbacks} />)
 
+    fireEvent.click(screen.getByRole('button', { name: 'Voir les cibles de la séance C' }))
+    rerender(<SessionLanding {...callbacks} starting />)
     const start = screen.getByRole('button', { name: 'Démarrage…' })
     expect(start).toBeDisabled()
     fireEvent.click(start)
@@ -84,8 +92,10 @@ describe('SessionLanding', () => {
   it('rend une erreur d’écriture sans quitter l’accueil', () => {
     render(<SessionLanding {...props()} errorMessage="Sauvegarde impossible. Réessaie." />)
 
+    fireEvent.click(screen.getByRole('button', { name: 'Voir les cibles de la séance C' }))
+
     expect(screen.getByRole('alert')).toHaveTextContent('Sauvegarde impossible. Réessaie.')
-    expect(screen.getByRole('button', { name: 'Démarrer la séance C' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'C’est parti' })).toBeInTheDocument()
   })
 
   it('n’exécute aucune intention utilisateur au montage', () => {

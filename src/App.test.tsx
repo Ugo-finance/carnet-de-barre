@@ -31,6 +31,16 @@ import { store } from './db/store'
 const MARDI = new Date('2026-09-15T08:00:00+02:00')
 let finalizedSessionId: string | undefined
 
+function advanceSummaryTo(heading: string): void {
+  for (let index = 0; index < 20; index += 1) {
+    if (screen.queryByRole('heading', { name: heading })) return
+    const next = screen.queryByRole('button', { name: 'Suivant' })
+    if (!next) break
+    fireEvent.click(next)
+  }
+  throw new Error(`Page de récapitulatif introuvable : ${heading}`)
+}
+
 describe('navigation depuis le point d’entrée réel', () => {
   beforeEach(() => {
     // `Date` seulement : figer aussi les minuteurs suspend `fake-indexeddb`, et les
@@ -141,9 +151,11 @@ describe('navigation depuis le point d’entrée réel', () => {
   it('garde la navigation masquée après avoir quitté le focus, puis la rend après abandon', async () => {
     render(<App />)
     await screen.findByRole('heading', { name: /Séance [ABC]/ })
-    fireEvent.click(screen.getByRole('button', { name: /Démarrer la séance/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Voir les cibles de la séance/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'C’est parti' }))
 
-    expect(await screen.findByRole('button', { name: 'Quitter la vue' })).toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('button', { name: 'Actions' }))
+    expect(screen.getByRole('button', { name: 'Quitter la vue' })).toBeInTheDocument()
     expect(screen.queryByRole('navigation', { name: 'Sections' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Quitter la vue' }))
 
@@ -181,6 +193,8 @@ describe('navigation depuis le point d’entrée réel', () => {
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'Reprendre la séance' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Terminer la séance' }))
+    await screen.findByText('Séance enregistrée')
+    advanceSummaryTo('Prochaine séance · B')
     fireEvent.click(await screen.findByRole('button', { name: 'Voir dans l’historique' }))
 
     expect(await screen.findByRole('heading', { name: 'Historique' })).toBeInTheDocument()
@@ -227,7 +241,8 @@ describe('navigation depuis le point d’entrée réel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Séance' }))
 
     expect(await store.loadDraft()).toBeUndefined()
-    fireEvent.click(await screen.findByRole('button', { name: /Démarrer la séance/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /Voir les cibles de la séance/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'C’est parti' }))
 
     await waitFor(() => expect(store.loadDraft()).resolves.toBeDefined())
     const brouillon = await store.loadDraft()
