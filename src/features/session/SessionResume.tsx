@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button } from '../../components/Button'
 import { ProgressBar } from '../../components/ProgressBar'
 import type { SeanceType } from '../../domain/types'
@@ -36,8 +36,20 @@ export function SessionResume({
   onAbandon,
 }: SessionResumeProps) {
   const [confirmingAbandon, setConfirmingAbandon] = useState(false)
+  const dialogRef = useRef<HTMLDivElement>(null)
   const busy = resuming || abandoning
   const summary = progressText(completedSets, totalSets)
+
+  useEffect(() => {
+    if (!confirmingAbandon) return
+    dialogRef.current?.querySelector<HTMLButtonElement>('button')?.focus()
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !abandoning) setConfirmingAbandon(false)
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [abandoning, confirmingAbandon])
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col gap-4 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
@@ -108,7 +120,10 @@ export function SessionResume({
           aria-modal="true"
           aria-labelledby="abandon-title"
         >
-          <div className="mx-auto w-full max-w-md rounded-2xl border border-line bg-surface p-4 shadow-2xl">
+          <div
+            ref={dialogRef}
+            className="mx-auto w-full max-w-md rounded-2xl border border-line bg-surface p-4 shadow-2xl"
+          >
             <h2 className="text-lg font-bold" id="abandon-title">
               Abandonner la séance {type} ?
             </h2>

@@ -59,6 +59,18 @@ describe('SessionResume', () => {
     expect(callbacks.onAbandon).not.toHaveBeenCalled()
   })
 
+  it('place le focus sur l’action sûre et ferme la confirmation avec Échap', () => {
+    const callbacks = props()
+    render(<SessionResume {...callbacks} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Abandonner la séance' }))
+    expect(screen.getByRole('button', { name: 'Garder la séance' })).toHaveFocus()
+
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(callbacks.onAbandon).not.toHaveBeenCalled()
+  })
+
   it('n’abandonne qu’après confirmation explicite', () => {
     const callbacks = props()
     render(<SessionResume {...callbacks} />)
