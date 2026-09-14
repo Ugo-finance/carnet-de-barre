@@ -147,7 +147,7 @@ function EditeurSerie({
           <p className="text-sm font-semibold text-bad">Retirer cette série ?</p>
           <p className="mt-1 text-sm text-muted">
             Elle disparaîtra de la séance et du résumé. Tes cibles ne changeront pas — pour les
-            corriger, passe par l’onglet Cibles.
+            corriger, passe par l’onglet Progression.
           </p>
           <div className="mt-3 grid gap-2">
             <button
@@ -386,7 +386,7 @@ function LigneSeance({
                */}
               <p className="mt-1 text-sm text-muted">
                 Elle disparaîtra de l’historique et des exports. Tes cibles ne changeront pas — pour
-                les corriger, passe par l’onglet Cibles.
+                les corriger, passe par l’onglet Progression.
               </p>
               <div className="mt-3 grid gap-2">
                 <button

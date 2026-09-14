@@ -387,3 +387,34 @@ describe('historique', () => {
     expect(screen.queryByText(/Entre des nombres/)).not.toBeInTheDocument()
   })
 })
+
+describe('renvois vers l’écran de correction des cibles', () => {
+  // L'onglet « Cibles » est devenu « Progression » en CB-66. Un texte qui nomme
+  // l'ancien envoie Ugo chercher un onglet absent — et c'est exactement le texte
+  // qu'il lit au moment où il vient de comprendre qu'une correction ne suffit pas.
+  //
+  // L'écran le dit à **deux** endroits, sur deux gestes différents. Une première
+  // version de ce test n'en exerçait qu'un : remettre « Cibles » sur l'autre laissait
+  // la suite verte. Les deux chemins ont donc chacun leur mesure.
+  it('ne renvoie pas vers un onglet disparu en supprimant une séance', async () => {
+    render(<HistoryPanel seances={[CE_SOIR]} store={faux([CE_SOIR])} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }))
+
+    const alerte = await screen.findByRole('alert')
+    expect(alerte).toHaveTextContent(/passe par l’onglet Progression/)
+    expect(alerte).not.toHaveTextContent(/onglet Cibles/)
+  })
+
+  it('ne renvoie pas vers un onglet disparu en retirant une série', async () => {
+    const enregistree = seanceAvecSeries()
+    render(<HistoryPanel seances={[enregistree]} store={faux([enregistree])} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /Squat — top set/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Retirer' }))
+
+    const alerte = await screen.findByRole('alert')
+    expect(alerte).toHaveTextContent(/passe par l’onglet Progression/)
+    expect(alerte).not.toHaveTextContent(/onglet Cibles/)
+  })
+})
