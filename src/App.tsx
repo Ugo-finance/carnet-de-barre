@@ -14,46 +14,46 @@ import { useCallback, useEffect, useState } from 'react'
 import { store } from './db/store'
 import { SessionHome } from './features/session/SessionHome'
 import { ExportPanel } from './features/export/ExportPanel'
-import { TargetsPanel } from './features/history/TargetsPanel'
+import { ProgressionPanel } from './features/history/ProgressionPanel'
 import { HistoryPanel } from './features/history/HistoryPanel'
-import { isDraftActive } from './db/draft'
 import { UpdatePrompt } from './pwa/UpdatePrompt'
-import type { Seance, Targets } from './domain/types'
+import type { Draft, Seance, Targets } from './domain/types'
 
-type Onglet = 'seance' | 'historique' | 'cibles' | 'export'
+type Onglet = 'seance' | 'historique' | 'progression' | 'export'
 
 const ONGLETS: { id: Onglet; label: string }[] = [
   { id: 'seance', label: 'Séance' },
   { id: 'historique', label: 'Historique' },
-  { id: 'cibles', label: 'Cibles' },
+  { id: 'progression', label: 'Progression' },
   { id: 'export', label: 'Export' },
 ]
 
 /**
- * Les cibles sont chargées à la demande, pas au démarrage.
+ * La progression est chargée à la demande, pas au démarrage.
  *
- * `TargetsPanel` les reçoit en valeur initiale et suit ensuite ses propres
+ * `ProgressionPanel` reçoit les cibles en valeur initiale et suit ensuite ses propres
  * ajustements. Les recharger à chaque ouverture de l'onglet évite d'afficher une
- * valeur périmée après une finalisation de séance.
+ * valeur périmée après une finalisation de séance — et l'historique voyage avec, car
+ * c'est lui qui porte les records de CB-13.
+ *
+ * Le brouillon est passé **tel quel** plutôt qu'un booléen « verrouillé » : c'est
+ * `resumeProgression` qui décide si l'ajustement est possible, via `isDraftActive`.
+ * Recopier la règle ici en ferait deux, et c'est la copie qui dériverait — le motif
+ * exact des trois P1 de la journée.
  */
-function CiblesTab({ onAdjusted }: { onAdjusted: () => void }) {
-  const [targets, setTargets] = useState<Targets>()
-  const [verrouille, setVerrouille] = useState(true)
+function ProgressionTab({ onAdjusted }: { onAdjusted: () => void }) {
+  const [donnees, setDonnees] = useState<{
+    targets: Targets
+    seances: Seance[]
+    draft: Draft | undefined
+  }>()
   const [erreur, setErreur] = useState<string>()
 
   useEffect(() => {
     let actif = true
-    Promise.all([store.getTargets(), store.loadDraft()]).then(
-      ([valeur, brouillon]) => {
-        if (!actif) return
-        setTargets(valeur)
-        // Une séance **commencée** interdit l'ajustement : `finalizeSeance` refuserait
-        // ensuite d'écrire, et aucun écran ne sait rebaser un brouillon. Ugo devrait
-        // abandonner toute sa saisie pour sortir de l'impasse.
-        //
-        // Un ancien brouillon **vierge** n'est pas une séance. CB-63 n'en crée plus à
-        // l'affichage, mais cette distinction garde les données migrées ajustables.
-        setVerrouille(brouillon !== undefined && isDraftActive(brouillon))
+    Promise.all([store.getTargets(), store.listSeances(), store.loadDraft()]).then(
+      ([targets, seances, draft]) => {
+        if (actif) setDonnees({ targets, seances, draft })
       },
       (cause: unknown) =>
         actif && setErreur(cause instanceof Error ? cause.message : 'Lecture impossible.'),
@@ -66,20 +66,22 @@ function CiblesTab({ onAdjusted }: { onAdjusted: () => void }) {
   if (erreur) {
     return (
       <p className="mx-auto max-w-md py-6 text-sm text-bad" role="alert">
-        Cibles indisponibles : {erreur}
+        Progression indisponible : {erreur}
       </p>
     )
   }
-  if (!targets) {
+  if (!donnees) {
     return (
       <p className="mx-auto max-w-md py-6 text-sm text-muted" role="status">
-        Lecture des cibles…
+        Lecture de ta progression…
       </p>
     )
   }
   return (
-    <TargetsPanel
-      targets={targets}
+    <ProgressionPanel
+      targets={donnees.targets}
+      seances={donnees.seances}
+      draft={donnees.draft}
       store={{
         adjustTarget: async (lift, patch) => {
           const suivantes = await store.adjustTarget(lift, patch)
@@ -89,7 +91,6 @@ function CiblesTab({ onAdjusted }: { onAdjusted: () => void }) {
           return suivantes
         },
       }}
-      verrouille={verrouille}
     />
   )
 }
@@ -194,8 +195,8 @@ export default function App() {
           montrerait des cibles périmées juste après le récapitulatif qui les annonce.
         */}
         {onglet === 'historique' ? <HistoriqueTab /> : null}
-        {onglet === 'cibles' ? (
-          <CiblesTab onAdjusted={() => setGenerationSeance((n) => n + 1)} />
+        {onglet === 'progression' ? (
+          <ProgressionTab onAdjusted={() => setGenerationSeance((n) => n + 1)} />
         ) : null}
         {onglet === 'export' ? <ExportPanel store={store} /> : null}
       </div>

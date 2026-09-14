@@ -55,13 +55,13 @@ describe('navigation depuis le point d’entrée réel', () => {
     expect(await store.loadDraft()).toBeUndefined()
   })
 
-  it('atteint l’écran des cibles', async () => {
+  it('atteint l’écran de progression', async () => {
     render(<App />)
     await screen.findByRole('heading', { name: /Séance [ABC]/ })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Cibles' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Progression' }))
 
-    expect(await screen.findByRole('heading', { name: 'Cibles' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Progression' })).toBeInTheDocument()
     // Cherché **dans la liste des cibles**, et non dans le document entier : l'écran de
     // séance reste monté derrière celui-ci, et il porte lui aussi le mot « Squat » les
     // jours de séance A. La requête large trouvait alors deux éléments et le test tombait.
@@ -96,7 +96,7 @@ describe('navigation depuis le point d’entrée réel', () => {
     render(<App />)
     const titre = await screen.findByRole('heading', { name: /Séance [ABC]/ })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Cibles' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Progression' }))
     fireEvent.click(screen.getByRole('button', { name: 'Séance' }))
 
     // Même nœud : l'écran n'a pas été remonté, donc rien n'a été rejoué.
@@ -110,9 +110,12 @@ describe('navigation depuis le point d’entrée réel', () => {
 
     expect(screen.getByRole('button', { name: 'Séance' })).toHaveAttribute('aria-current', 'page')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Cibles' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Progression' }))
 
-    expect(screen.getByRole('button', { name: 'Cibles' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('button', { name: 'Progression' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
     expect(screen.getByRole('button', { name: 'Séance' })).not.toHaveAttribute('aria-current')
   })
 
@@ -161,7 +164,9 @@ describe('navigation depuis le point d’entrée réel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Historique' }))
 
     expect(await screen.findByRole('heading', { name: 'Historique' })).toBeInTheDocument()
-    await waitFor(() => expect(screen.getByText('12 séances enregistrées.')).toBeInTheDocument())
+    await waitFor(() =>
+      expect(screen.getByText(/^12 séances enregistrées, sur \d+ semaines\.$/)).toBeInTheDocument(),
+    )
   })
 
   it('ouvre l’historique depuis le récapitulatif réellement finalisé', async () => {
@@ -179,7 +184,9 @@ describe('navigation depuis le point d’entrée réel', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Voir dans l’historique' }))
 
     expect(await screen.findByRole('heading', { name: 'Historique' })).toBeInTheDocument()
-    await waitFor(() => expect(screen.getByText('13 séances enregistrées.')).toBeInTheDocument())
+    await waitFor(() =>
+      expect(screen.getByText(/^13 séances enregistrées, sur \d+ semaines\.$/)).toBeInTheDocument(),
+    )
   })
 
   it('laisse ajuster une cible quand le brouillon n’a jamais été touché', async () => {
@@ -188,8 +195,8 @@ describe('navigation depuis le point d’entrée réel', () => {
     render(<App />)
     await screen.findByRole('heading', { name: /Séance [ABC]/ })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Cibles' }))
-    await screen.findByRole('heading', { name: 'Cibles' })
+    fireEvent.click(screen.getByRole('button', { name: 'Progression' }))
+    await screen.findByRole('heading', { name: 'Progression' })
 
     await waitFor(() =>
       expect(screen.getAllByRole('button', { name: 'Ajuster' }).length).toBeGreaterThan(0),
@@ -198,21 +205,24 @@ describe('navigation depuis le point d’entrée réel', () => {
   })
 
   it('démarre la séance sur la cible ajustée sans brouillon intermédiaire', async () => {
-    // `SessionHome` garde son aperçu en mémoire. Le remontage demandé par CiblesTab
+    // `SessionHome` garde son aperçu en mémoire. Le remontage demandé par ProgressionTab
     // doit lui faire relire les cibles avant le démarrage atomique.
     render(<App />)
     await screen.findByRole('heading', { name: /Séance [ABC]/ })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Cibles' }))
-    await screen.findByRole('heading', { name: 'Cibles' })
+    fireEvent.click(screen.getByRole('button', { name: 'Progression' }))
+    await screen.findByRole('heading', { name: 'Progression' })
     await waitFor(() =>
       expect(screen.getAllByRole('button', { name: 'Ajuster' }).length).toBeGreaterThan(0),
     )
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Ajuster' })[0])
     fireEvent.change(screen.getByLabelText('Nouvelle cible Squat'), { target: { value: '80' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Poser' }))
-    await waitFor(() => expect(screen.getByText('80 kg')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Poser la cible' }))
+    // La feuille ne se referme qu'en cas de succès : c'est le seul signal qui dit que
+    // l'écriture est passée. Attendre « 80 kg » à l'écran ne le dit pas — un record de
+    // 80 kg porte le même texte, et le test repartait alors avant la fin de l'écriture.
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
 
     fireEvent.click(screen.getByRole('button', { name: 'Séance' }))
 
