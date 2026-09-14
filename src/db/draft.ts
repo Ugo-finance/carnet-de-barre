@@ -125,7 +125,9 @@ export function setsForExercise(
     ]
   }
 
-  // Les exercices optionnels se notent en texte libre, pas en séries.
+  // Un `topset` ou un `volume` dont la cible manque : le moteur n'a rien à proposer, et
+  // une série sans charge ni répétitions ne vaut pas mieux qu'aucune série. Depuis CB-69,
+  // aucun exercice n'arrive ici par son genre — les optionnels sont des accessoires.
   return []
 }
 
@@ -157,9 +159,10 @@ export function buildDraft(
     sets: seance.exercises.flatMap((exercise) =>
       setsForExercise(exercise, targets, plans.get(exercise.id)),
     ),
-    accessories: seance.exercises
-      .filter((exercise) => exercise.kind === 'optional')
-      .map((exercise) => ({ exerciseId: exercise.id, done: false, note: '' })),
+    // Vide depuis CB-69 : les optionnels sont des séries comme les autres, et se notent
+    // dans `sets`. Le champ demeure au contrat pour les **séances déjà enregistrées**,
+    // qui en portent et dont le résumé se relit avec la fonction qui l'a produit.
+    accessories: [],
     notes: '',
     rushed: false,
     timerEndsAt: null,
@@ -189,7 +192,43 @@ export type StoredDraft = Omit<Draft, 'keepAwake'> & Partial<Pick<Draft, 'keepAw
  * `Draft` dit la vérité pour tout le monde en aval.
  */
 export function hydrateDraft(row: StoredDraft): Draft {
-  return { ...row, keepAwake: row.keepAwake ?? false }
+  return {
+    ...row,
+    keepAwake: row.keepAwake ?? false,
+    notes: fusionnerAccessoires(row),
+    accessories: [],
+  }
+}
+
+/**
+ * Ce qu'Ugo avait écrit dans les accessoires libres, rapatrié dans les notes de séance
+ * — CB-69.
+ *
+ * Depuis ce lot, l'écran de séance ne rend plus de champ d'accessoire : les optionnels
+ * sont des séries. Une ligne déjà en base peut pourtant en porter, cochés ou annotés,
+ * et les laisser dans le brouillon reviendrait à les effacer — le champ existe, plus
+ * rien ne l'affiche. On les replie donc là où Ugo les relira.
+ *
+ * Le pliage a lieu **au point de lecture**, comme le défaut de `keepAwake`, et il est
+ * idempotent : `accessories` repart vide, donc une relecture du brouillon replié
+ * n'ajoute rien. Seuls les accessoires porteurs d'une information passent — un
+ * `{ done: false, note: '' }` n'a jamais rien dit.
+ */
+function fusionnerAccessoires(row: StoredDraft): string {
+  const portes = (row.accessories ?? []).filter(
+    (accessory) => accessory.done || accessory.note.trim() !== '',
+  )
+  if (portes.length === 0) return row.notes
+
+  const lignes = portes.map((accessory) => {
+    const label = SEANCES[row.type].exercises.find(
+      (exercise) => exercise.id === accessory.exerciseId,
+    )?.label
+    const nom = label ?? accessory.exerciseId
+    return accessory.note.trim() === '' ? `${nom} ✓` : `${nom} : ${accessory.note.trim()}`
+  })
+
+  return [row.notes.trim(), ...lignes].filter((ligne) => ligne !== '').join('\n')
 }
 
 /**

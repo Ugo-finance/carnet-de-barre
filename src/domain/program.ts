@@ -83,8 +83,6 @@ export type ExerciseKind =
   | 'volume'
   /** Accessoire structuré : charge et répétitions saisies, pas de progression automatique. */
   | 'accessory'
-  /** Accessoire facultatif, saisie en texte libre. */
-  | 'optional'
 
 export interface ExerciseDef {
   id: string
@@ -101,6 +99,22 @@ export interface ExerciseDef {
    * entrée, y compris celles qu'on ajoutera. Valeurs et motifs : `docs/refonte/00-contrat.md`.
    */
   warmup: WarmupPolicy
+  /**
+   * L'exercice peut être sauté sans que la séance soit incomplète — CB-69.
+   *
+   * Curls, élévations, face pulls et abdos se notaient en texte libre, sous un genre
+   * `'optional'` à part. Ils sont depuis des accessoires structurés comme les autres :
+   * même charge, mêmes répétitions, même place dans la file. Seul leur caractère
+   * facultatif les distingue, et il se déclare **ici** plutôt que dans `kind`.
+   *
+   * Le motif : `kind` répond à « comment cet exercice se fait » et pilote
+   * `setsForExercise`. Lui faire porter en plus « est-ce obligatoire » obligerait chaque
+   * aiguillage sur `kind` à traiter deux questions à la fois, et le premier oublié
+   * fabriquerait un exercice structuré que le moteur ignore, en silence. Même
+   * raisonnement que `repsAfterRise` et `loadGroup` : une dimension orthogonale se
+   * déclare à part.
+   */
+  optional?: boolean
   /** Présent si l'exercice est piloté par le moteur de progression. */
   lift?: LiftKey
   /** Nombre de séries hors top set. */
@@ -222,24 +236,28 @@ export const SEANCES: Record<SeanceType, SeanceDef> = {
         id: 'a-curls',
         warmup: 'aucun',
         label: 'Curls',
-        kind: 'optional',
+        kind: 'accessory',
+        optional: true,
         loadKind: 'perDumbbell',
         scheme: '2×10–12',
         sets: 2,
         reps: null,
         repsRange: [10, 12],
+        suggestedWeight: 12,
         restSeconds: REST.superset,
       },
       {
         id: 'a-elevations',
         warmup: 'aucun',
         label: 'Élévations latérales',
-        kind: 'optional',
+        kind: 'accessory',
+        optional: true,
         loadKind: 'perDumbbell',
         scheme: '2×12–20',
         sets: 2,
         reps: null,
         repsRange: [12, 20],
+        suggestedWeight: 8,
         restSeconds: REST.superset,
       },
     ],
@@ -308,18 +326,35 @@ export const SEANCES: Record<SeanceType, SeanceDef> = {
         id: 'b-face-pulls',
         warmup: 'aucun',
         label: 'Face pulls',
-        kind: 'optional',
+        kind: 'accessory',
+        optional: true,
         loadKind: 'machine',
-        scheme: '2×15',
+        scheme: '2×12–20',
         sets: 2,
-        reps: 15,
+        reps: null,
+        // Deux arbitrages d'Ugo, distincts, et c'est Codex qui a exigé le second.
+        //
+        // 13.09.2026 — la maquette les annonçait « hors moteur (poulie) » : à 2×15
+        // fermes, sans fourchette, rien ne pouvait déclencher une montée et la
+        // proposition serait restée à 25 kg même après une séance à 30, la forme exacte
+        // du défaut vu en salle le 12.09. Sa réponse : « non il faut progresser ».
+        //
+        // 14.09.2026 — cette réponse fait entrer les face pulls dans le moteur, elle ne
+        // dit pas avec quelle fourchette. J'avais écrit 12–15 en la présentant comme une
+        // conséquence de son arbitrage : P1 de Codex, fondé. Question reposée, les trois
+        // rampes sous les yeux. Réponse : **12–20, comme les élévations**. Le motif est
+        // celui du coach — la poulie avance de 5 kg, soit +20 % à 25 kg, et une
+        // fourchette étroite ferait sauter la charge trop souvent.
+        repsRange: [12, 20],
+        suggestedWeight: 25,
         restSeconds: REST.superset,
       },
       {
         id: 'b-abdos',
         warmup: 'aucun',
         label: 'Abdos roulette',
-        kind: 'optional',
+        kind: 'accessory',
+        optional: true,
         loadKind: 'bodyweight',
         scheme: '2×10',
         sets: 2,
@@ -391,12 +426,14 @@ export const SEANCES: Record<SeanceType, SeanceDef> = {
         id: 'c-elevations',
         warmup: 'aucun',
         label: 'Élévations latérales',
-        kind: 'optional',
+        kind: 'accessory',
+        optional: true,
         loadKind: 'perDumbbell',
         scheme: '2×12–20',
         sets: 2,
         reps: null,
         repsRange: [12, 20],
+        suggestedWeight: 8,
         restSeconds: REST.superset,
       },
     ],
