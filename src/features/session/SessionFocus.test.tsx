@@ -131,6 +131,44 @@ describe('SessionFocus', () => {
     expect(screen.getByRole('article')).toHaveAttribute('aria-label', canonicalName)
   })
 
+  it('duplique précédente/suivante au balayage sans dépasser la série canonique', () => {
+    let value = draft()
+    const first = buildSessionQueue(value)[0]!.set.id
+    const second = buildSessionQueue(value)[1]!.set.id
+    value = withStatus(value, first, 'validated')
+    value = withStatus(value, second, 'validated')
+    render(<SessionFocus {...props(value)} />)
+    const screenRoot = screen.getByRole('main')
+    const canonicalName = screen.getByRole('article').getAttribute('aria-label')
+
+    fireEvent.touchStart(screenRoot, { touches: [{ clientX: 180, clientY: 100 }] })
+    fireEvent.touchEnd(screenRoot, { changedTouches: [{ clientX: 250, clientY: 104 }] })
+    expect(screen.getByRole('article')).not.toHaveAttribute('aria-label', canonicalName)
+
+    fireEvent.touchStart(screenRoot, { touches: [{ clientX: 250, clientY: 100 }] })
+    fireEvent.touchEnd(screenRoot, { changedTouches: [{ clientX: 180, clientY: 104 }] })
+    expect(screen.getByRole('article')).toHaveAttribute('aria-label', canonicalName)
+
+    // Depuis la série à faire, un autre balayage vers la gauche ne peut pas l'ignorer.
+    fireEvent.touchStart(screenRoot, { touches: [{ clientX: 250, clientY: 100 }] })
+    fireEvent.touchEnd(screenRoot, { changedTouches: [{ clientX: 180, clientY: 104 }] })
+    expect(screen.getByRole('article')).toHaveAttribute('aria-label', canonicalName)
+  })
+
+  it('ignore un geste vertical ou trop court', () => {
+    let value = draft()
+    const first = buildSessionQueue(value)[0]!.set.id
+    value = withStatus(value, first, 'validated')
+    render(<SessionFocus {...props(value)} />)
+    const screenRoot = screen.getByRole('main')
+    const canonicalName = screen.getByRole('article').getAttribute('aria-label')
+
+    fireEvent.touchStart(screenRoot, { touches: [{ clientX: 180, clientY: 80 }] })
+    fireEvent.touchEnd(screenRoot, { changedTouches: [{ clientX: 200, clientY: 160 }] })
+
+    expect(screen.getByRole('article')).toHaveAttribute('aria-label', canonicalName)
+  })
+
   it('garde la carte et bloque ses actions pendant une écriture en échec', () => {
     const actions = props()
     render(<SessionFocus {...actions} writing errorMessage="Sauvegarde impossible. Réessayer." />)

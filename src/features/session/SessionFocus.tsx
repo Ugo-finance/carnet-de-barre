@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState, type TouchEvent } from 'react'
 import { FocusSetCard, type FocusRole } from '../../components/FocusSetCard'
 import { NumberStepper } from '../../components/NumberStepper'
 import { ProgressBar } from '../../components/ProgressBar'
@@ -33,6 +33,19 @@ type SessionFocusProps = {
   onValidate: (setId: string, value: EditableSet) => void
   onSkip: (setId: string, value: EditableSet) => void
   onExit: () => void
+}
+
+const SWIPE_THRESHOLD_PX = 48
+
+type TouchPoint = { x: number; y: number }
+
+/** Ignore le défilement vertical et les gestes trop courts pour éviter un changement accidentel. */
+function swipeStep(start: TouchPoint, end: TouchPoint): -1 | 0 | 1 {
+  const horizontal = end.x - start.x
+  const vertical = end.y - start.y
+  if (Math.abs(horizontal) < SWIPE_THRESHOLD_PX || Math.abs(horizontal) <= Math.abs(vertical))
+    return 0
+  return horizontal > 0 ? -1 : 1
 }
 
 function presentationRole(item: SessionQueueItem): FocusRole {
@@ -86,6 +99,7 @@ export function SessionFocus({
   onExit,
 }: SessionFocusProps) {
   const [viewedSetId, setViewedSetId] = useState<string | null>(null)
+  const touchStart = useRef<TouchPoint | null>(null)
   const canonical = currentSessionQueueItem(queue)
   const viewedIndex = viewedSetId ? queue.findIndex(({ set }) => set.id === viewedSetId) : -1
   const canonicalIndex = canonical ? queue.findIndex(({ set }) => set.id === canonical.set.id) : -1
@@ -113,8 +127,34 @@ export function SessionFocus({
   const canSkip = set.role === 'warmup' || visible.optional
   const canShowBarbell = set.loadKind === 'barTotal' && set.weight !== null
 
+  const moveReviewCursor = (step: -1 | 1) => {
+    // La consultation reste derrière la série canonique. Un geste ne peut jamais
+    // contourner une série à faire : il ne fait que relire, puis revenir vers elle.
+    const destination = Math.min(visibleIndex + step, canonicalIndex)
+    if (destination < 0 || destination >= queue.length || destination === visibleIndex) return
+    setViewedSetId(destination === canonicalIndex ? null : (queue[destination]?.set.id ?? null))
+  }
+
+  const rememberTouch = (event: TouchEvent<HTMLElement>) => {
+    const touch = event.touches[0]
+    touchStart.current = touch ? { x: touch.clientX, y: touch.clientY } : null
+  }
+
+  const followSwipe = (event: TouchEvent<HTMLElement>) => {
+    const start = touchStart.current
+    const touch = event.changedTouches[0]
+    touchStart.current = null
+    if (!start || !touch || writing) return
+    const step = swipeStep(start, { x: touch.clientX, y: touch.clientY })
+    if (step !== 0) moveReviewCursor(step)
+  }
+
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col gap-3 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+    <main
+      className="mx-auto flex min-h-dvh w-full max-w-md flex-col gap-3 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
+      onTouchStart={rememberTouch}
+      onTouchEnd={followSwipe}
+    >
       <header className="rounded-2xl border border-line bg-surface p-3">
         <div className="flex items-baseline justify-between gap-3">
           <p className="num text-sm font-bold text-fg">
@@ -229,7 +269,7 @@ export function SessionFocus({
         <Button
           variant="ghost"
           disabled={writing || visibleIndex === 0}
-          onClick={() => setViewedSetId(queue[visibleIndex - 1]?.set.id ?? null)}
+          onClick={() => moveReviewCursor(-1)}
         >
           Précédente
         </Button>
