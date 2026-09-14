@@ -150,7 +150,11 @@ export default function App() {
      * faire disparaître.
      */
     <div className={sessionActive ? 'h-dvh overflow-y-auto' : 'min-h-dvh'}>
-      {sessionActive ? null : <UpdatePrompt store={store} />}
+      {sessionActive ? null : (
+        <div className="px-3">
+          <UpdatePrompt store={store} />
+        </div>
+      )}
 
       <div className={sessionActive ? 'px-3' : 'px-3 pb-20'}>
         {/*
