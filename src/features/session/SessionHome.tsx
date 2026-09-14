@@ -3,12 +3,7 @@ import type { CarnetStore, FinalizeResult } from '../../db/contracts'
 import { apercuSeance, resumeAccueil, type ResumeAccueil } from '../../db/selectors'
 import { formatDate } from '../../domain/format'
 import type { Preferences } from '../../domain/preferences'
-import {
-  currentSession,
-  type SeanceFaite,
-  todayInZurich,
-  type UpcomingSession,
-} from '../../domain/schedule'
+import { currentSession, todayInZurich, type UpcomingSession } from '../../domain/schedule'
 import type { Draft, Seance, SeanceType, Targets } from '../../domain/types'
 import { useDraftEditor } from './useDraftEditor'
 import { unlockTimerAudio, useWakeLock } from './timer'
@@ -41,7 +36,7 @@ type ReadyState = {
    * de l'écran et le récapitulatif de fin. Les faire diverger donnerait deux réponses
    * différentes à la même question dans la même minute.
    */
-  seances: SeanceFaite[]
+  seances: Seance[]
 }
 
 type EntryData = {
@@ -95,12 +90,16 @@ function SessionEditor({
   now,
   onExit,
   onFinished,
+  onReturnHome,
+  onViewHistory,
 }: {
   state: ReadyState
   store: SessionStore
   now: Date
   onExit: (draft: Draft) => void
   onFinished: () => void
+  onReturnHome: (result: FinalizeResult) => void
+  onViewHistory?: () => void
 }) {
   const editor = useDraftEditor(store, state.draft)
   const [writing, setWriting] = useState(false)
@@ -138,7 +137,15 @@ function SessionEditor({
     // `currentSession` reçoit l'historique entier : c'est lui qui décide quel créneau
     // est servi, y compris un jour creux où aucune séance n'est prévue.
     const apres = [...state.seances, { date: result.seance.date, type: result.seance.type }]
-    return <SessionSummary result={result} next={currentSession(now, apres)} />
+    return (
+      <SessionSummary
+        result={result}
+        next={currentSession(now, apres)}
+        previousSeances={state.seances}
+        onHome={() => onReturnHome(result)}
+        onHistory={onViewHistory}
+      />
+    )
   }
 
   const finish = async () => {
@@ -297,12 +304,11 @@ function SessionEditor({
 }
 
 function editorState(entry: EntryData, draft: Draft, now: Date): ReadyState {
-  const seances = entry.seances.map(({ date, type }) => ({ date, type }))
   return {
     draft,
-    suggestion: currentSession(now, seances),
+    suggestion: currentSession(now, entry.seances),
     today: todayInZurich(now),
-    seances,
+    seances: entry.seances,
   }
 }
 
@@ -321,11 +327,13 @@ function SessionHomeAttempt({
   now,
   onRetry,
   onSessionActiveChange,
+  onViewHistory,
 }: {
   store: SessionStore
   now: Date
   onRetry: () => void
   onSessionActiveChange?: (active: boolean) => void
+  onViewHistory?: () => void
 }) {
   const [entry, setEntry] = useState<EntryData>()
   const [selectedType, setSelectedType] = useState<SeanceType>()
@@ -420,6 +428,19 @@ function SessionHomeAttempt({
           setFocusedDraft(undefined)
         }}
         onFinished={() => onSessionActiveChange?.(false)}
+        onReturnHome={(result) => {
+          const seances = [result.seance, ...entry.seances]
+          const resume = resumeAccueil({
+            draft: undefined,
+            seances,
+            targets: result.targets,
+            now,
+          })
+          setEntry({ ...entry, draft: undefined, seances, targets: result.targets, resume })
+          setSelectedType(resume.type)
+          setFocusedDraft(undefined)
+        }}
+        onViewHistory={onViewHistory}
       />
     )
   }
@@ -520,10 +541,12 @@ export function SessionHome({
   store,
   now = new Date(),
   onSessionActiveChange,
+  onViewHistory,
 }: {
   store: SessionStore
   now?: Date
   onSessionActiveChange?: (active: boolean) => void
+  onViewHistory?: () => void
 }) {
   const [attempt, setAttempt] = useState(0)
   return (
@@ -533,6 +556,7 @@ export function SessionHome({
       now={now}
       onRetry={() => setAttempt((value) => value + 1)}
       onSessionActiveChange={onSessionActiveChange}
+      onViewHistory={onViewHistory}
     />
   )
 }

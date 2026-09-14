@@ -156,8 +156,14 @@ test('parcours réel, reprise et double finalisation', async ({ page }) => {
 
   await finishTwice(page)
   await expect(page.getByText('Soulevé de terre → 97,5 kg')).toBeVisible()
+  const summary = page.getByRole('heading', { name: 'Travail validé' }).locator('..')
+  await expect(summary.getByText('Séries validées')).toBeVisible()
+  await expect(summary.getByText('Soulevé de terre : 92,5×3 @8')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Notes' }).locator('..')).toContainText(
+    'Aucune note.',
+  )
 
-  await page.getByRole('button', { name: 'Historique' }).click()
+  await page.getByRole('button', { name: 'Voir dans l’historique' }).click()
   await expect(page.getByText('13 séances enregistrées.')).toBeVisible()
 
   await page.getByRole('button', { name: 'Export' }).click()

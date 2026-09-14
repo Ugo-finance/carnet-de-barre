@@ -464,6 +464,48 @@ describe('SessionHome', () => {
     expect(await screen.findByText('Séance enregistrée')).toBeInTheDocument()
   })
 
+  it('affiche le même récapitulatif quand la finalisation avait déjà été appliquée', async () => {
+    const initial = draftFor('C', '2026-09-20')
+    const store = fakeStore({ initial })
+    vi.mocked(store.finalizeSeance).mockResolvedValueOnce({
+      seance: saved('C', '2026-09-20'),
+      targets: TARGETS,
+      events: [],
+      applied: false,
+    })
+    render(<SessionHome store={store} now={SUNDAY} />)
+    await resumeSession()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Terminer la séance' }))
+
+    expect(await screen.findByText('Séance enregistrée')).toBeInTheDocument()
+    expect(store.finalizeSeance).toHaveBeenCalledOnce()
+  })
+
+  it('revient à un accueil relu depuis le résultat de finalisation', async () => {
+    const store = fakeStore({ initial: draftFor('C', '2026-09-20') })
+    render(<SessionHome store={store} now={SUNDAY} />)
+    await resumeSession()
+    fireEvent.click(screen.getByRole('button', { name: 'Terminer la séance' }))
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Retour à l’accueil' }))
+
+    expect(await screen.findByRole('heading', { name: 'Séance A' })).toBeInTheDocument()
+    expect(screen.queryByText('Séance enregistrée')).not.toBeInTheDocument()
+  })
+
+  it('transmet la sortie vers l’historique après finalisation', async () => {
+    const store = fakeStore({ initial: draftFor('C', '2026-09-20') })
+    const onViewHistory = vi.fn()
+    render(<SessionHome store={store} now={SUNDAY} onViewHistory={onViewHistory} />)
+    await resumeSession()
+    fireEvent.click(screen.getByRole('button', { name: 'Terminer la séance' }))
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Voir dans l’historique' }))
+
+    expect(onViewHistory).toHaveBeenCalledOnce()
+  })
+
   it('demande confirmation quand des séries restent non validées', async () => {
     const initial = draftFor('C', '2026-09-20')
     initial.sets = [

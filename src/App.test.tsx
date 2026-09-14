@@ -29,6 +29,7 @@ import { store } from './db/store'
  * passait : un test de rotation pris un seul jour ne prouve rien des six autres.
  */
 const MARDI = new Date('2026-09-15T08:00:00+02:00')
+let finalizedSessionId: string | undefined
 
 describe('navigation depuis le point d’entrée réel', () => {
   beforeEach(() => {
@@ -40,6 +41,10 @@ describe('navigation depuis le point d’entrée réel', () => {
 
   afterEach(async () => {
     await store.clearDraft()
+    if (finalizedSessionId) {
+      await store.deleteSeance(finalizedSessionId)
+      finalizedSessionId = undefined
+    }
     vi.useRealTimers()
   })
 
@@ -157,6 +162,24 @@ describe('navigation depuis le point d’entrée réel', () => {
 
     expect(await screen.findByRole('heading', { name: 'Historique' })).toBeInTheDocument()
     await waitFor(() => expect(screen.getByText('12 séances enregistrées.')).toBeInTheDocument())
+  })
+
+  it('ouvre l’historique depuis le récapitulatif réellement finalisé', async () => {
+    await store.ready()
+    const draft = await store.startSession('A', '2026-09-15', { now: MARDI.getTime() })
+    finalizedSessionId = draft.id
+    await store.saveDraft({
+      ...draft,
+      sets: draft.sets.map((set) => ({ ...set, status: 'skipped' as const })),
+    })
+
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Reprendre la séance' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Terminer la séance' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Voir dans l’historique' }))
+
+    expect(await screen.findByRole('heading', { name: 'Historique' })).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText('13 séances enregistrées.')).toBeInTheDocument())
   })
 
   it('laisse ajuster une cible quand le brouillon n’a jamais été touché', async () => {
