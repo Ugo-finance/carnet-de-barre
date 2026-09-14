@@ -20,9 +20,16 @@ export function unlockTimerAudio(): void {
   if (audioContext.state === 'suspended') void audioContext.resume()
 }
 
-export function notifyTimerDone(): void {
-  if ('vibrate' in navigator) navigator.vibrate([180, 80, 180])
-  if (!audioContext || audioContext.state !== 'running') return
+export interface TimerNotificationOptions {
+  sound: boolean
+  vibration: boolean
+}
+
+export function notifyTimerDone(
+  options: TimerNotificationOptions = { sound: true, vibration: true },
+): void {
+  if (options.vibration && 'vibrate' in navigator) navigator.vibrate([180, 80, 180])
+  if (!options.sound || !audioContext || audioContext.state !== 'running') return
 
   const oscillator = audioContext.createOscillator()
   const gain = audioContext.createGain()

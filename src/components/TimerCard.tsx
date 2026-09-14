@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import { formatDuration } from '../domain/format'
 import { notifyTimerDone, useRecoveryTimer } from '../features/session/timer'
+import type { TimerNotificationOptions } from '../features/session/timer'
 
 type TimerCardProps = {
   endsAt: number
@@ -8,10 +9,19 @@ type TimerCardProps = {
   onAdjust: (deltaMs: number) => void
   onStop: () => void
   disabled?: boolean
+  notifications?: TimerNotificationOptions
 }
 
-export function TimerCard({ endsAt, label, onAdjust, onStop, disabled = false }: TimerCardProps) {
-  const notify = useCallback(() => notifyTimerDone(), [])
+export function TimerCard({
+  endsAt,
+  label,
+  onAdjust,
+  onStop,
+  disabled = false,
+  notifications = { sound: true, vibration: true },
+}: TimerCardProps) {
+  const { sound, vibration } = notifications
+  const notify = useCallback(() => notifyTimerDone({ sound, vibration }), [sound, vibration])
   const remaining = useRecoveryTimer(endsAt, notify)
 
   return (
@@ -50,7 +60,9 @@ export function TimerCard({ endsAt, label, onAdjust, onStop, disabled = false }:
         </button>
       </div>
       <p className="sr-only">
-        Le son et la vibration fonctionnent au premier plan. Pas d’alarme garantie écran verrouillé.
+        {sound || vibration
+          ? `${sound ? 'Son' : 'Vibration'}${sound && vibration ? ' et vibration' : ''} au premier plan. Pas d’alarme garantie écran verrouillé.`
+          : 'Son et vibration coupés dans Réglages.'}
       </p>
     </aside>
   )

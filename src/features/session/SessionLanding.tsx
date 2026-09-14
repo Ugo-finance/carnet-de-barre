@@ -53,7 +53,7 @@ export function SessionLanding({
 
   if (page === 'cibles') {
     return (
-      <main className="mx-auto flex min-h-[calc(100dvh-3.25rem)] w-full max-w-md flex-col gap-4 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+      <main className="mx-auto flex min-h-[calc(100dvh-8.25rem)] w-full max-w-md flex-col gap-4 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
         <header className="knurled rounded-2xl border border-line bg-surface p-4">
           <p className="text-xs font-bold tracking-[0.14em] text-accent-readable uppercase">
             Séance {selectedType}
@@ -115,7 +115,7 @@ export function SessionLanding({
   }
 
   return (
-    <main className="mx-auto flex min-h-[calc(100dvh-3.25rem)] w-full max-w-md flex-col gap-4 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+    <main className="mx-auto flex min-h-[calc(100dvh-8.25rem)] w-full max-w-md flex-col gap-4 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
       <header className="knurled rounded-2xl border border-line bg-surface p-4">
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs font-bold tracking-[0.14em] text-accent-readable uppercase">

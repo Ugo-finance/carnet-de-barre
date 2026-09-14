@@ -50,7 +50,13 @@ function download(contenu: string, nom: string): void {
   URL.revokeObjectURL(url)
 }
 
-export function ExportPanel({ store }: { store: ExchangePort }) {
+export function ExportPanel({
+  store,
+  section = 'all',
+}: {
+  store: ExchangePort
+  section?: 'all' | 'export' | 'import'
+}) {
   const [status, setStatus] = useState<Status>({ kind: 'idle' })
   const [texte, setTexte] = useState('')
   const [apercu, setApercu] = useState<ImportPreview | null>(null)
@@ -125,86 +131,92 @@ export function ExportPanel({ store }: { store: ExchangePort }) {
   const occupe = status.kind === 'busy'
 
   return (
-    <main className="mx-auto flex w-full max-w-md flex-col gap-6 py-4 pb-8">
-      <section className="flex flex-col gap-3">
-        <div>
-          <h1 className="text-xl font-bold">Exporter</h1>
-          <p className="mt-1 text-sm text-muted">
-            Après chaque séance, copie tes données et colle-les dans ta conversation Claude. C’est
-            aussi ta seule sauvegarde : l’app ne stocke rien ailleurs que sur ce téléphone.
-          </p>
-        </div>
-        <button
-          type="button"
-          className="min-h-12 rounded-xl bg-accent px-4 font-semibold text-bg disabled:opacity-50"
-          onClick={() => void exporter(true)}
-          disabled={occupe}
-        >
-          Copier mes séances
-        </button>
-        <button
-          type="button"
-          className="min-h-11 rounded-xl border border-line px-4 font-medium text-fg disabled:opacity-50"
-          onClick={() => void exporter(false)}
-          disabled={occupe}
-        >
-          Télécharger le fichier
-        </button>
-      </section>
-
-      <section className="flex flex-col gap-3 border-t border-line pt-6">
-        <div>
-          <h2 className="text-lg font-bold">Importer</h2>
-          <p className="mt-1 text-sm text-muted">
-            Remplace <strong>tout</strong> ton historique et tes cibles par le contenu collé.
-            Exporte d’abord si tu veux pouvoir revenir en arrière.
-          </p>
-        </div>
-        <label className="text-sm font-medium text-muted">
-          Contenu de l’export
-          <textarea
-            className="mt-1 h-32 w-full rounded-xl border border-line bg-bg p-3 font-mono text-xs text-fg outline-none focus:border-accent"
-            value={texte}
-            onChange={(event) => {
-              setTexte(event.target.value)
-              setApercu(null)
-            }}
-            placeholder="Colle ici un export JSON"
-            spellCheck={false}
-          />
-        </label>
-
-        {apercu ? (
-          <div className="rounded-xl border border-warn/60 bg-surface p-3 text-sm">
-            <p className="font-semibold text-warn">À confirmer</p>
-            <p className="mt-1 text-muted">
-              {apercu.seanceCount} séances
-              {apercu.firstDate
-                ? ` (${formatDate(apercu.firstDate)} → ${formatDate(apercu.lastDate ?? apercu.firstDate)})`
-                : ''}{' '}
-              vont remplacer tes {apercu.replacing.seanceCount} séances actuelles et tes cibles du{' '}
-              {formatDate(apercu.replacing.targetsUpdatedAt)}.
+    <section className="flex flex-col gap-6" aria-label="Sauvegarde et restauration">
+      {section === 'all' || section === 'export' ? (
+        <section className="flex flex-col gap-3">
+          <div>
+            <h2 className="text-xl font-bold">Exporter</h2>
+            <p className="mt-1 text-sm text-muted">
+              Après chaque séance, copie tes données et colle-les dans ta conversation Claude. C’est
+              aussi ta seule sauvegarde : l’app ne stocke rien ailleurs que sur ce téléphone.
             </p>
-            <button
-              type="button"
-              className="mt-3 min-h-11 w-full rounded-xl bg-bad px-4 font-semibold text-fg disabled:opacity-50"
-              onClick={() => void remplacer()}
-              disabled={occupe}
-            >
-              Remplacer définitivement
-            </button>
           </div>
-        ) : (
+          <button
+            type="button"
+            className="min-h-12 rounded-xl bg-accent px-4 font-semibold text-bg disabled:opacity-50"
+            onClick={() => void exporter(true)}
+            disabled={occupe}
+          >
+            Copier mes séances
+          </button>
           <button
             type="button"
             className="min-h-11 rounded-xl border border-line px-4 font-medium text-fg disabled:opacity-50"
-            onClick={() => void preparer()}
+            onClick={() => void exporter(false)}
             disabled={occupe}
           >
-            Vérifier ce contenu
+            Télécharger le fichier
           </button>
-        )}
-      </section>
+        </section>
+      ) : null}
+
+      {section === 'all' || section === 'import' ? (
+        <section
+          className={`flex flex-col gap-3 ${section === 'all' ? 'border-t border-line pt-6' : ''}`}
+        >
+          <div>
+            <h2 className="text-lg font-bold">Importer</h2>
+            <p className="mt-1 text-sm text-muted">
+              Remplace <strong>tout</strong> ton historique et tes cibles par le contenu collé.
+              Exporte d’abord si tu veux pouvoir revenir en arrière.
+            </p>
+          </div>
+          <label className="text-sm font-medium text-muted">
+            Contenu de l’export
+            <textarea
+              className="mt-1 h-32 w-full rounded-xl border border-line bg-bg p-3 font-mono text-xs text-fg outline-none focus:border-accent"
+              value={texte}
+              onChange={(event) => {
+                setTexte(event.target.value)
+                setApercu(null)
+              }}
+              placeholder="Colle ici un export JSON"
+              spellCheck={false}
+            />
+          </label>
+
+          {apercu ? (
+            <div className="rounded-xl border border-warn/60 bg-surface p-3 text-sm">
+              <p className="font-semibold text-warn">À confirmer</p>
+              <p className="mt-1 text-muted">
+                {apercu.seanceCount} séances
+                {apercu.firstDate
+                  ? ` (${formatDate(apercu.firstDate)} → ${formatDate(apercu.lastDate ?? apercu.firstDate)})`
+                  : ''}{' '}
+                vont remplacer tes {apercu.replacing.seanceCount} séances actuelles et tes cibles du{' '}
+                {formatDate(apercu.replacing.targetsUpdatedAt)}.
+              </p>
+              <button
+                type="button"
+                className="mt-3 min-h-11 w-full rounded-xl bg-bad px-4 font-semibold text-fg disabled:opacity-50"
+                onClick={() => void remplacer()}
+                disabled={occupe}
+              >
+                Remplacer définitivement
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="min-h-11 rounded-xl border border-line px-4 font-medium text-fg disabled:opacity-50"
+              onClick={() => void preparer()}
+              disabled={occupe}
+            >
+              Vérifier ce contenu
+            </button>
+          )}
+        </section>
+      ) : null}
 
       <p
         className={`min-h-6 text-sm ${status.kind === 'error' ? 'text-bad' : 'text-ok'}`}
@@ -213,6 +225,6 @@ export function ExportPanel({ store }: { store: ExchangePort }) {
       >
         {status.kind === 'ok' || status.kind === 'error' ? status.message : ''}
       </p>
-    </main>
+    </section>
   )
 }

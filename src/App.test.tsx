@@ -1,7 +1,7 @@
 /**
  * Le test qui part de `<App />` — CB-24.
  *
- * Il existe à cause d'un trou réel : `ExportPanel` et `TargetsPanel` étaient
+ * Il existe à cause d'un trou réel : les écrans de données et de cibles étaient
  * construits, testés et fusionnés, mais **inatteignables** — `App.tsx` ne rendait que
  * l'écran de séance. Aucun test ne l'a vu, parce que tous montent leur écran
  * directement. Une couverture par composant ne peut pas voir ça, par construction.
@@ -79,14 +79,17 @@ describe('navigation depuis le point d’entrée réel', () => {
     await waitFor(() => expect(within(liste).getByText('Squat')).toBeInTheDocument())
   })
 
-  it('atteint l’écran d’export', async () => {
+  it('atteint les réglages et l’export', async () => {
     // Sans cet écran, une séance faite ne peut pas sortir du téléphone : ni sauvegarde,
     // ni transmission pour l'événement Outlook.
     render(<App />)
     await screen.findByRole('heading', { name: /Séance [ABC]/ })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Export' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Réglages' }))
 
+    expect(await screen.findByRole('heading', { name: 'Réglages' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Suivant : Matériel' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Suivant : Export' }))
     expect(await screen.findByRole('button', { name: /Copier mes séances/ })).toBeInTheDocument()
   })
 
@@ -96,7 +99,7 @@ describe('navigation depuis le point d’entrée réel', () => {
     render(<App />)
     const titre = await screen.findByRole('heading', { name: /Séance [ABC]/ })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Export' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Réglages' }))
 
     expect(titre).toBeInTheDocument()
     expect(titre.closest('[hidden]')).not.toBeNull()
@@ -144,7 +147,9 @@ describe('navigation depuis le point d’entrée réel', () => {
     render(<App />)
     await screen.findByRole('heading', { name: /Séance [ABC]/ })
 
-    expect(screen.queryByRole('navigation', { name: 'Sections' })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('navigation', { name: 'Navigation principale' }),
+    ).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Reprendre la séance' })).toBeInTheDocument()
   })
 
@@ -156,15 +161,21 @@ describe('navigation depuis le point d’entrée réel', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Actions' }))
     expect(screen.getByRole('button', { name: 'Quitter la vue' })).toBeInTheDocument()
-    expect(screen.queryByRole('navigation', { name: 'Sections' })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('navigation', { name: 'Navigation principale' }),
+    ).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Quitter la vue' }))
 
     expect(await screen.findByRole('button', { name: 'Reprendre la séance' })).toBeInTheDocument()
-    expect(screen.queryByRole('navigation', { name: 'Sections' })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('navigation', { name: 'Navigation principale' }),
+    ).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Abandonner la séance' }))
     fireEvent.click(screen.getByRole('button', { name: 'Confirmer l’abandon' }))
 
-    expect(await screen.findByRole('navigation', { name: 'Sections' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('navigation', { name: 'Navigation principale' }),
+    ).toBeInTheDocument()
   })
 
   it('atteint l’historique et y montre les séances de départ', async () => {
@@ -194,10 +205,16 @@ describe('navigation depuis le point d’entrée réel', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Reprendre la séance' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Terminer la séance' }))
     await screen.findByText('Séance enregistrée')
+    expect(
+      screen.queryByRole('navigation', { name: 'Navigation principale' }),
+    ).not.toBeInTheDocument()
     advanceSummaryTo('Prochaine séance · B')
     fireEvent.click(await screen.findByRole('button', { name: 'Voir dans l’historique' }))
 
     expect(await screen.findByRole('heading', { name: 'Historique' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('navigation', { name: 'Navigation principale' }),
+    ).toBeInTheDocument()
     await waitFor(() =>
       expect(screen.getByText(/^13 séances enregistrées, sur \d+ semaines\.$/)).toBeInTheDocument(),
     )

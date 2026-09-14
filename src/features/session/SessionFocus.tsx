@@ -10,6 +10,7 @@ import { formatNumber } from '../../domain/format'
 import { weightStepFor } from '../../domain/program'
 import type { SeanceType, SetLog } from '../../domain/types'
 import type { EditableSet } from '../../components/SetCard'
+import type { TimerNotificationOptions } from './timer'
 import {
   currentSessionQueueItem,
   sessionQueueProgress,
@@ -21,6 +22,7 @@ type RecoveryTimer = {
   label: string
   onAdjust: (deltaMs: number) => void
   onStop: () => void
+  notifications?: TimerNotificationOptions
 }
 
 type SessionFocusProps = {
@@ -228,6 +230,7 @@ export function SessionFocus({
             label={timer.label}
             onAdjust={timer.onAdjust}
             onStop={timer.onStop}
+            notifications={timer.notifications}
             disabled={writing}
           />
         ) : (

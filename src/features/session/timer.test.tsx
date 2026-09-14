@@ -1,6 +1,12 @@
 import { act, renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { secondsUntil, shiftedDeadline, useRecoveryTimer } from './timer'
+import {
+  notifyTimerDone,
+  secondsUntil,
+  shiftedDeadline,
+  unlockTimerAudio,
+  useRecoveryTimer,
+} from './timer'
 
 describe('calcul du chrono', () => {
   it('calcule depuis l’échéance absolue et arrondit la seconde entamée', () => {
@@ -13,6 +19,67 @@ describe('calcul du chrono', () => {
   it('ajoute depuis maintenant si le chrono est déjà terminé', () => {
     expect(shiftedDeadline(100_000, 30_000, 120_000)).toBe(150_000)
     expect(shiftedDeadline(150_000, -30_000, 120_000)).toBe(120_000)
+  })
+})
+
+describe('préférences de notification', () => {
+  it('ne vibre que lorsque le réglage est actif', () => {
+    const vibrate = vi.fn()
+    Object.defineProperty(navigator, 'vibrate', { value: vibrate, configurable: true })
+
+    notifyTimerDone({ sound: false, vibration: false })
+    expect(vibrate).not.toHaveBeenCalled()
+
+    notifyTimerDone({ sound: false, vibration: true })
+    expect(vibrate).toHaveBeenCalledWith([180, 80, 180])
+  })
+
+  it('ne crée le signal audio que lorsque le son est actif', () => {
+    const oscillator = {
+      type: 'sine',
+      frequency: { value: 0 },
+      connect: vi.fn(),
+      start: vi.fn(),
+      stop: vi.fn(),
+    }
+    const gain = {
+      gain: {
+        setValueAtTime: vi.fn(),
+        exponentialRampToValueAtTime: vi.fn(),
+      },
+      connect: vi.fn(),
+    }
+    oscillator.connect.mockReturnValue(gain)
+    gain.connect.mockReturnValue(gain)
+    const context = {
+      state: 'running',
+      currentTime: 10,
+      destination: {},
+      createOscillator: vi.fn(() => oscillator),
+      createGain: vi.fn(() => gain),
+      resume: vi.fn(),
+    }
+    function FakeAudioContext() {
+      return context
+    }
+    const original = Object.getOwnPropertyDescriptor(window, 'AudioContext')
+    Object.defineProperty(window, 'AudioContext', {
+      configurable: true,
+      value: FakeAudioContext,
+    })
+
+    try {
+      unlockTimerAudio()
+      notifyTimerDone({ sound: false, vibration: false })
+      expect(context.createOscillator).not.toHaveBeenCalled()
+
+      notifyTimerDone({ sound: true, vibration: false })
+      expect(context.createOscillator).toHaveBeenCalledOnce()
+      expect(oscillator.start).toHaveBeenCalledOnce()
+    } finally {
+      if (original) Object.defineProperty(window, 'AudioContext', original)
+      else Reflect.deleteProperty(window, 'AudioContext')
+    }
   })
 })
 

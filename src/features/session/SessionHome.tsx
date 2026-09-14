@@ -37,6 +37,7 @@ type ReadyState = {
    * différentes à la même question dans la même minute.
    */
   seances: Seance[]
+  preferences: Preferences
 }
 
 type EntryData = {
@@ -89,7 +90,6 @@ function SessionEditor({
   store,
   now,
   onExit,
-  onFinished,
   onReturnHome,
   onViewHistory,
 }: {
@@ -97,7 +97,6 @@ function SessionEditor({
   store: SessionStore
   now: Date
   onExit: (draft: Draft) => void
-  onFinished: () => void
   onReturnHome: (result: FinalizeResult) => void
   onViewHistory?: () => void
 }) {
@@ -157,7 +156,6 @@ function SessionEditor({
       await editor.flush()
       const next = await store.finalizeSeance(draft.id)
       setResult(next)
-      onFinished()
     } catch (error) {
       setFinalizeError(messageFor(error))
     } finally {
@@ -193,6 +191,10 @@ function SessionEditor({
                 label: draft.timerLabel,
                 onAdjust: editor.adjustTimer,
                 onStop: editor.stopTimer,
+                notifications: {
+                  sound: state.preferences.sonChrono,
+                  vibration: state.preferences.vibration,
+                },
               }
             : undefined
         }
@@ -201,7 +203,7 @@ function SessionEditor({
           if (writingRef.current) return
           const item = queue.find(({ set }) => set.id === setId)
           if (!item) return
-          unlockTimerAudio()
+          if (state.preferences.sonChrono) unlockTimerAudio()
           writingRef.current = true
           setWriting(true)
           void editor
@@ -309,6 +311,7 @@ function editorState(entry: EntryData, draft: Draft, now: Date): ReadyState {
     suggestion: currentSession(now, entry.seances),
     today: todayInZurich(now),
     seances: entry.seances,
+    preferences: entry.preferences,
   }
 }
 
@@ -427,7 +430,6 @@ function SessionHomeAttempt({
           })
           setFocusedDraft(undefined)
         }}
-        onFinished={() => onSessionActiveChange?.(false)}
         onReturnHome={(result) => {
           const seances = [result.seance, ...entry.seances]
           const resume = resumeAccueil({
@@ -439,6 +441,7 @@ function SessionHomeAttempt({
           setEntry({ ...entry, draft: undefined, seances, targets: result.targets, resume })
           setSelectedType(resume.type)
           setFocusedDraft(undefined)
+          onSessionActiveChange?.(false)
         }}
         onViewHistory={onViewHistory}
       />

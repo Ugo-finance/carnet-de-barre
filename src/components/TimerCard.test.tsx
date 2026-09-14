@@ -19,4 +19,21 @@ describe('TimerCard', () => {
     expect(screen.getByText(/Pas d’alarme garantie écran verrouillé/)).toBeInTheDocument()
     vi.useRealTimers()
   })
+
+  it('indique clairement quand les deux notifications sont coupées', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+    render(
+      <TimerCard
+        endsAt={150_000}
+        label="Récup Squat"
+        onAdjust={() => {}}
+        onStop={() => {}}
+        notifications={{ sound: false, vibration: false }}
+      />,
+    )
+
+    expect(screen.getByText('Son et vibration coupés dans Réglages.')).toBeInTheDocument()
+    vi.useRealTimers()
+  })
 })
