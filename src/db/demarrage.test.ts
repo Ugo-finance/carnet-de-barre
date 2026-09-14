@@ -194,3 +194,28 @@ describe('le magasin en mémoire répond comme celui du téléphone', () => {
     expect(reprise.startedAt).toBe(5000)
   })
 })
+
+describe('le mode pressé au démarrage, en mémoire', () => {
+  it('applique le choix de l’accueil à un brouillon vierge', async () => {
+    // Les deux magasins doivent répondre pareil : un test écrit contre celui-ci doit
+    // rester vrai contre celui qui tourne sur le téléphone d'Ugo.
+    const store = new MemoryStore()
+    await store.ready()
+    const ouvert = await store.openDraft('A', '2026-09-15')
+    expect(ouvert.rushed).toBe(false)
+
+    const demarre = await store.startSession('A', '2026-09-15', { now: 5000, rushed: true })
+    expect(demarre.rushed).toBe(true)
+    expect(demarre.id).toBe(ouvert.id)
+  })
+
+  it('garde le mode d’une séance déjà commencée', async () => {
+    const store = new MemoryStore()
+    await store.ready()
+    const demarre = await store.startSession('A', '2026-09-15', { now: 5000, rushed: true })
+    await store.saveDraft({ ...demarre, rushed: false })
+
+    const reprise = await store.startSession('A', '2026-09-15', { now: 9000, rushed: true })
+    expect(reprise.rushed).toBe(false)
+  })
+})

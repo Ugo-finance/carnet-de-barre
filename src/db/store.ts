@@ -32,7 +32,14 @@ import {
   db as defaultDb,
   ensureSeeded,
 } from './database.ts'
-import { buildDraft, hydrateDraft, isDraftActive, reutilisable, startDraft } from './draft.ts'
+import {
+  buildDraft,
+  hydrateDraft,
+  isDraftActive,
+  reprendreAvecMode,
+  reutilisable,
+  startDraft,
+} from './draft.ts'
 import {
   PREFERENCES_PAR_DEFAUT,
   readPreferences,
@@ -178,7 +185,7 @@ export class DexieStore implements DraftStore {
         const existant = stocke ? hydrateDraft(stocke) : undefined
         const draft =
           existant && reutilisable(existant, type, date)
-            ? existant
+            ? reprendreAvecMode(existant, options.rushed)
             : await this.construireDansTransaction(type, date, options.rushed)
 
         // Idempotent : une séance déjà démarrée garde son instant. Reprendre après un

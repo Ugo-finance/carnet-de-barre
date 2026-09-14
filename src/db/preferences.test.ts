@@ -196,6 +196,33 @@ describe('ce que les réglages changent réellement', () => {
     expect((await b.store.startSession('A', '2026-09-15', { rushed: false })).rushed).toBe(false)
   })
 
+  it('applique le choix à un brouillon vierge du même jour', async () => {
+    // Le dernier endroit où l'oubli était possible : `reutilisable` accepte un
+    // brouillon vierge de même type et même date, et on le reprenait **tel quel**. Un
+    // brouillon laissé par un affichage antérieur — ou par l'ancienne interface sur le
+    // téléphone — imposait alors son mode au démarrage. P1 de Codex sur #55.
+    const { store } = magasin()
+    await store.ready()
+    const ouvert = await store.openDraft('A', '2026-09-15')
+    expect(ouvert.rushed).toBe(false)
+
+    const demarre = await store.startSession('A', '2026-09-15', { now: 5000, rushed: true })
+    expect(demarre.rushed).toBe(true)
+    // Son identité est conservée : c'est le même brouillon, pas un neuf.
+    expect(demarre.id).toBe(ouvert.id)
+  })
+
+  it('ne décide rien quand l’accueil ne donne pas de choix', async () => {
+    const { store } = magasin()
+    await store.ready()
+    await store.savePreferences({ modePresseParDefaut: true })
+    const ouvert = await store.openDraft('A', '2026-09-15')
+    expect(ouvert.rushed).toBe(true)
+
+    const demarre = await store.startSession('A', '2026-09-15', { now: 5000 })
+    expect(demarre.rushed).toBe(true)
+  })
+
   it('ne rouvre pas une file qu’Ugo a repliée en salle', async () => {
     // Une séance **déjà démarrée** garde son mode : le choix de l'accueil ne s'applique
     // qu'à la construction, et reprendre n'est pas recommencer.

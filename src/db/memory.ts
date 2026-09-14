@@ -27,7 +27,7 @@ import { applyTargetPatch, type TargetPatch } from './targets.ts'
 import { StoreError, type FinalizeResult, type ImportPreview } from './contracts.ts'
 import { seanceSchema } from '../domain/schema.ts'
 import { loadSeed } from './seed.ts'
-import { buildDraft, isDraftActive, reutilisable, startDraft } from './draft.ts'
+import { buildDraft, isDraftActive, reprendreAvecMode, reutilisable, startDraft } from './draft.ts'
 import {
   readPreferences,
   writePreferences,
@@ -120,7 +120,7 @@ export class MemoryStore implements DraftStore {
     const preferences = await this.getPreferences()
     const draft =
       this.draft && reutilisable(this.draft, type, date)
-        ? this.draft
+        ? reprendreAvecMode(this.draft, options.rushed)
         : buildDraft(type, date, await this.getTargets(), {
             id: crypto.randomUUID(),
             seances: this.seances,

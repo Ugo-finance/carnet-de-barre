@@ -310,6 +310,25 @@ export function reutilisable(draft: Draft, type: SeanceType, date: string): bool
 }
 
 /**
+ * Le brouillon repris, avec le mode pressé choisi sur l'accueil — CB-62b.
+ *
+ * Les deux sortes de brouillon réutilisable ne se traitent pas pareil, et c'est le
+ * dernier endroit où l'oubli était possible :
+ *
+ * - **actif** : son mode est celui qu'Ugo a réglé en salle. Reprendre n'est pas
+ *   recommencer, et l'accueil ne rouvre pas une file qu'il a repliée ;
+ * - **vierge** : il ne porte aucune information, seulement une identité. Le choix de
+ *   l'accueil s'y applique — sans quoi un brouillon laissé par un affichage antérieur,
+ *   ou par l'ancienne interface sur le téléphone, imposerait son mode au démarrage.
+ *
+ * Option absente : on ne décide rien, le mode courant reste. P1 de Codex sur #55.
+ */
+export function reprendreAvecMode(draft: Draft, rushed: boolean | undefined): Draft {
+  if (rushed === undefined || isDraftActive(draft)) return draft
+  return { ...draft, rushed }
+}
+
+/**
  * « Une séance est-elle en cours ? » — la question unique, à un seul endroit.
  *
  * Cinq appelants y répondaient par `!isBlankDraft(...)`, c'est-à-dire par « ce
