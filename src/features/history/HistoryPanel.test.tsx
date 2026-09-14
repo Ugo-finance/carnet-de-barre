@@ -86,9 +86,65 @@ describe('historique', () => {
     expect(screen.getByText('Développé couché : 70×4 @8')).toBeInTheDocument()
   })
 
+  it('groupe les séances par semaine, la plus récente en premier', () => {
+    // 12.09 est un samedi, 15.09 un mardi : deux semaines, et non un seul bloc.
+    const samedi = seance({ id: 's-samedi', date: '2026-09-12', type: 'C' })
+    const mardi = seance({ id: 's-mardi', date: '2026-09-15', type: 'A' })
+    const jeudi = seance({ id: 's-jeudi', date: '2026-09-17', type: 'B' })
+    const liste = [samedi, mardi, jeudi]
+    render(<HistoryPanel seances={liste} store={faux(liste)} />)
+
+    const semaines = screen.getAllByRole('region')
+    expect(semaines).toHaveLength(2)
+    expect(semaines[0]).toHaveAccessibleName('Semaine du 14.09 au 20.09.2026')
+    expect(semaines[1]).toHaveAccessibleName('Semaine du 07.09 au 13.09.2026')
+    expect(within(semaines[0]).getAllByRole('listitem')).toHaveLength(2)
+    expect(within(semaines[1]).getAllByRole('listitem')).toHaveLength(1)
+  })
+
+  it('rattache la séance du dimanche à la semaine qui s’achève', () => {
+    // La séance C se fait le dimanche. Une semaine qui commencerait le dimanche la
+    // séparerait des séances A et B de la même semaine d'entraînement — exactement ce
+    // qu'Ugo vient vérifier quand il ouvre l'écran.
+    const mardi = seance({ id: 's-mardi', date: '2026-09-15', type: 'A' })
+    const dimanche = seance({ id: 's-dimanche', date: '2026-09-20', type: 'C' })
+    const liste = [mardi, dimanche]
+    render(<HistoryPanel seances={liste} store={faux(liste)} />)
+
+    const semaines = screen.getAllByRole('region')
+    expect(semaines).toHaveLength(1)
+    expect(within(semaines[0]).getAllByRole('listitem')).toHaveLength(2)
+  })
+
+  it('compte les séances de chaque semaine dans son en-tête', () => {
+    const liste = [
+      seance({ id: 's-mardi', date: '2026-09-15', type: 'A' }),
+      seance({ id: 's-jeudi', date: '2026-09-17', type: 'B' }),
+    ]
+    render(<HistoryPanel seances={liste} store={faux(liste)} />)
+
+    expect(screen.getByText('2 séances')).toBeInTheDocument()
+  })
+
+  it('avertit en permanence qu’une correction ne recalcule aucune cible', () => {
+    // L'avertissement se lit **avant** de corriger, pas au moment de confirmer. Replié
+    // derrière un geste, il n'arriverait qu'après la décision.
+    render(<HistoryPanel seances={[CE_SOIR]} store={faux([CE_SOIR])} />)
+
+    const note = screen.getByRole('note')
+    expect(note).toHaveTextContent(/ne recalcule\s+jamais\s+tes cibles/)
+    expect(note).toHaveTextContent(/Progression/)
+  })
+
+  it('n’affiche pas l’avertissement quand il n’y a rien à corriger', () => {
+    render(<HistoryPanel seances={[]} store={faux([])} />)
+
+    expect(screen.queryByRole('note')).not.toBeInTheDocument()
+  })
+
   it('compte les séances enregistrées', () => {
     render(<HistoryPanel seances={[JUILLET, CE_SOIR]} store={faux([JUILLET, CE_SOIR])} />)
-    expect(screen.getByText('2 séances enregistrées.')).toBeInTheDocument()
+    expect(screen.getByText('2 séances enregistrées, sur 2 semaines.')).toBeInTheDocument()
   })
 
   it('signale une date reconstituée de mémoire', () => {
@@ -209,7 +265,7 @@ describe('historique', () => {
 
     await waitFor(() => expect(screen.queryByText('Séance C')).not.toBeInTheDocument())
     expect(store.deleteSeance).toHaveBeenCalledWith('s-ce-soir')
-    expect(screen.getByText('1 séance enregistrée.')).toBeInTheDocument()
+    expect(screen.getByText('1 séance enregistrée, sur 1 semaine.')).toBeInTheDocument()
   })
 
   it('dit pourquoi quand le magasin refuse, sans faire disparaître la séance', async () => {

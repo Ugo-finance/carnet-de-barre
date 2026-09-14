@@ -164,7 +164,7 @@ test('parcours réel, reprise et double finalisation', async ({ page }) => {
   )
 
   await page.getByRole('button', { name: 'Voir dans l’historique' }).click()
-  await expect(page.getByText('13 séances enregistrées.')).toBeVisible()
+  await expect(page.getByText(/^13 séances enregistrées, sur \d+ semaines\.$/)).toBeVisible()
 
   await page.getByRole('button', { name: 'Export' }).click()
   await page.getByRole('button', { name: 'Copier mes séances' }).click()

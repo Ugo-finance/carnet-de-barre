@@ -15,6 +15,7 @@ import { useState } from 'react'
 import { formatDate, formatNumber } from '../../domain/format.ts'
 import { findExercise } from '../../domain/program.ts'
 import { removeSet, reviseSet, type SetPatch } from '../../db/edit.ts'
+import { grouperParSemaine, type SemaineGroupee } from '../../domain/semaine.ts'
 import type { Seance, SetLog } from '../../domain/types.ts'
 
 export interface HistoryPort {
@@ -23,22 +24,19 @@ export interface HistoryPort {
 }
 
 /**
- * Les séances du plus récent au plus ancien, à date égale la dernière enregistrée
- * d'abord.
+ * L'intitulé d'une semaine, bornes comprises.
  *
- * Deux séances le même jour sont permises (D5). Rendre `0` à date égale laissait
- * l'ordre des clés IndexedDB décider, qui n'a aucun rapport avec l'heure : c'est
- * alors la mauvaise des deux qui pouvait s'afficher dépliée en haut, juste au moment
- * où Ugo vient vérifier que sa séance du soir est bien là.
- *
- * `ts` est l'instant de finalisation. Il manque aux séances du dossier de départ, qui
- * n'ont qu'une date : elles passent donc après celles qui en ont, ce qui est le bon
- * ordre puisqu'elles sont toutes anciennes.
+ * Une date seule — « Semaine du 14.09 » — obligerait Ugo à compter pour savoir si sa
+ * séance de dimanche est dedans. Les deux bornes le disent sans calcul, et l'année ne
+ * figure qu'une fois puisque la semaine ne peut en enjamber qu'au plus une.
  */
-function parOrdreAntichronologique(seances: Seance[]): Seance[] {
-  return seances.toSorted((a, b) =>
-    a.date === b.date ? (b.ts ?? 0) - (a.ts ?? 0) : a.date < b.date ? 1 : -1,
-  )
+function libelleSemaine(semaine: SemaineGroupee): string {
+  const [jourLundi, moisLundi, anneeLundi] = formatDate(semaine.lundi).split('.')
+  const fin = formatDate(semaine.dimanche)
+  const debut = fin.endsWith(anneeLundi)
+    ? `${jourLundi}.${moisLundi}`
+    : `${jourLundi}.${moisLundi}.${anneeLundi}`
+  return `Semaine du ${debut} au ${fin}`
 }
 
 /** Le libellé qu'Ugo reconnaît : l'exercice, puis le rôle de la série. */
@@ -436,35 +434,73 @@ export function HistoryPanel({ seances, store }: { seances: Seance[]; store: His
   // L'écran tient sa propre copie : corriger ou supprimer doit se voir tout de suite,
   // sans relire la base ni remonter l'onglet — et la liste reçue appartient à l'appelant.
   const [etat, setEtat] = useState<Seance[]>(seances)
-  const ordonnees = parOrdreAntichronologique(etat)
+  const semaines = grouperParSemaine(etat)
+  const total = etat.length
 
   return (
     <section className="mx-auto w-full max-w-md py-4">
-      <header>
+      {/*
+       * L'en-tête reste au-dessus du défilement. L'historique est l'une des deux
+       * exceptions à « aucun écran ne scrolle » (contrat § 1.7) : sa longueur dépend
+       * des données, pas du parcours. L'exception porte sur la liste, pas sur le
+       * repère — sans en-tête collé, Ugo scrolle trois semaines et ne sait plus dans
+       * quel écran il est.
+       */}
+      <header className="sticky top-0 z-10 -mx-4 bg-bg px-4 pb-3">
         <h1 className="text-xl font-bold">Historique</h1>
         <p className="mt-1 text-sm text-muted">
-          {ordonnees.length === 0
+          {total === 0
             ? 'Aucune séance enregistrée pour le moment.'
-            : `${ordonnees.length} séance${ordonnees.length > 1 ? 's' : ''} enregistrée${
-                ordonnees.length > 1 ? 's' : ''
-              }.`}
+            : `${total} séance${total > 1 ? 's' : ''} enregistrée${total > 1 ? 's' : ''}, sur ${
+                semaines.length
+              } semaine${semaines.length > 1 ? 's' : ''}.`}
         </p>
       </header>
 
-      <ul className="mt-4 grid gap-2">
-        {ordonnees.map((seance, index) => (
-          <LigneSeance
-            key={seance.id}
-            seance={seance}
-            ouvertParDefaut={index === 0}
-            store={store}
-            onChange={(suivante) =>
-              setEtat((liste) => liste.map((s) => (s.id === suivante.id ? suivante : s)))
-            }
-            onDelete={(id) => setEtat((liste) => liste.filter((s) => s.id !== id))}
-          />
+      {/*
+       * L'avertissement est permanent, et non replié derrière un geste : c'est la règle
+       * que cet écran viole le plus facilement dans l'esprit d'Ugo. Corriger une séance
+       * ressemble à « annuler ce qui s'est passé », alors que D6 dit que les cibles ne
+       * bougent pas. Le dire au moment de la suppression ne suffisait pas — il faut
+       * l'avoir lu **avant** de commencer à corriger, pas après avoir décidé.
+       */}
+      {total === 0 ? null : (
+        <p
+          className="mt-3 rounded-xl border border-warn/60 bg-warn/10 p-3 text-sm text-fg"
+          role="note"
+        >
+          Corriger ou supprimer une séance passée ne recalcule <strong>jamais</strong> tes cibles.
+          Elles reflètent ce que tu sais faire, pas le contenu de cette liste. Pour les changer,
+          passe par <strong>Progression</strong>.
+        </p>
+      )}
+
+      <div className="mt-4 grid gap-5">
+        {semaines.map((semaine, rangSemaine) => (
+          <section key={semaine.lundi} aria-label={libelleSemaine(semaine)}>
+            <h2 className="flex items-baseline justify-between gap-2 text-sm font-bold text-muted">
+              <span>{libelleSemaine(semaine)}</span>
+              <span className="num shrink-0 font-semibold">
+                {semaine.seances.length} séance{semaine.seances.length > 1 ? 's' : ''}
+              </span>
+            </h2>
+            <ul className="mt-2 grid gap-2">
+              {semaine.seances.map((seance, rang) => (
+                <LigneSeance
+                  key={seance.id}
+                  seance={seance}
+                  ouvertParDefaut={rangSemaine === 0 && rang === 0}
+                  store={store}
+                  onChange={(suivante) =>
+                    setEtat((liste) => liste.map((s) => (s.id === suivante.id ? suivante : s)))
+                  }
+                  onDelete={(id) => setEtat((liste) => liste.filter((s) => s.id !== id))}
+                />
+              ))}
+            </ul>
+          </section>
         ))}
-      </ul>
+      </div>
     </section>
   )
 }

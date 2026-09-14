@@ -53,6 +53,35 @@ Ce classement a servi deux fois. Les deux fois, la règle écrite avait raison c
    que son coach a appliqué aux élévations — la poulie saute de +20 % à cette charge, et une
    fourchette étroite la ferait monter trop souvent. Retour au bas de la fourchette après une
    montée, comme le défaut.
+7. **Aucun écran ne scrolle. Le parcours avance page par page, un bouton après l'autre.**
+   Signalé spontanément par Ugo le 14.09.2026, en usage : « sur la page principale il faut que
+   je scrolle vers le bas pour trouver le bouton ; il faudrait que ce soit une page, pas que
+   j'aie besoin de scroller, et que ce soit page par page, comme ça un bouton après l'autre ».
+
+   Mesuré sur la production, iPhone 15 Pro (393 × 852 px, budget utile ~759 px en PWA
+   installée, ~752 px dans l'onglet Safari) :
+
+   | Écran | Hauteur | À scroller | Action principale |
+   | --- | --- | --- | --- |
+   | Accueil | 916 px | 72 px | « Démarrer la séance C » à 838 px |
+   | Séance en focus | 1102 px | 258 px | « Valider » à 789 px, « Terminer » à 1040 px |
+
+   Le budget vertical de l'accueil se répartit ainsi : en-tête 138, sélecteur A/B/C 74,
+   **« Cibles du jour » 386**, échauffement et mode pressé 96, bouton 66. Un seul bloc pèse
+   plus que la moitié du dépassement.
+
+   Question posée le 14.09.2026, les trois dispositions sous les yeux — cibles sorties en page
+   séparée, repliées derrière un dépliant, ou réduites à une ligne par exercice ? Réponse :
+   **page séparée**. L'accueil tient en une vue et porte un seul bouton « Démarrer » ; les
+   cibles du jour deviennent l'écran suivant, avec son propre bouton d'avancement.
+
+   La règle vaut pour **tous** les écrans, pas seulement celui qu'Ugo a signalé : la séance en
+   focus dépasse davantage. Un écran qui ne tient pas se **découpe** en étapes ; il ne se
+   compresse pas jusqu'à devenir illisible en salle, ce que CB-43 a déjà coûté une fois.
+
+   Deux exceptions, parce qu'elles ne sont pas des étapes d'un parcours mais des consultations :
+   l'historique et la progression peuvent défiler, leur contenu étant une liste dont la longueur
+   dépend des données. Leur en-tête et leur navigation restent en revanche toujours visibles.
 
 ## 2. Arbitrages des agents
 
