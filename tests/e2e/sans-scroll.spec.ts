@@ -100,6 +100,7 @@ test('la navigation reste visible au bas des écrans de consultation', async ({ 
   for (const tab of ['Historique', 'Progression']) {
     await navigation.getByRole('button', { name: tab }).click()
     await expect(page.getByRole('heading', { name: tab })).toBeVisible()
+    await expect(navigation).toBeInViewport()
     await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
     await expect(navigation).toBeInViewport()
     await expect(page.getByRole('heading', { name: tab })).toBeInViewport()
