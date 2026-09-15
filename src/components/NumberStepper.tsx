@@ -93,10 +93,10 @@ export function NumberStepper({
         se lit debout, à bout de bras, entre deux séries.
       */}
       <div className="min-w-0 overflow-hidden rounded-xl border border-line bg-bg">
-        <div className="flex min-w-0 items-baseline justify-center gap-1 px-2 py-2">
+        <div className="flex min-h-11 min-w-0 items-baseline justify-center gap-1 px-2">
           <input
             id={inputId}
-            className="num min-w-0 flex-1 bg-transparent text-center text-2xl font-semibold outline-none"
+            className="num min-h-11 min-w-0 flex-1 bg-transparent text-center text-2xl font-semibold outline-none"
             type="text"
             inputMode="decimal"
             autoComplete="off"

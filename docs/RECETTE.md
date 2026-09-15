@@ -19,10 +19,43 @@ Une PWA iOS s’installe depuis Safari. N’installe qu’une copie : Safari, Ch
 ## Avant de commencer
 
 1. Ouvre l’URL de production avec du réseau.
-2. Dans **Export**, touche **Copier mes séances** et conserve le JSON hors de l’application. Ce fichier permettra de restaurer les vraies données après les essais.
-3. Note le nombre de séances annoncé dans **Historique** et les cinq charges de **Cibles**.
+2. Dans **Réglages**, avance jusqu’à **Exporter**, touche **Copier mes séances** et conserve le JSON hors de l’application. Ce fichier permettra de restaurer les vraies données après les essais.
+3. Note le nombre de séances annoncé dans **Historique** et les cinq charges de **Progression**.
 
 Arrête la recette si l’export de sauvegarde n’est pas lisible ou ne contient pas `schemaVersion`, `targets` et `seances`.
+
+## Porte UX v2
+
+Effectue ce contrôle dans l’application installée, en portrait, puis répète le parcours de séance
+dans un onglet Safari avec ses barres visibles. Ce second passage reproduit la vue utile plus
+courte (environ 393 × 659 px) qui a déjà rendu une action inaccessible. Il complète les
+vérifications automatisées par ce que seul l’iPhone réel peut montrer.
+
+- [ ] Hors séance, les quatre entrées **Séance**, **Historique**, **Progression** et
+  **Réglages** sont visibles et chacune ouvre un écran complet.
+- [ ] Pendant une séance, cette navigation disparaît et aucune action ne permet de quitter le
+  brouillon sans passer par le parcours prévu.
+- [ ] Sur chaque écran, aucun texte, bouton ou champ ne déborde horizontalement et aucun libellé
+  utile n’est tronqué.
+- [ ] Les actions basses restent entièrement au-dessus de l’indicateur d’accueil et peuvent être
+  touchées d’une main.
+- [ ] Dans l’onglet Safari, chaque action de série est soit déjà entièrement visible, soit
+  atteignable par un défilement au doigt ; aucun contenu dépassant n’est coupé.
+- [ ] Avec le clavier numérique puis le clavier de texte ouverts, le champ actif et son action de
+  validation restent visibles après le défilement automatique.
+- [ ] Avec **Réduire les animations** activé dans iOS, les cartes changent immédiatement et aucun
+  glissement n’est joué.
+- [ ] Les états RPE, succès, erreur, série validée et série passée restent compréhensibles sans se
+  fier uniquement à leur couleur.
+
+Compare ensuite les écrans **Aujourd’hui**, séance en cours, fin de séance, **Historique**,
+**Progression** et **Réglages** avec `docs/refonte/maquette-ux.html`. Consigne toute différence qui
+change la hiérarchie, la lisibilité ou l’action principale ; les données illustratives de la
+maquette ne sont pas des valeurs attendues.
+
+Résultat et différences observées :
+
+> À renseigner.
 
 ## Installation
 
@@ -37,7 +70,7 @@ Résultat et notes :
 
 ## Brouillon et mode avion
 
-1. Sur l’accueil, contrôle la séance proposée, touche **Démarrer la séance**, puis saisis la note
+1. Sur l’accueil, contrôle la séance proposée, touche **Voir les cibles de la séance**, puis **C’est parti** et saisis la note
    `RECETTE HORS LIGNE`.
 2. Modifie une charge ou des répétitions, puis attends que l’indicateur de saisie soit visible.
 3. Ferme complètement l’application, active le mode avion et relance-la depuis l’icône.
@@ -73,8 +106,8 @@ Cette partie se fait sur une séance qui porte des paliers. Elle vérifie ce que
 peut pas décider à la place du téléphone : lisibilité réelle, absence de saut visuel et gestes au
 pouce avec le clavier affiché.
 
-1. Sur l’accueil, relève le nombre annoncé dans « Échauffement · [n] paliers », puis touche
-   **Démarrer la séance**.
+1. Sur l’accueil, relève le nombre annoncé dans « Échauffement · [n] paliers », touche
+   **Voir les cibles de la séance**, contrôle la page, puis **C’est parti**.
 2. Sur un exercice à la barre, contrôle la charge, les répétitions et le texte « Par côté » de
    chaque palier.
 3. Valide le premier palier, puis ferme et relance l’application.
@@ -119,7 +152,7 @@ Résultat, ancienne version et nouvelle version :
 ## Ajustement, import et restauration
 
 1. Sans séance commencée, ajuste une cible et vérifie qu’elle se reporte dans la séance affichée.
-2. Dans **Export**, colle le JSON sauvegardé au début et touche **Vérifier ce contenu**.
+2. Dans **Réglages**, avance jusqu’à **Importer**, colle le JSON sauvegardé au début et touche **Vérifier ce contenu**.
 3. Contrôle le nombre de séances et les dates annoncés avant de toucher **Remplacer définitivement**.
 
 - [ ] L’import restaure le nombre de séances initial.
@@ -147,5 +180,11 @@ Résultat et notes :
 | Stabilité de la zone chrono | ☐ OK ☐ KO | |
 | Paliers exclus de la progression | ☐ OK ☐ KO | |
 | Export v2 avec rôles `warmup` | ☐ OK ☐ KO | |
+| Quatre écrans atteignables hors séance | ☐ OK ☐ KO | |
+| Navigation masquée pendant la séance | ☐ OK ☐ KO | |
+| Safe areas et usage à une main | ☐ OK ☐ KO | |
+| Actions atteignables dans l’onglet Safari | ☐ OK ☐ KO | |
+| Champs visibles avec le clavier ouvert | ☐ OK ☐ KO | |
+| Mouvement réduit respecté | ☐ OK ☐ KO | |
 
 Tout KO lié à une perte de données, une double progression ou une séance impossible à finaliser bloque la recette de production.
