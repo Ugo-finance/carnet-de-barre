@@ -72,6 +72,51 @@ async function markRemainingSetsSkipped(page: Page): Promise<void> {
 
 test.use({ viewport: { width: 393, height: 759 } })
 
+test('les quatre pages de réglages tiennent au-dessus de la navigation', async ({ page }) => {
+  await page.goto('/')
+  const navigation = page.getByRole('navigation', { name: 'Navigation principale' })
+  await navigation.getByRole('button', { name: 'Réglages' }).click()
+
+  const toHardware = page.getByRole('button', { name: 'Suivant : Matériel' })
+  await expectPageToFit(page, toHardware)
+  await toHardware.click()
+
+  const toExport = page.getByRole('button', { name: 'Suivant : Export' })
+  await expectPageToFit(page, toExport)
+  await toExport.click()
+
+  const toImport = page.getByRole('button', { name: 'Suivant : Import' })
+  await expectPageToFit(page, toImport)
+  await toImport.click()
+
+  await expectPageToFit(page, page.getByRole('button', { name: 'Vérifier ce contenu' }))
+  await expect(navigation).toBeInViewport()
+})
+
+test('la navigation reste visible au bas des écrans de consultation', async ({ page }) => {
+  await page.goto('/')
+  const navigation = page.getByRole('navigation', { name: 'Navigation principale' })
+
+  for (const tab of ['Historique', 'Progression']) {
+    await navigation.getByRole('button', { name: tab }).click()
+    await expect(page.getByRole('heading', { name: tab })).toBeVisible()
+    await expect(navigation).toBeInViewport()
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+    await expect(navigation).toBeInViewport()
+    await expect(page.getByRole('heading', { name: tab })).toBeInViewport()
+  }
+
+  await page.getByRole('button', { name: 'Ajuster' }).first().click()
+  const adjustment = page.getByRole('dialog', { name: 'Ajuster Squat' })
+  const input = adjustment.getByLabel('Nouvelle cible Squat')
+  await input.fill('750')
+  await adjustment.getByRole('button', { name: 'Poser la cible' }).click()
+  const refusal = adjustment.getByRole('alert')
+  await expect(refusal).toContainText('500 kg')
+  await expect(refusal).toBeInViewport()
+  await expect(input).toHaveValue('750')
+})
+
 test('les cibles des trois séances tiennent chacune dans leur page', async ({ page }) => {
   await page.clock.setFixedTime(SUNDAY)
   await page.goto('/')

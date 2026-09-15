@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { FinalizeResult } from '../../db/contracts'
-import { PREFERENCES_PAR_DEFAUT } from '../../domain/preferences'
+import { PREFERENCES_PAR_DEFAUT, type Preferences } from '../../domain/preferences'
 import type { Draft, Seance, SeanceType, SetLog, Targets } from '../../domain/types'
 import { SessionHome, type SessionStore } from './SessionHome'
 
@@ -68,13 +68,15 @@ function saved(type: SeanceType, date: string): Seance {
   return { id: `saved-${type}`, type, date, lines: [], tops: {}, notes: '' }
 }
 
-function fakeStore(options: { initial?: Draft; seances?: Seance[] } = {}) {
+function fakeStore(
+  options: { initial?: Draft; seances?: Seance[]; preferences?: Preferences } = {},
+) {
   let active = options.initial
   const store: SessionStore = {
     ready: vi.fn().mockResolvedValue(undefined),
     listSeances: vi.fn().mockResolvedValue(options.seances ?? []),
     getTargets: vi.fn().mockResolvedValue(TARGETS),
-    getPreferences: vi.fn().mockResolvedValue(PREFERENCES_PAR_DEFAUT),
+    getPreferences: vi.fn().mockResolvedValue(options.preferences ?? PREFERENCES_PAR_DEFAUT),
     loadDraft: vi.fn(async () => active),
     startSession: vi.fn(async (type: SeanceType, date: string, startOptions = {}) => {
       active ??= {
@@ -230,6 +232,21 @@ describe('SessionHome', () => {
     await resumeSession()
     expect(await screen.findByText('Récup Soulevé de terre')).toBeInTheDocument()
     expect(screen.getByRole('timer')).toBeInTheDocument()
+  })
+
+  it('applique au chrono les préférences de son et de vibration', async () => {
+    const initial = draftFor('C', '2026-09-20')
+    initial.sets = [deadliftTop()]
+    initial.timerEndsAt = Date.now() + 150_000
+    initial.timerLabel = 'Récup Soulevé de terre'
+    const store = fakeStore({
+      initial,
+      preferences: { ...PREFERENCES_PAR_DEFAUT, sonChrono: false, vibration: false },
+    })
+    render(<SessionHome store={store} now={SUNDAY} />)
+
+    await resumeSession()
+    expect(await screen.findByText('Son et vibration coupés dans Réglages.')).toBeVisible()
   })
 
   it('ne lance aucun chrono après un palier d’échauffement', async () => {

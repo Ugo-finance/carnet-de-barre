@@ -1,32 +1,20 @@
 /**
  * Navigation de l'app — CB-24.
  *
- * Trois écrans, et c'est tout ce qu'il en faut. La séance est l'écran par défaut
- * parce que c'est le seul qu'Ugo ouvre les mains sur une barre ; les deux autres se
- * consultent posément, une fois de temps en temps.
- *
- * La navigation vit en haut et **défile avec la page** au lieu d'être fixée : une
- * barre fixe mangerait de la hauteur sur chaque série, et la série est ce qu'il
- * regarde. Elle reste à un pouce de distance en remontant.
+ * La séance est l'écran par défaut. Hors brouillon actif, une barre basse fixe garde
+ * les quatre destinations accessibles même au bas des listes de consultation. Elle
+ * disparaît pendant tout le parcours de séance, récapitulatif compris.
  */
 
 import { useCallback, useEffect, useState } from 'react'
 import { store } from './db/store'
+import { BottomNav, type AppTab } from './components/BottomNav'
 import { SessionHome } from './features/session/SessionHome'
-import { ExportPanel } from './features/export/ExportPanel'
+import { SettingsPanel } from './features/export/SettingsPanel'
 import { ProgressionPanel } from './features/history/ProgressionPanel'
 import { HistoryPanel } from './features/history/HistoryPanel'
 import { UpdatePrompt } from './pwa/UpdatePrompt'
 import type { Draft, Seance, Targets } from './domain/types'
-
-type Onglet = 'seance' | 'historique' | 'progression' | 'export'
-
-const ONGLETS: { id: Onglet; label: string }[] = [
-  { id: 'seance', label: 'Séance' },
-  { id: 'historique', label: 'Historique' },
-  { id: 'progression', label: 'Progression' },
-  { id: 'export', label: 'Export' },
-]
 
 /**
  * La progression est chargée à la demande, pas au démarrage.
@@ -134,12 +122,12 @@ function HistoriqueTab() {
 }
 
 export default function App() {
-  const [onglet, setOnglet] = useState<Onglet>('seance')
+  const [onglet, setOnglet] = useState<AppTab>('session')
   const [generationSeance, setGenerationSeance] = useState(0)
   const [sessionActive, setSessionActive] = useState(false)
   const handleSessionActiveChange = useCallback((active: boolean) => {
     setSessionActive(active)
-    if (active) setOnglet('seance')
+    if (active) setOnglet('session')
   }, [])
 
   return (
@@ -163,35 +151,12 @@ export default function App() {
      */
     <div className={sessionActive ? 'h-dvh overflow-y-auto' : 'min-h-dvh'}>
       {sessionActive ? null : (
-        <>
-          <nav
-            className="mx-auto flex w-full max-w-md gap-1 px-3 pt-[max(0.5rem,env(safe-area-inset-top))]"
-            aria-label="Sections"
-          >
-            {ONGLETS.map(({ id, label }) => (
-              <button
-                key={id}
-                type="button"
-                aria-current={onglet === id ? 'page' : undefined}
-                className={`min-h-11 flex-1 rounded-xl px-3 text-sm font-semibold ${
-                  onglet === id
-                    ? 'bg-accent text-bg'
-                    : 'border border-line text-muted hover:text-fg focus:text-fg'
-                }`}
-                onClick={() => setOnglet(id)}
-              >
-                {label}
-              </button>
-            ))}
-          </nav>
-
-          <div className="px-3">
-            <UpdatePrompt store={store} />
-          </div>
-        </>
+        <div className="px-3">
+          <UpdatePrompt store={store} />
+        </div>
       )}
 
-      <div className="px-3">
+      <div className={sessionActive ? 'px-3' : 'px-3 pb-20'}>
         {/*
           La séance reste **montée** quand on la quitte, seulement masquée. Elle porte
           la saisie en cours ; la démonter en plein entraînement pour aller regarder une
@@ -199,12 +164,15 @@ export default function App() {
           pari serait presque toujours gagné, et le jour où il ne l'est pas c'est une
           série perdue au milieu d'une séance.
         */}
-        <div hidden={onglet !== 'seance'}>
+        <div hidden={onglet !== 'session'}>
           <SessionHome
             key={generationSeance}
             store={store}
             onSessionActiveChange={handleSessionActiveChange}
-            onViewHistory={() => setOnglet('historique')}
+            onViewHistory={() => {
+              setSessionActive(false)
+              setOnglet('history')
+            }}
           />
         </div>
         {/*
@@ -212,12 +180,18 @@ export default function App() {
           données changent quand une séance se termine. Réafficher l'état d'avant
           montrerait des cibles périmées juste après le récapitulatif qui les annonce.
         */}
-        {onglet === 'historique' ? <HistoriqueTab /> : null}
-        {onglet === 'progression' ? (
+        {onglet === 'history' ? <HistoriqueTab /> : null}
+        {onglet === 'progress' ? (
           <ProgressionTab onAdjusted={() => setGenerationSeance((n) => n + 1)} />
         ) : null}
-        {onglet === 'export' ? <ExportPanel store={store} /> : null}
+        {onglet === 'settings' ? (
+          <SettingsPanel
+            store={store}
+            onPreferencesChange={() => setGenerationSeance((n) => n + 1)}
+          />
+        ) : null}
       </div>
+      {sessionActive ? null : <BottomNav active={onglet} onSelect={setOnglet} />}
     </div>
   )
 }

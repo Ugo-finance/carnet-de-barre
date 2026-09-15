@@ -101,10 +101,31 @@ async function copiedExport(
     sets?: { id: string; role: string; status: string }[]
   }[]
 }> {
-  await page.getByRole('button', { name: 'Export' }).click()
+  await openSettingsPage(page, 'export')
   await page.getByRole('button', { name: 'Copier mes séances' }).click()
   await expect(page.getByText(new RegExp(`${expectedCount} séances copiées`))).toBeVisible()
   return JSON.parse(await page.evaluate(() => navigator.clipboard.readText()))
+}
+
+async function openSettingsPage(page: Page, target: 'export' | 'import'): Promise<void> {
+  const summary = page.getByRole('heading', { name: /Séance [ABC] terminée/ })
+  if (await summary.isVisible().catch(() => false)) {
+    await advanceSummaryTo(page, 'Prochaine séance · A')
+    await page.getByRole('button', { name: 'Retour à l’accueil' }).click()
+  }
+
+  const navigation = page.getByRole('navigation', { name: 'Navigation principale' })
+  await expect(navigation).toBeVisible()
+  const settings = navigation.getByRole('button', { name: 'Réglages' })
+  if ((await settings.getAttribute('aria-current')) === 'page') {
+    await navigation.getByRole('button', { name: 'Séance' }).click()
+  }
+  await navigation.getByRole('button', { name: 'Réglages' }).click()
+  await page.getByRole('button', { name: 'Suivant : Matériel' }).click()
+  await page.getByRole('button', { name: 'Suivant : Export' }).click()
+  if (target === 'import') {
+    await page.getByRole('button', { name: 'Suivant : Import' }).click()
+  }
 }
 
 async function validateDeadliftTop(page: Page): Promise<void> {
@@ -189,7 +210,7 @@ test('parcours réel, reprise et double finalisation', async ({ page }) => {
   await page.getByRole('button', { name: 'Voir dans l’historique' }).click()
   await expect(page.getByText(/^13 séances enregistrées, sur \d+ semaines\.$/)).toBeVisible()
 
-  await page.getByRole('button', { name: 'Export' }).click()
+  await openSettingsPage(page, 'export')
   await page.getByRole('button', { name: 'Copier mes séances' }).click()
   await expect(page.getByText(/13 séances copiées/)).toBeVisible()
   const exported = JSON.parse(await page.evaluate(() => navigator.clipboard.readText())) as {
@@ -286,7 +307,7 @@ test('importe le format historique puis le réexporte en version 2', async ({ pa
   const seed = await readFile(new URL('../../src/domain/seed.json', import.meta.url), 'utf8')
   expect(await storedDraft(page)).toBeNull()
 
-  await page.getByRole('button', { name: 'Export' }).click()
+  await openSettingsPage(page, 'import')
   await page.getByRole('textbox', { name: 'Contenu de l’export' }).fill(seed)
   await page.getByRole('button', { name: 'Vérifier ce contenu' }).click()
   await expect(page.getByRole('button', { name: 'Remplacer définitivement' })).toBeVisible()
@@ -325,7 +346,7 @@ test('ouverture, saisie et finalisation restent disponibles hors ligne', async (
 
   await validateDeadliftTop(page)
   await finishTwice(page)
-  await page.getByRole('button', { name: 'Export' }).click()
+  await openSettingsPage(page, 'export')
   await page.getByRole('button', { name: 'Copier mes séances' }).click()
   await expect(page.getByText(/13 séances copiées/)).toBeVisible()
 })
