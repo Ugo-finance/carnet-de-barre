@@ -95,6 +95,20 @@ describe('records — CB-13', () => {
     ).toBeInTheDocument()
   })
 
+  it('ne demande pas un RPE sur un exercice qui n’a aucun top set', async () => {
+    // Le développé couché volume est en `barTotal` comme le squat, mais en
+    // `kind: 'volume'` : il n'entre jamais dans `LIFTS_A_TOP_SET`. Discriminer sur la
+    // nature de la charge lui envoyait « note un RPE sur un top set », consigne
+    // qu'aucun RPE n'aurait satisfaite. Dire à Ugo de faire une chose qui ne marchera
+    // jamais est pire qu'un tiret.
+    const store = await magasinPret()
+    await monter(store)
+
+    const volume = carte('Développé couché volume')
+    expect(within(volume).getByText('Pas de top set sur cet exercice.')).toBeInTheDocument()
+    expect(within(volume).queryByText('Note un RPE sur un top set.')).not.toBeInTheDocument()
+  })
+
   it('demande un RPE quand le maximum est calculable mais qu’aucun top set n’en porte', async () => {
     const store = await magasinPret()
     const sansRpe = (await store.listSeances()).map((seance) => ({

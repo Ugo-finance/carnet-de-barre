@@ -10,7 +10,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { batLeRecord, e1rm, recordCharge, recordE1RM, type TopPasse } from './e1rm.ts'
+import { aUnTopSet, batLeRecord, e1rm, recordCharge, recordE1RM, type TopPasse } from './e1rm.ts'
 
 function top(over: Partial<TopPasse> = {}): TopPasse {
   return {
@@ -187,5 +187,31 @@ describe('battre un record', () => {
       },
     ]
     expect(batLeRecord(sansRepere, top())).toEqual({ charge: true, e1rm: false })
+  })
+})
+
+describe('aUnTopSet', () => {
+  it('reconnaît les lifts qui portent un top set dans le programme', () => {
+    expect(aUnTopSet('squat')).toBe(true)
+    expect(aUnTopSet('bench')).toBe(true)
+    expect(aUnTopSet('deadlift')).toBe(true)
+    expect(aUnTopSet('tractions')).toBe(true)
+  })
+
+  it('refuse le développé volume, qui n’en porte aucun', () => {
+    // `kind: 'volume'`, et non `'topset'`. C'est ce qui distingue « aucun top set ici »
+    // — définitif — de « aucun top set noté au RPE », qui se corrige. Les confondre
+    // fait dire à un écran de noter un RPE que rien ne lira jamais.
+    expect(aUnTopSet('benchVol')).toBe(false)
+  })
+
+  it('s’accorde avec ce que la formule accepte de calculer', () => {
+    // Le prédicat et la formule doivent lire la même table : si `e1rm` calculait pour
+    // un lift que `aUnTopSet` refuse, un écran afficherait « pas de top set » sous une
+    // valeur bien réelle.
+    const parfait = { weight: 100, reps: 3, rpe: 8, loadKind: 'barTotal' as const }
+    for (const lift of ['squat', 'bench', 'deadlift', 'benchVol'] as const) {
+      expect(e1rm({ ...parfait, lift }) !== null).toBe(aUnTopSet(lift))
+    }
   })
 })
