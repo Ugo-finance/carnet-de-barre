@@ -192,11 +192,11 @@ export function SessionFocus({
 
   return (
     <main
-      className="mx-auto flex min-h-dvh w-full max-w-md flex-col gap-3 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
+      className="mx-auto flex min-h-dvh w-full max-w-md flex-col gap-1.5 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
       onTouchStart={rememberTouch}
       onTouchEnd={followSwipe}
     >
-      <header className="rounded-2xl border border-line bg-surface p-3">
+      <header className="rounded-2xl border border-line bg-surface p-2">
         <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3">
           <p className="num text-sm font-bold text-fg">
             Série {position}/{queue.length}
