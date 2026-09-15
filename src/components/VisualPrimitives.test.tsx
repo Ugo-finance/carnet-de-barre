@@ -12,12 +12,14 @@ describe('barre dessinée', () => {
     expect(
       screen.getByRole('img', { name: '92,5 kg — Par côté : 25 + 10 + 1,25' }),
     ).toBeInTheDocument()
+    expect(screen.getByTestId('barbell-description')).toHaveTextContent('Par côté : 25 + 10 + 1,25')
     expect(container.querySelectorAll('[style*="--plate-color"]')).toHaveLength(3)
   })
 
   it('annonce explicitement une barre seule', () => {
     render(<BarbellLoad total={20} />)
     expect(screen.getByRole('img', { name: '20 kg — Barre seule' })).toBeInTheDocument()
+    expect(screen.getByTestId('barbell-description')).toHaveTextContent('Barre seule')
   })
 })
 

@@ -62,7 +62,7 @@ export function FocusSetCard({
 }: FocusSetCardProps) {
   return (
     <article
-      className="motion-enter rounded-2xl border border-[#4a4131] bg-surface p-4"
+      className="motion-enter rounded-2xl border border-[#4a4131] bg-surface p-3"
       aria-label={`${exercise} · ${seriesLabel}`}
       aria-busy={busy}
     >
@@ -84,17 +84,19 @@ export function FocusSetCard({
         ) : null}
       </div>
 
-      <h2 className="mt-3 text-xl font-bold">{exercise}</h2>
+      <h2 className="mt-2 text-xl font-bold">{exercise}</h2>
       <p className="num mt-0.5 text-xs text-muted">{seriesLabel}</p>
 
-      <p className="mt-5 flex items-baseline gap-2">
-        <span className="num text-[3.375rem] font-bold leading-none tracking-tight">{load}</span>
+      <p className="mt-2 flex items-baseline gap-2">
+        <span className="num text-[3.125rem] font-bold leading-none tracking-tight">{load}</span>
         {unit ? <span className="num text-sm text-muted">{unit}</span> : null}
       </p>
-      {loadDetail ? <p className="num mt-1 min-h-5 text-xs text-muted">{loadDetail}</p> : null}
-      {barbellTotal !== undefined ? <BarbellLoad total={barbellTotal} className="mt-2" /> : null}
+      {loadDetail ? (
+        <p className="num mt-1 min-h-4 text-xs leading-4 text-muted">{loadDetail}</p>
+      ) : null}
+      {barbellTotal !== undefined ? <BarbellLoad total={barbellTotal} className="mt-1" /> : null}
 
-      {children ? <div className="mt-4">{children}</div> : null}
+      {children ? <div className="mt-3">{children}</div> : null}
 
       {errorMessage ? (
         <p
@@ -108,7 +110,7 @@ export function FocusSetCard({
       {onSkip ? (
         <Button
           variant="ghost"
-          className="mt-4 w-full border-dashed text-muted"
+          className="mt-3 w-full border-dashed text-muted"
           disabled={busy}
           onClick={onSkip}
         >
@@ -118,7 +120,7 @@ export function FocusSetCard({
       {onPrimary ? (
         <Button
           variant="secondary"
-          className="mt-3 w-full bg-fg text-bg"
+          className="mt-2 w-full bg-fg text-bg"
           disabled={busy}
           onClick={onPrimary}
         >
