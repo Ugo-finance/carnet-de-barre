@@ -143,7 +143,25 @@ export default function App() {
   }, [])
 
   return (
-    <div className={sessionActive ? 'h-dvh overflow-hidden' : 'min-h-dvh'}>
+    /*
+     * Pendant une séance, l'enveloppe tient la hauteur de la vue — c'est ce qui fait
+     * que l'écran ne défile pas, conformément à l'arbitrage § 1.7 du contrat.
+     *
+     * Elle la tient avec `overflow-y-auto`, et non `overflow-hidden`. La nuance est
+     * celle qui a coûté une séance à Ugo le 15.09 : `hidden` n'empêche pas le contenu
+     * de dépasser, il empêche de le voir. Sur son iPhone 15 Pro dans un onglet Safari —
+     * 393 × 659, et non les 759 px de la PWA installée — la carte de série mesurait
+     * 734 px : « Valider » occupait y = 655 à 701, hors de la vue, et
+     * `window.scrollTo(0, 9999)` ne bougeait rien. Le bouton principal de l'app était
+     * inatteignable, sans aucun signe qu'il existait.
+     *
+     * `auto` ne rend pas la barre de défilement quand tout tient : la règle « aucun
+     * écran ne scrolle » reste tenue dans le cas nominal. Elle cesse seulement d'être
+     * tenue par la disparition de ce qui dépasse. Un écran trop court, un texte iOS
+     * agrandi ou un exercice plus bavard rendent le contenu accessible au lieu de le
+     * faire disparaître.
+     */
+    <div className={sessionActive ? 'h-dvh overflow-y-auto' : 'min-h-dvh'}>
       {sessionActive ? null : (
         <>
           <nav
