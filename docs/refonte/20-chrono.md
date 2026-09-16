@@ -12,7 +12,7 @@ Mesuré sur la production, iPhone 15 Pro dans un onglet Safari — 393 × 659 :
 | Élément | Hauteur | Taille du chiffre |
 | --- | --- | --- |
 | Barre de chrono | 46 px | **20 px** |
-| Charge de la série | — | 54 px |
+| Charge de la série | — | 50 px |
 | Espace libre sous la carte | **127 px** | — |
 
 L'app affiche donc en 54 px **ce qu'Ugo vient de soulever**, et en 20 px **ce qu'il est en train
@@ -46,11 +46,43 @@ Quand un chrono est actif, la vue de séance bascule en **mode récup** :
 
 À la fin du décompte, l'écran revient de lui-même à la saisie. Un tap y ramène avant la fin.
 
+### Quand il s'ouvre, et quand il ne s'ouvre pas
+
+« Quand un chrono est actif » ne suffit pas : un chrono de travail court encore pendant le palier
+suivant, et cette formulation rouvrirait l'écran après chaque saisie, chaque ±30 s et chaque sortie.
+P2-1 de Codex, fondé. La règle est donc un **événement**, pas un état.
+
+| Geste | Mode récup |
+| --- | --- |
+| Validation d'une série de travail **effectivement écrite**, qui crée une nouvelle récupération | **s'ouvre** |
+| Validation d'un palier d'échauffement | ne s'ouvre pas, même si un chrono tourne |
+| Saisie d'un poids, de répétitions ou d'un RPE | ne s'ouvre pas |
+| ±30 s, ou arrêt du chrono | ne s'ouvre pas ; l'arrêt le **ferme** |
+| Tap de sortie | se ferme, **sans arrêter l'échéance** |
+| Geste explicite de retour au chrono | se rouvre |
+| Rechargement pendant une récupération | voir ci-dessous |
+
+**Fermer la vue n'arrête pas le chrono.** Ce sont deux choses distinctes, et les confondre ferait
+perdre une récupération à chaque fois qu'Ugo veut corriger une valeur.
+
+**Au rechargement**, l'échéance persistée est relue comme aujourd'hui. Le mode récup **ne se rouvre
+pas tout seul** : rien ne dit qu'Ugo rouvre l'app pour regarder le temps plutôt que pour corriger
+une série. Il retrouve la saisie, la barre de chrono compacte, et le geste explicite pour revenir
+au plein écran.
+
+### Un seul propriétaire du signal d'expiration
+
+La carte reste montée sous le mode récup. Deux `useRecoveryTimer` sur la même échéance donneraient
+**deux alarmes**. Le signal appartient à un seul appelant, et le mode récup lit un temps restant
+qu'on lui passe — il ne s'abonne pas une seconde fois. À prouver par un test qui compte les
+notifications, pas par une relecture.
+
+Les commandes du mode récup ne doivent pas déclencher le tap de sortie par propagation.
+
 ### Ce que le mode récup ne fait pas
 
-- **Il ne bloque rien.** Corriger la série qu'on vient de valider doit rester possible pendant la
-  récup ; c'est même le moment naturel pour le faire.
-- **Il ne se déclenche jamais sur un palier d'échauffement.** Voir § 5.
+- **Il ne bloque rien.** Corriger la série qu'on vient de valider doit rester possible ; c'est même
+  le moment naturel pour le faire.
 - **Il ne remplace pas la carte** : il la recouvre, et la carte reprend sa place intacte.
 
 ## 4. La question de l'écran verrouillé
@@ -78,15 +110,24 @@ Il reste **un seul chemin**, et il a deux conditions :
    que dans ce mode, depuis iOS 16.4 ;
 2. un **serveur** doit connaître l'échéance et envoyer la notification au bon moment.
 
-Ce serveur est exactement celui dont la sauvegarde automatique a besoin. **CB-75 débloque donc
-cette option**, et il n'y a aucune raison de la construire deux fois. Tant que CB-75 n'est pas
-livrée, le mode récup doit continuer à ne rien promettre qu'il ne tienne : le texte actuel, « pas
-d'alarme garantie écran verrouillé », reste vrai et reste affiché.
+**Ce chemin n'est pas débloqué par CB-75**, et une première version de ce plan le disait à tort —
+P2-2 de Codex, fondé. La sauvegarde n'envoie rien à chaque série : son serveur ne connaît **aucune**
+échéance de repos. Ce qui se réutilise est l'hébergement et l'authentification, pas le protocole.
 
-**À vérifier sur l'appareil d'Ugo avant toute promesse** : il ouvre l'app dans un onglet Safari et
-non depuis l'écran d'accueil — c'est ce que révèle la hauteur de 659 px. Aucune notification web ne
-lui parviendra tant qu'il ne l'aura pas installée. Voir aussi CB-75 § 1, où ce même détail a une
-conséquence bien plus grave.
+L'alarme d'écran verrouillé est donc un **ticket séparé**, et son périmètre propre est plus large
+qu'il n'en a l'air : permission obtenue par un geste explicite, abonnement, envoi de chaque nouvelle
+échéance, envoi des modifications et des arrêts, déduplication, refus d'une notification devenue
+périmée, et réception tardive ou hors ligne. Une notification ponctuelle n'est pas un décompte qui
+défile : iOS ne donne pas aux applications web l'équivalent d'une *Live Activity*.
+
+**Le texte de limitation reste affiché** tant que cette fonctionnalité séparée n'est pas livrée
+**et vérifiée sur l'appareil d'Ugo**. Et même livrée, il ne faudra jamais promettre une heure de
+réception garantie : une notification poussée arrive quand le système veut bien la remettre.
+
+**Avant toute promesse, un fait à vérifier** : Ugo ouvre l'app dans un onglet Safari et non depuis
+l'écran d'accueil — c'est ce que révèle la hauteur de 659 px. Aucune notification web ne lui
+parviendra tant qu'il ne l'aura pas installée, et **installer n'est pas un geste anodin** : voir
+CB-75 § 1, où le même détail a une conséquence bien plus grave.
 
 ## 5. Ce qui ne doit pas casser
 
@@ -104,7 +145,8 @@ mode plein écran qui déborderait doit rester **défilable**, jamais coupé.
 
 ## 6. Acceptation
 
-Chaque mesure doit **échouer avant** le correctif. Un test écrit après coup sur un écran neuf passe
+Chaque mesure doit **échouer avant** le correctif, et les transitions se testent **depuis l'app
+assemblée**, pas sur le composant isolé : c'est le montage qui porte le cycle de vie. Un test écrit après coup sur un écran neuf passe
 au vert sans avoir exercé son sujet — c'est le motif des 25 tests morts de CB-64.
 
 - [ ] À 393 × 659, quand un chrono est actif, le chiffre du temps restant mesure **au moins 72 px**
@@ -114,10 +156,17 @@ au vert sans avoir exercé son sujet — c'est le motif des 25 tests morts de CB
 - [ ] Valider un palier d'échauffement n'ouvre **pas** le mode récup.
 - [ ] Les commandes du mode récup sont entièrement dans la vue à 393 × 659.
 - [ ] La fin du décompte ramène à la saisie sans perdre la valeur en cours de frappe.
-- [ ] Un tap pendant la récup ramène à la saisie, et le chrono continue de tourner.
+- [ ] Un tap pendant la récup ramène à la saisie, et **le chrono continue de tourner**. Mutation :
+      arrêter l'échéance à la fermeture doit rougir.
+- [ ] Saisir un poids, toucher ±30 s ou valider un palier **ne rouvre pas** le mode récup.
+- [ ] Un rechargement pendant une récupération rend la saisie, pas le plein écran, et le temps
+      restant reste juste.
+- [ ] L'expiration ne déclenche **qu'une** alarme, carte montée sous le mode récup comprise.
+      Mutation : abonner le mode récup à son propre `useRecoveryTimer` doit rougir sur le compte.
+- [ ] Les commandes du mode récup ne déclenchent pas la sortie par propagation.
 - [ ] Avec **Réduire les animations**, la bascule est immédiate.
-- [ ] Le texte sur l'absence d'alarme écran verrouillé reste présent tant que CB-75 n'est pas
-      livrée.
+- [ ] Le texte sur l'absence d'alarme écran verrouillé reste présent tant que le ticket push n'est
+      pas livré **et vérifié sur l'appareil**.
 
 ## 7. Reste ouvert
 
