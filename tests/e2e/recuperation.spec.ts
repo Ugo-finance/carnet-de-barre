@@ -2,6 +2,42 @@ import { expect, test } from '@playwright/test'
 
 test.use({ viewport: { width: 393, height: 659 }, reducedMotion: 'reduce' })
 
+test('la dernière série de A passe à la clôture sans récupération', async ({ page }) => {
+  await page.clock.setFixedTime('2026-09-15T17:00:00.000Z')
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Séance A', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Voir les cibles de la séance A' }).click()
+  await page.getByRole('button', { name: 'C’est parti' }).click()
+  const recovery = page.getByRole('dialog', { name: 'Récupération' })
+  let openings = 0
+  for (let index = 0; index < 23; index++) {
+    const card = page.getByRole('article')
+    await expect(card).toHaveCount(1)
+    const label = await card.getAttribute('aria-label')
+    const last = index === 22
+    if (last) expect(label).toBe('Élévations latérales · série 2/2')
+    await card.getByRole('button', { name: 'Valider', exact: true }).click()
+    await expect(page.getByRole('article', { name: label!, exact: true })).toHaveCount(0)
+    if (last) {
+      await expect(
+        page.getByRole('heading', { name: 'Toutes les séries sont traitées' }),
+      ).toBeVisible()
+      await expect(recovery).toHaveCount(0)
+      await expect(
+        page.getByRole('button', { name: 'Terminer la séance', exact: true }),
+      ).toBeVisible()
+    } else if (!label!.includes('palier')) {
+      await expect(recovery).toBeVisible()
+      openings += 1
+      await recovery.getByRole('button', { name: 'Revenir à la saisie' }).click()
+      await expect(recovery).toHaveCount(0)
+    } else {
+      await expect(recovery).toHaveCount(0)
+    }
+  }
+  expect(openings).toBe(15)
+})
+
 test('la récupération reste lisible, joignable et distincte du chrono persisté', async ({
   page,
 }) => {
