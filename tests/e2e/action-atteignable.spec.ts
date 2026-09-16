@@ -26,6 +26,10 @@ import { expect, test, type Locator, type Page } from '@playwright/test'
 const SAFARI = { width: 393, height: 659 }
 test.use({ viewport: SAFARI })
 
+test.beforeEach(async ({ page }) => {
+  await page.clock.setFixedTime('2026-09-15T17:00:00.000Z')
+})
+
 /**
  * Entièrement dans la vue, et non « visible » au sens de Playwright.
  *
@@ -99,7 +103,8 @@ async function actionCourante(page: Page): Promise<{ cible: Locator; nom: string
 
 test('chaque série de la séance garde son action sous le pouce', async ({ page }) => {
   await page.goto('/')
-  await page.getByRole('button', { name: /Voir les cibles/ }).click()
+  await expect(page.getByRole('heading', { name: 'Séance A', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Voir les cibles de la séance A', exact: true }).click()
   await page.getByRole('button', { name: 'C’est parti' }).click()
   await page.getByRole('article').first().waitFor()
 
@@ -140,7 +145,8 @@ test('chaque série de la séance garde son action sous le pouce', async ({ page
 
 test('rien ne dépasse en silence pendant la séance', async ({ page }) => {
   await page.goto('/')
-  await page.getByRole('button', { name: /Voir les cibles/ }).click()
+  await expect(page.getByRole('heading', { name: 'Séance A', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Voir les cibles de la séance A', exact: true }).click()
   await page.getByRole('button', { name: 'C’est parti' }).click()
   await page.getByRole('article').first().waitFor()
 
