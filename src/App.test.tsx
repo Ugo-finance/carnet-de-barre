@@ -11,7 +11,7 @@
  */
 
 import 'fake-indexeddb/auto'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { store } from './db/store'
@@ -330,6 +330,10 @@ describe('navigation depuis le point d’entrée réel', () => {
 
   it('refuse d’ouvrir la récup avant une écriture réussie, puis permet la reprise sans réouverture automatique', async () => {
     await prepareRecovery()
+    // IndexedDB garde ses tâches réelles ; seules l’horloge et les boucles du chrono
+    // sont pilotées, pour que l’expiration ne dépende pas du rythme du serveur CI.
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] })
+    vi.setSystemTime(MARDI)
     const view = render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'Reprendre la séance' }))
     const save = vi.spyOn(store, 'saveDraft').mockRejectedValueOnce(new Error('panne écriture'))
@@ -358,10 +362,12 @@ describe('navigation depuis le point d’entrée réel', () => {
     Object.defineProperty(navigator, 'vibrate', { value: vibrate, configurable: true })
     try {
       fireEvent.click(screen.getByRole('button', { name: 'Agrandir le chrono' }))
-      vi.setSystemTime(new Date(Number(deadline)))
-      await waitFor(() =>
-        expect(screen.queryByRole('dialog', { name: 'Récupération' })).not.toBeInTheDocument(),
-      )
+      expect(screen.getByRole('dialog', { name: 'Récupération' })).toBeInTheDocument()
+      act(() => {
+        vi.setSystemTime(new Date(Number(deadline) - 250))
+        vi.advanceTimersByTime(250)
+      })
+      expect(screen.queryByRole('dialog', { name: 'Récupération' })).not.toBeInTheDocument()
       expect(input).toHaveValue('7')
       expect(vibrate).toHaveBeenCalledTimes(1)
     } finally {
