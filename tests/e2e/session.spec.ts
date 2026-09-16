@@ -143,6 +143,8 @@ async function validateDeadliftTop(page: Page): Promise<void> {
   await top.getByRole('button', { name: 'Valider' }).click()
   await expect(top).toHaveCount(0)
   await expect(page.getByRole('timer')).toBeVisible()
+  const retourRecup = page.getByRole('button', { name: 'Revenir à la saisie' })
+  if (await retourRecup.isVisible()) await retourRecup.click()
   await expect
     .poll(async () => (await storedDraft(page))?.sets.find((set) => set.role === 'top')?.status)
     .toBe('validated')
@@ -193,6 +195,8 @@ test('parcours réel, reprise et double finalisation', async ({ page }) => {
   await page.getByRole('button', { name: 'Actions' }).click()
   await expect(page.getByRole('button', { name: 'Retour à la série courante' })).toBeVisible()
   await expect(page.getByRole('timer')).toBeVisible()
+  const retourRecup = page.getByRole('button', { name: 'Revenir à la saisie' })
+  if (await retourRecup.isVisible()) await retourRecup.click()
   await page.getByRole('button', { name: 'Retour à la série courante' }).click()
 
   await finishTwice(page)

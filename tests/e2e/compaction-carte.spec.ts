@@ -63,6 +63,8 @@ test('les 24 étapes de la séance A tiennent sans défiler dans Safari', async 
     if (etiquette === 'écran de clôture') break
     await action!.click()
     await page.waitForTimeout(80)
+    const retour = page.getByRole('button', { name: 'Revenir à la saisie' })
+    if (await retour.isVisible()) await retour.click()
   }
 
   expect(etapes).toHaveLength(24)
