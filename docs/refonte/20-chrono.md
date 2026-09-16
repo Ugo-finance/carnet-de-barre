@@ -32,6 +32,15 @@ Réponse : **mode récup plein écran**.
 Le motif qu'il donne tient en une phrase, et c'est elle qui doit guider le dessin : pendant la
 récup, la charge est déjà soulevée.
 
+**Pas de mode récup après la dernière série.** Question posée le 16.09.2026 — récup ou passage
+direct à la clôture ? Réponse : **passage direct**. Il n'y a plus rien « ensuite », et l'écran de
+clôture a déjà sa place.
+
+Cette propriété tient aujourd'hui par construction, la vue exigeant une série suivante pour
+s'ouvrir. **Une propriété arbitrée se garde par un test**, pas par une condition qu'on espère
+stable : le jour où le calcul de la file change, la récup reviendrait sur la dernière série sans que
+rien ne proteste. Voir § 6.
+
 ## 3. Ce que l'écran montre
 
 Quand un chrono est actif, la vue de séance bascule en **mode récup** :
@@ -164,6 +173,8 @@ au vert sans avoir exercé son sujet — c'est le motif des 25 tests morts de CB
 - [ ] L'expiration ne déclenche **qu'une** alarme, carte montée sous le mode récup comprise.
       Mutation : abonner le mode récup à son propre `useRecoveryTimer` doit rougir sur le compte.
 - [ ] Les commandes du mode récup ne déclenchent pas la sortie par propagation.
+- [ ] La **dernière série** de la séance passe à la clôture **sans ouvrir** le mode récup. Mutation :
+      remplacer la condition de série suivante par `true` doit rougir.
 - [ ] Avec **Réduire les animations**, la bascule est immédiate.
 - [ ] Le texte sur l'absence d'alarme écran verrouillé reste présent tant que le ticket push n'est
       pas livré **et vérifié sur l'appareil**.
@@ -172,7 +183,5 @@ au vert sans avoir exercé son sujet — c'est le motif des 25 tests morts de CB
 
 - **La cible de 96 px est une intention, pas une mesure.** Elle se valide sur le téléphone d'Ugo, à
   bout de bras, pas dans un navigateur de bureau redimensionné.
-- **Faut-il garder le mode récup après la dernière série ?** Il n'y a plus rien « ensuite », et
-  l'écran de clôture a déjà sa place. Proposition : pas de mode récup sur la dernière série.
 - **Le mode pressé raccourcit-il les récups ?** Aujourd'hui non — il retire des exercices, pas du
   repos. Hors périmètre de ce lot, mais à ne pas confondre en l'implémentant.
