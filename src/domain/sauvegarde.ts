@@ -17,75 +17,123 @@
  *   qui interdit qu'« enregistré » et « partira » divergent ;
  * - **la révision distante** est celle du carnet tel qu'il est stocké en face.
  *
- * Les confondre est le piège central. Une génération acquittée dit *ce qui est parti*,
+ * Les confondre est le premier piège. Une génération acquittée dit *ce qui est parti*,
  * une révision distante dit *ce que le serveur porte* — et un appareil qui n'a jamais
  * rien envoyé peut très bien trouver une révision distante en avance.
+ *
+ * ## Deux états qu'une première version confondait
+ *
+ * Ils ont chacun coûté un P2 à la contre-revue de #71, et les deux produisaient une
+ * décision fausse **sans rien signaler** :
+ *
+ * 1. **« pas encore lu » n'est pas « rien en face ».** Un `null` unique laissait
+ *    `prochaineAction` répondre « envoyer » alors qu'aucune lecture distante n'avait eu
+ *    lieu. C'est précisément la première activation avec un carnet local, celle où une
+ *    sauvegarde existante doit être proposée avant tout envoi.
+ * 2. **une révision distante qu'on n'a pas acquittée n'est pas forcément celle d'un
+ *    autre appareil.** Elle peut être la nôtre, commitée par une opération dont la
+ *    réponse s'est perdue. La traiter en conflit ferait crier au danger là où il n'y a
+ *    qu'un réseau capricieux — et le vrai conflit, noyé dans les faux, cesserait d'être
+ *    pris au sérieux.
  */
 
-/** Ce que l'appareil sait de lui-même et de ce qu'il voit en face. */
+/**
+ * Ce qu'on sait du carnet distant.
+ *
+ * Trois états, et non deux : l'ignorance a sa propre valeur. Sans elle, ne pas savoir
+ * se confond avec savoir qu'il n'y a rien.
+ */
+export type LectureDistante =
+  /** Aucune lecture n'a encore eu lieu. On ne sait pas. */
+  | { etat: 'inconnue' }
+  /** Lecture réussie : il n'y a rien en face. */
+  | { etat: 'absente' }
+  /** Lecture réussie : voici la révision, et l'opération qui l'a posée. */
+  | { etat: 'lue'; revision: number; operation: string | null }
+
+/** L'envoi parti dont la réponse n'est pas revenue. */
+export interface EnvoiEnVol {
+  generation: number
+  operation: string
+}
+
+/** Ce que l'appareil sait de lui-même. */
 export interface EtatSauvegarde {
   /** Dernière génération écrite localement. Croît d'une mutation à l'autre. */
   generationLocale: number
   /**
    * Dernière génération dont l'envoi est **confirmé**. `0` quand rien n'est jamais
-   * parti — y compris sur une base seulement amorcée.
+   * parti. Invariant : jamais supérieure à `generationLocale`.
    */
   generationAcquittee: number
-  /**
-   * Révision du carnet distant à la dernière lecture, ou `null` si le distant est vide
-   * ou n'a pas encore été lu.
-   */
-  revisionDistante: number | null
   /**
    * Révision distante correspondant à `generationAcquittee`, ou `null` si rien n'est
    * jamais parti. Sert à distinguer « le distant a avancé à cause de nous » de « le
    * distant a avancé à cause de quelqu'un d'autre ».
    */
   revisionAcquittee: number | null
-}
-
-/**
- * Le carnet ne porte-t-il encore aucune saisie d'Ugo ?
- *
- * **Dérivé, et non stocké.** Une première version portait un drapeau
- * `seulementAmorcee` à côté des compteurs. Il ne servait à rien : `muter` l'effaçait,
- * donc « amorcée » impliquait toujours `generationLocale === 0`, et les deux gardes qui
- * l'invoquaient étaient inatteignables. Une mutation retirant l'un d'eux laissait les
- * seize tests verts — c'est ce qui l'a révélé.
- *
- * Un drapeau qui double une information déjà portée par un compteur est une seconde
- * source de vérité, et c'est toujours la copie qui dérive. La règle est donc posée ici,
- * une fois : **l'amorçage n'est pas une mutation**. Charger le dossier de départ
- * n'appelle pas `muter` et ne fait pas avancer la génération.
- */
-export function jamaisSaisi(etat: EtatSauvegarde): boolean {
-  return etat.generationLocale === 0
+  /**
+   * L'envoi dont on attend encore la réponse, ou `null`.
+   *
+   * C'est lui qui permet de reconnaître notre propre commit quand la réponse s'est
+   * perdue : au redémarrage, une révision distante portant **cette** opération est la
+   * nôtre, pas celle d'un autre appareil.
+   */
+  envoiEnVol: EnvoiEnVol | null
 }
 
 export type ActionSauvegarde =
+  /** On ne sait pas ce qu'il y a en face. Rien ne se décide avant de l'avoir lu. */
+  | { type: 'lire-distant' }
   /** Rien à faire : tout ce qui est local est parti, et le distant n'a pas bougé. */
   | { type: 'rien' }
   /** Envoyer cette génération, sous cet identifiant d'opération idempotent. */
   | { type: 'envoyer'; generation: number; operation: string }
   /**
+   * Notre propre envoi a bien été commité : la réponse s'était perdue. On acquitte sans
+   * renvoyer, et sans crier au conflit.
+   */
+  | { type: 'acquitter-envoi'; generation: number; revision: number }
+  /**
    * Le distant porte quelque chose que cet appareil n'a pas. On **propose**, on
    * n'applique jamais : écraser une saisie locale non envoyée serait perdre ce qu'on
    * prétend protéger.
    */
-  | { type: 'proposer-restauration'; revisionDistante: number }
+  | { type: 'proposer-restauration'; revision: number }
   /**
    * Les deux côtés ont avancé indépendamment. Aucun des deux ne peut être choisi sans
    * qu'Ugo tranche.
    */
-  | { type: 'conflit'; generationLocale: number; revisionDistante: number }
+  | { type: 'conflit'; generationLocale: number; revision: number }
+
+/**
+ * Le carnet ne porte-t-il encore aucune saisie d'Ugo ?
+ *
+ * **Dérivé, et non stocké.** Une première version portait un drapeau `seulementAmorcee`
+ * à côté des compteurs. Il ne servait à rien : `muter` l'effaçait, donc « amorcée »
+ * impliquait toujours `generationLocale === 0`, et les deux gardes qui l'invoquaient
+ * étaient inatteignables. Une mutation retirant l'un d'eux laissait les seize tests
+ * verts — c'est ce qui l'a révélé.
+ *
+ * La règle est donc posée ici, une fois : **l'amorçage n'est pas une mutation**.
+ * Charger le dossier de départ n'appelle pas `muter` et ne fait pas avancer la
+ * génération.
+ */
+export function jamaisSaisi(etat: EtatSauvegarde): boolean {
+  return etat.generationLocale === 0
+}
 
 /**
  * L'identifiant d'opération : stable pour une génération donnée, sur un appareil donné.
  *
  * C'est lui qui rend un réessai inoffensif. Une réponse perdue après commit distant
  * fait rejouer l'envoi ; le serveur reconnaît l'opération déjà appliquée et n'incrémente
- * pas une seconde fois. Le tirer au hasard à chaque tentative, au contraire, produirait
- * un doublon à la première coupure réseau.
+ * pas une seconde fois. Le tirer au hasard à chaque tentative produirait un doublon à la
+ * première coupure réseau.
+ *
+ * Sa stabilité ne suffit pourtant pas à fermer le parcours « réponse perdue après
+ * commit » : encore faut-il **reconnaître** notre commit en face plutôt que de le
+ * prendre pour celui d'un autre. C'est le rôle d'`envoiEnVol`.
  */
 export function operationPour(appareil: string, generation: number): string {
   return `${appareil}:${generation}`
@@ -94,29 +142,45 @@ export function operationPour(appareil: string, generation: number): string {
 /**
  * Que faire maintenant.
  *
- * L'ordre des cas n'est pas indifférent : le conflit se teste **avant** l'envoi, sinon
- * on écraserait un distant plus récent en croyant simplement rattraper son retard.
+ * L'ordre des cas n'est pas indifférent :
+ *
+ * - **l'ignorance passe avant tout.** Décider sans avoir lu le distant, c'est décider au
+ *   hasard ;
+ * - **reconnaître notre propre envoi passe avant le conflit**, sinon une réponse perdue
+ *   déclencherait une alerte pour rien ;
+ * - **le conflit passe avant l'envoi**, sinon on écraserait un distant plus récent en
+ *   croyant simplement rattraper son retard.
  */
-export function prochaineAction(etat: EtatSauvegarde, appareil: string): ActionSauvegarde {
-  const enRetard = etat.generationLocale > etat.generationAcquittee
-  const distantInconnu = etat.revisionDistante !== null && etat.revisionAcquittee === null
-  const distantAAvance =
-    etat.revisionDistante !== null &&
-    etat.revisionAcquittee !== null &&
-    etat.revisionDistante > etat.revisionAcquittee
+export function prochaineAction(
+  etat: EtatSauvegarde,
+  distant: LectureDistante,
+  appareil: string,
+): ActionSauvegarde {
+  if (distant.etat === 'inconnue') return { type: 'lire-distant' }
 
-  // Le distant porte un état qu'on n'a pas produit.
-  if (distantInconnu || distantAAvance) {
-    // Rien de local à défendre : on propose. C'est le scénario « nouvelle installation
-    // avec distant existant », celui du passage de Safari à l'app installée — la base
-    // n'y porte que le dossier de départ, qui n'est pas une saisie d'Ugo.
-    if (!enRetard) {
-      return { type: 'proposer-restauration', revisionDistante: etat.revisionDistante! }
+  const enRetard = etat.generationLocale > etat.generationAcquittee
+
+  if (distant.etat === 'lue') {
+    // Notre envoi a bien atterri ; seule la réponse s'est perdue.
+    if (etat.envoiEnVol && distant.operation === etat.envoiEnVol.operation) {
+      return {
+        type: 'acquitter-envoi',
+        generation: etat.envoiEnVol.generation,
+        revision: distant.revision,
+      }
     }
-    return {
-      type: 'conflit',
-      generationLocale: etat.generationLocale,
-      revisionDistante: etat.revisionDistante!,
+
+    const distantAAvance =
+      etat.revisionAcquittee === null || distant.revision > etat.revisionAcquittee
+    if (distantAAvance) {
+      // Rien de local à défendre : on propose. C'est le scénario « nouvelle installation
+      // avec distant existant », celui du passage de Safari à l'app installée.
+      if (!enRetard) return { type: 'proposer-restauration', revision: distant.revision }
+      return {
+        type: 'conflit',
+        generationLocale: etat.generationLocale,
+        revision: distant.revision,
+      }
     }
   }
 
@@ -126,6 +190,18 @@ export function prochaineAction(etat: EtatSauvegarde, appareil: string): ActionS
     type: 'envoyer',
     generation: etat.generationLocale,
     operation: operationPour(appareil, etat.generationLocale),
+  }
+}
+
+/** Noter qu'un envoi est parti, avant d'en connaître le sort. */
+export function envoyer(
+  etat: EtatSauvegarde,
+  generation: number,
+  appareil: string,
+): EtatSauvegarde {
+  return {
+    ...etat,
+    envoiEnVol: { generation, operation: operationPour(appareil, generation) },
   }
 }
 
@@ -141,22 +217,33 @@ export function prochaineAction(etat: EtatSauvegarde, appareil: string): ActionS
  *
  * L'acquittement ne fait donc qu'**avancer une borne**, jamais poser un état final.
  *
- * Il ne recule pas non plus : une ancienne tentative dont la réponse arrive en retard
- * ne doit pas défaire un acquittement plus récent. C'est le même `max`, dans l'autre
- * sens.
+ * Il ne recule pas non plus : une ancienne tentative dont la réponse arrive en retard ne
+ * doit pas défaire un acquittement plus récent, ni faire reculer la révision distante —
+ * ce dernier point ferait ensuite croire à un conflit là où il n'y en a pas.
+ *
+ * **Précondition** : `generation <= etat.generationLocale`. Acquitter une génération
+ * jamais écrite n'a pas de sens, et l'invariant `generationAcquittee <= generationLocale`
+ * doit tenir après l'appel.
  */
 export function acquitter(
   etat: EtatSauvegarde,
   generation: number,
-  revisionDistante: number,
+  revision: number,
 ): EtatSauvegarde {
+  if (generation > etat.generationLocale) {
+    throw new Error(
+      `Acquittement de la génération ${generation}, jamais écrite (locale : ${etat.generationLocale}).`,
+    )
+  }
   if (generation <= etat.generationAcquittee) return etat
 
   return {
     ...etat,
     generationAcquittee: generation,
-    revisionDistante: Math.max(etat.revisionDistante ?? 0, revisionDistante),
-    revisionAcquittee: Math.max(etat.revisionAcquittee ?? 0, revisionDistante),
+    revisionAcquittee: Math.max(etat.revisionAcquittee ?? 0, revision),
+    // L'envoi n'est plus en vol s'il portait cette génération ; un envoi plus récent,
+    // lui, reste en attente de sa propre réponse.
+    envoiEnVol: etat.envoiEnVol && etat.envoiEnVol.generation > generation ? etat.envoiEnVol : null,
   }
 }
 
@@ -170,10 +257,10 @@ export function muter(etat: EtatSauvegarde): EtatSauvegarde {
   return { ...etat, generationLocale: etat.generationLocale + 1 }
 }
 
-/** L'état d'un carnet qui n'a jamais rien envoyé ni rien vu en face. */
+/** L'état d'un carnet qui n'a jamais rien envoyé. */
 export const ETAT_INITIAL: EtatSauvegarde = {
   generationLocale: 0,
   generationAcquittee: 0,
-  revisionDistante: null,
   revisionAcquittee: null,
+  envoiEnVol: null,
 }
