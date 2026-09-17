@@ -35,6 +35,26 @@
  *    réponse s'est perdue. La traiter en conflit ferait crier au danger là où il n'y a
  *    qu'un réseau capricieux — et le vrai conflit, noyé dans les faux, cesserait d'être
  *    pris au sérieux.
+ * 3. **un envoi sans réponse n'est pas un envoi qui n'a pas eu lieu.** Reconnaître notre
+ *    commit *une fois qu'on le voit* ne suffisait pas : tant qu'il n'est pas visible, il
+ *    peut encore être en cours. Une seconde contre-revue de #71 l'a montré — `g` partait,
+ *    Ugo validait une série de plus, la lecture ne voyait rien, et l'app envoyait `g+1`
+ *    en écrasant la trace de `g`. Voir « un seul envoi en vol » ci-dessous.
+ *
+ * ## Un seul envoi en vol à la fois
+ *
+ * Tant qu'une opération n'a pas de sort connu, **c'est elle qu'on reprend**, sous la même
+ * identité, et aucune autre ne part. La règle ferme deux trous d'un coup :
+ *
+ * - la **fausse alerte** : sans la trace de `g`, son commit tardif devient indiscernable
+ *   de l'écriture d'un autre appareil, et l'app crie au conflit sans qu'il y en ait ;
+ * - la **perte silencieuse**, plus grave : si `g+1` part pendant que `g` est toujours en
+ *   cours, rien n'ordonne les deux écritures en face. `g` commité *après* `g+1` reposerait
+ *   un carnet plus ancien par-dessus le plus récent — et l'app afficherait « à jour ».
+ *
+ * Le prix est connu et assumé : la reprise renvoie l'instantané de `g`, donc un aller-retour
+ * de plus avant que `g+1` ne parte. Le magasin doit garder **l'instantané de `g`** pour ce
+ * réessai, pas celui de `g+1` sous la même identité.
  */
 
 /**
@@ -87,7 +107,13 @@ export type ActionSauvegarde =
   | { type: 'lire-distant' }
   /** Rien à faire : tout ce qui est local est parti, et le distant n'a pas bougé. */
   | { type: 'rien' }
-  /** Envoyer cette génération, sous cet identifiant d'opération idempotent. */
+  /**
+   * Envoyer cette génération, sous cet identifiant d'opération idempotent.
+   *
+   * C'est aussi l'action de **reprise** : quand un envoi est en vol sans réponse, c'est
+   * lui qui revient ici, à l'identique. Le réessai est inoffensif parce que l'identité
+   * ne bouge pas — le serveur reconnaît l'opération déjà appliquée.
+   */
   | { type: 'envoyer'; generation: number; operation: string }
   /**
    * Notre propre envoi a bien été commité : la réponse s'était perdue. On acquitte sans
@@ -140,6 +166,24 @@ export function operationPour(appareil: string, generation: number): string {
 }
 
 /**
+ * L'envoi dont le sort est encore inconnu, s'il y en a un.
+ *
+ * **Une seule ligne, et c'est délibéré.** Une version de cette fonction ajoutait
+ * `generation > generationAcquittee`, pour écarter un envoi dont la réponse serait déjà
+ * arrivée. La mutation qui retirait cette condition ne faisait rougir personne : c'est
+ * `acquitter` qui efface l'envoi qu'il confirme, donc l'invariant
+ * `envoiEnVol === null || envoiEnVol.generation > generationAcquittee` **tient par
+ * construction**. La condition était une seconde implémentation de la même règle,
+ * inatteignable, et une garde inatteignable donne l'illusion de protéger.
+ *
+ * C'est exactement ce qui avait éliminé le drapeau `seulementAmorcee`. La règle vit là
+ * où elle est maintenue — dans `acquitter` — et nulle part ailleurs.
+ */
+export function envoiNonResolu(etat: EtatSauvegarde): EnvoiEnVol | null {
+  return etat.envoiEnVol
+}
+
+/**
  * Que faire maintenant.
  *
  * L'ordre des cas n'est pas indifférent :
@@ -149,7 +193,10 @@ export function operationPour(appareil: string, generation: number): string {
  * - **reconnaître notre propre envoi passe avant le conflit**, sinon une réponse perdue
  *   déclencherait une alerte pour rien ;
  * - **le conflit passe avant l'envoi**, sinon on écraserait un distant plus récent en
- *   croyant simplement rattraper son retard.
+ *   croyant simplement rattraper son retard ;
+ * - **la reprise d'un envoi non résolu passe avant tout nouvel envoi**, sinon `g+1`
+ *   partirait pendant que `g` est encore en cours, et les deux écritures arriveraient en
+ *   face sans ordre garanti.
  */
 export function prochaineAction(
   etat: EtatSauvegarde,
@@ -184,6 +231,13 @@ export function prochaineAction(
     }
   }
 
+  // Un envoi sans réponse se reprend sous sa propre identité. Rien de plus récent ne part
+  // tant qu'il n'est pas résolu : voir « un seul envoi en vol » en tête de fichier.
+  const enVol = envoiNonResolu(etat)
+  if (enVol) {
+    return { type: 'envoyer', generation: enVol.generation, operation: enVol.operation }
+  }
+
   if (!enRetard) return { type: 'rien' }
 
   return {
@@ -193,12 +247,26 @@ export function prochaineAction(
   }
 }
 
-/** Noter qu'un envoi est parti, avant d'en connaître le sort. */
+/**
+ * Noter qu'un envoi est parti, avant d'en connaître le sort.
+ *
+ * **Refuse d'écraser un envoi non résolu** par une génération différente. Sans ce refus,
+ * la trace de `g` disparaissait au profit de `g+1` : son commit tardif devenait
+ * indiscernable de celui d'un autre appareil, et les deux écritures pouvaient atterrir
+ * dans le désordre. Un réessai de la **même** génération reste permis — c'est la reprise,
+ * et elle est idempotente par construction.
+ */
 export function envoyer(
   etat: EtatSauvegarde,
   generation: number,
   appareil: string,
 ): EtatSauvegarde {
+  const enVol = envoiNonResolu(etat)
+  if (enVol && enVol.generation !== generation) {
+    throw new Error(
+      `Envoi de la génération ${generation} alors que ${enVol.operation} n'a pas de sort connu.`,
+    )
+  }
   return {
     ...etat,
     envoiEnVol: { generation, operation: operationPour(appareil, generation) },

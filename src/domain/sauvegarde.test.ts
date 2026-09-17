@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   acquitter,
+  envoiNonResolu,
   envoyer,
   ETAT_INITIAL,
   jamaisSaisi,
@@ -20,6 +21,13 @@ const lu = (revision: number, operation: string | null = null): LectureDistante 
   revision,
   operation,
 })
+
+/** Un carnet où rien n'est encore parti : n mutations, aucun acquittement. */
+function apresMutations(n: number): EtatSauvegarde {
+  let courant = ETAT_INITIAL
+  for (let i = 0; i < n; i += 1) courant = muter(courant)
+  return courant
+}
 
 /** Le carnet d'Ugo après quelques séances, toutes envoyées et confirmées. */
 function carnetAJour(mutations: number, revision: number): EtatSauvegarde {
@@ -113,6 +121,75 @@ describe('reconnaître notre propre envoi', () => {
   })
 })
 
+describe('un seul envoi en vol à la fois', () => {
+  // Le P2-2 rouvert par la seconde contre-revue. Reconnaître notre commit *quand on le
+  // voit* ne fermait qu'une moitié de la panne : tant qu'il n'est pas visible, il peut
+  // encore être en cours. L'app envoyait alors g+1 et perdait la trace de g.
+
+  it('reprend l’envoi en vol au lieu d’en lancer un plus récent', () => {
+    const enVol = envoyer(muter(ETAT_INITIAL), 1, APPAREIL)
+    const pendantLaPanne = muter(enVol) // Ugo valide une série de plus
+
+    // La lecture ne voit rien : le commit de g peut très bien se terminer juste après.
+    expect(prochaineAction(pendantLaPanne, VIDE, APPAREIL)).toEqual({
+      type: 'envoyer',
+      generation: 1,
+      operation: 'iphone-15-pro:1',
+    })
+  })
+
+  it('reprend aussi quand le distant est resté à la dernière révision acquittée', () => {
+    const enVol = envoyer(muter(carnetAJour(2, 5)), 3, APPAREIL)
+    const pendantLaPanne = muter(enVol)
+
+    expect(prochaineAction(pendantLaPanne, lu(5), APPAREIL)).toEqual({
+      type: 'envoyer',
+      generation: 3,
+      operation: 'iphone-15-pro:3',
+    })
+  })
+
+  it('refuse de remplacer la trace d’une opération sans sort connu', () => {
+    // Sans ce refus, `iphone:1` disparaissait de l'état. Son commit tardif devenait
+    // indiscernable de l'écriture d'un autre appareil — et, plus grave, les deux
+    // écritures pouvaient atterrir en face dans le désordre.
+    const enVol = envoyer(muter(ETAT_INITIAL), 1, APPAREIL)
+
+    expect(() => envoyer(muter(enVol), 2, APPAREIL)).toThrow(/sort connu/)
+  })
+
+  it('laisse réessayer la même génération, qui est la reprise elle-même', () => {
+    const enVol = envoyer(muter(ETAT_INITIAL), 1, APPAREIL)
+
+    expect(envoyer(enVol, 1, APPAREIL).envoiEnVol).toEqual({
+      generation: 1,
+      operation: 'iphone-15-pro:1',
+    })
+  })
+
+  it('rouvre la voie à g+1 dès que g est acquitté', () => {
+    // C'est `acquitter` qui résout l'envoi, et lui seul : l'invariant
+    // « un envoi en vol porte toujours plus que la borne acquittée » n'est pas revérifié
+    // ailleurs. Une condition qui l'aurait redoublé dans `envoiNonResolu` s'est révélée
+    // inatteignable — aucune mutation ne la faisait rougir — et a été retirée.
+    const acquitte = coherent(acquitter(envoyer(muter(ETAT_INITIAL), 1, APPAREIL), 1, 1))
+
+    expect(envoiNonResolu(acquitte)).toBeNull()
+    expect(() => envoyer(muter(acquitte), 2, APPAREIL)).not.toThrow()
+  })
+
+  it('n’empêche pas le conflit quand un autre appareil a vraiment écrit', () => {
+    // La reprise ne doit pas devenir un paravent : un distant tiers reste un conflit.
+    const enVol = envoyer(muter(ETAT_INITIAL), 1, APPAREIL)
+
+    expect(prochaineAction(muter(enVol), lu(4, 'macbook:9'), APPAREIL)).toEqual({
+      type: 'conflit',
+      generationLocale: 2,
+      revision: 4,
+    })
+  })
+})
+
 describe('ce qu’il faut faire maintenant', () => {
   it('ne fait rien quand tout ce qui est local est déjà parti', () => {
     const apres = carnetAJour(3, 7)
@@ -189,7 +266,13 @@ describe('acquitter sans rien effacer', () => {
     // Le défaut silencieux : Ugo valide une série, l'envoi part, il valide la suivante,
     // la réponse arrive. Un acquittement qui poserait « tout est parti » ferait
     // disparaître la seconde série au premier effacement de stockage.
-    const pendantEnvoi = muter(carnetAJour(4, 10))
+    //
+    // Le test partait d'un état où `g` était **déjà** acquitté avant la mutation : le
+    // retour précoce d'`acquitter` s'y déclenchait, et la règle n'était donc pas
+    // exercée. Remarque non bloquante de Codex, fondée. La séquence est maintenant la
+    // vraie : quatre mutations dont aucune n'est partie, l'envoi de la quatrième, la
+    // cinquième écrite pendant l'attente, puis la réponse.
+    const pendantEnvoi = muter(envoyer(apresMutations(4), 4, APPAREIL))
 
     const apres = coherent(acquitter(pendantEnvoi, 4, 10))
 
@@ -211,7 +294,7 @@ describe('acquitter sans rien effacer', () => {
     expect(tardive.generationAcquittee).toBe(6)
   })
 
-  it('ne fait pas reculer la révision distante sur une réponse tardive', () => {
+  it('ne fait pas reculer la révision distante, quelle que soit la réponse reçue', () => {
     // Une vieille réponse porte une vieille révision. La laisser écraser la plus
     // récente ferait ensuite croire à un conflit là où il n'y en a pas.
     //
@@ -220,6 +303,13 @@ describe('acquitter sans rien effacer', () => {
     // révision plus ancienne. Une version antérieure de ce test acquittait une
     // génération jamais écrite — P3 de Codex, fondé : l'état obtenu était incohérent,
     // et ce qu'on y observait ne prouvait rien d'une séquence réelle.
+    //
+    // **Ce que ce test garantit, exactement** : une propriété de robustesse d'`acquitter`
+    // pris isolément, et non un parcours. Depuis que les envois sont sérialisés, aucune
+    // séquence distante ne produit *elle-même* une génération qui avance avec une
+    // révision qui recule. La borne reste monotone quoi qu'on lui passe, pour qu'une
+    // réponse mal numérotée — par le serveur, ou par un appelant futur — ne puisse pas
+    // faire halluciner un conflit à l'app. Seconde remarque non bloquante de Codex.
     const sept = muter(carnetAJour(6, 14))
 
     const apres = coherent(acquitter(sept, 7, 9))
@@ -305,6 +395,39 @@ describe('les séquences complètes', () => {
     })
 
     courant = coherent(acquitter(courant, 1, 1))
+    expect(prochaineAction(courant, face, APPAREIL)).toEqual({
+      type: 'envoyer',
+      generation: 2,
+      operation: 'iphone-15-pro:2',
+    })
+  })
+
+  it('commit en cours : reprise de g, puis reconnaissance, puis départ de g+1', () => {
+    // L'autre moitié de la panne, celle que la première correction laissait ouverte : la
+    // lecture arrive **avant** que le commit de g ne soit visible. Le parcours précédent
+    // commence après ; celui-ci commence avant.
+    let courant = envoyer(muter(ETAT_INITIAL), 1, APPAREIL)
+    courant = muter(courant) // Ugo valide une série de plus pendant l'attente
+
+    // 1. Rien en face pour l'instant : on reprend g, on n'envoie surtout pas g+1.
+    expect(prochaineAction(courant, VIDE, APPAREIL)).toEqual({
+      type: 'envoyer',
+      generation: 1,
+      operation: 'iphone-15-pro:1',
+    })
+    courant = envoyer(courant, 1, APPAREIL) // la reprise part, même identité
+
+    // 2. Le serveur finit la transaction, la réponse se perd encore. On reconnaît.
+    const face = lu(1, operationPour(APPAREIL, 1))
+    expect(prochaineAction(courant, face, APPAREIL)).toEqual({
+      type: 'acquitter-envoi',
+      generation: 1,
+      revision: 1,
+    })
+
+    // 3. g résolu, g+1 peut enfin partir — et seulement maintenant.
+    courant = coherent(acquitter(courant, 1, 1))
+    expect(envoiNonResolu(courant)).toBeNull()
     expect(prochaineAction(courant, face, APPAREIL)).toEqual({
       type: 'envoyer',
       generation: 2,
