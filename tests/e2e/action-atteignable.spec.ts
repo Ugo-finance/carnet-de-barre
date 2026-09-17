@@ -130,6 +130,8 @@ test('chaque série de la séance garde son action sous le pouce', async ({ page
     if (action!.nom === 'Terminer la séance') break
     await action!.cible.click()
     await page.waitForTimeout(80)
+    const retour = page.getByRole('button', { name: 'Revenir à la saisie' })
+    if (await retour.isVisible()) await retour.click()
   }
 
   // Sans cette borne, un parcours qui s'arrêterait à la première série passerait au

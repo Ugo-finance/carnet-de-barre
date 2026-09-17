@@ -22,6 +22,10 @@ type RecoveryTimer = {
   label: string
   onAdjust: (deltaMs: number) => void
   onStop: () => void
+  durationSeconds?: number
+  fullScreen?: boolean
+  onOpen?: () => void
+  onClose?: () => void
   notifications?: TimerNotificationOptions
 }
 
@@ -226,6 +230,23 @@ export function SessionFocus({
       <section aria-label="Chronomètre">
         {timer ? (
           <TimerCard
+            durationSeconds={timer.durationSeconds}
+            fullScreen={timer.fullScreen}
+            onOpen={timer.onOpen}
+            onClose={timer.onClose}
+            next={
+              canonical
+                ? {
+                    exercise: canonical.exercise.label,
+                    series: seriesLabel(canonical, queue),
+                    load: `${loadPresentation(canonical.set).load} ${loadPresentation(canonical.set).unit ?? ''}`.trim(),
+                    reps:
+                      canonical.set.targetReps === null
+                        ? 'Répétitions libres'
+                        : `${formatNumber(canonical.set.targetReps)} répétitions`,
+                  }
+                : undefined
+            }
             endsAt={timer.endsAt}
             label={timer.label}
             onAdjust={timer.onAdjust}

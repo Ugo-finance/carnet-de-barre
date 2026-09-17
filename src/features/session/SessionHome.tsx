@@ -101,6 +101,8 @@ function SessionEditor({
   onViewHistory?: () => void
 }) {
   const editor = useDraftEditor(store, state.draft)
+  const [recoveryDuration, setRecoveryDuration] = useState<number>()
+  const [recoveryOpen, setRecoveryOpen] = useState(false)
   const [writing, setWriting] = useState(false)
   const [finalizing, setFinalizing] = useState(false)
   const [finalizeError, setFinalizeError] = useState<string>()
@@ -190,7 +192,14 @@ function SessionEditor({
                 endsAt: draft.timerEndsAt,
                 label: draft.timerLabel,
                 onAdjust: editor.adjustTimer,
-                onStop: editor.stopTimer,
+                onStop: () => {
+                  setRecoveryOpen(false)
+                  editor.stopTimer()
+                },
+                durationSeconds: recoveryDuration,
+                fullScreen: recoveryOpen,
+                onOpen: () => setRecoveryOpen(true),
+                onClose: () => setRecoveryOpen(false),
                 notifications: {
                   sound: state.preferences.sonChrono,
                   vibration: state.preferences.vibration,
@@ -217,6 +226,12 @@ function SessionEditor({
                     label: `Récup ${item.exercise.label}`,
                   },
             )
+            .then(() => {
+              if (item.set.role !== 'warmup') {
+                setRecoveryDuration(item.exercise.restSeconds)
+                setRecoveryOpen(true)
+              }
+            })
             .catch(() => undefined)
             .finally(() => {
               writingRef.current = false

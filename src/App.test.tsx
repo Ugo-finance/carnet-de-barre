@@ -11,7 +11,7 @@
  */
 
 import 'fake-indexeddb/auto'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { store } from './db/store'
@@ -265,5 +265,113 @@ describe('navigation depuis le point d’entrée réel', () => {
     const brouillon = await store.loadDraft()
     expect(brouillon?.baseTargets.squat.w).toBe(80)
     await store.clearDraft()
+  })
+  async function prepareRecovery() {
+    await store.ready()
+    const draft = await store.startSession('A', '2026-09-15', { now: MARDI.getTime() })
+    const work = draft.sets.find(
+      (set) => set.exerciseId === 'a-bench-vol' && set.role === 'volume' && set.index === 2,
+    )
+    const warmup = draft.sets.find(
+      (set) => set.exerciseId === 'a-tractions-lestees' && set.role === 'warmup',
+    )
+    expect(work).toBeDefined()
+    expect(warmup).toBeDefined()
+    if (!work || !warmup) throw new Error('Scénario de récupération incomplet')
+    await store.saveDraft({
+      ...draft,
+      sets: draft.sets.map((set) => ({
+        ...set,
+        status:
+          set.id === work.id || set.id === warmup.id ? ('planned' as const) : ('skipped' as const),
+      })),
+    })
+    return { work, warmup }
+  }
+
+  it('ouvre la récup après écriture, affiche le prochain palier et garde son échéance après sortie', async () => {
+    const { warmup } = await prepareRecovery()
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Reprendre la séance' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Valider' }))
+    const recovery = await screen.findByRole('dialog', { name: 'Récupération' })
+    expect(within(recovery).getByRole('region', { name: 'Prochaine série' })).toHaveTextContent(
+      'Tractions lestées',
+    )
+    expect(within(recovery).getByRole('region', { name: 'Prochaine série' })).toHaveTextContent(
+      'palier 1',
+    )
+    const saved = await store.loadDraft()
+    expect(
+      saved?.sets.find((set) => set.exerciseId === 'a-bench-vol' && set.index === 2)?.status,
+    ).toBe('validated')
+    const deadline = saved?.timerEndsAt
+    expect(deadline).toBeGreaterThan(MARDI.getTime())
+    fireEvent.click(within(recovery).getByRole('button', { name: '+30 s' }))
+    expect(recovery).toBeInTheDocument()
+    await waitFor(async () =>
+      expect((await store.loadDraft())?.timerEndsAt).toBe(Number(deadline) + 30_000),
+    )
+    fireEvent.click(within(recovery).getByRole('button', { name: 'Revenir à la saisie' }))
+    expect(screen.queryByRole('dialog', { name: 'Récupération' })).not.toBeInTheDocument()
+    expect(screen.getByRole('timer')).toBeInTheDocument()
+    const input = screen.getByRole('textbox', { name: 'Répétitions' })
+    fireEvent.change(input, { target: { value: '7' } })
+    expect(screen.queryByRole('dialog', { name: 'Récupération' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Valider' }))
+    await waitFor(async () =>
+      expect((await store.loadDraft())?.sets.find((set) => set.id === warmup.id)?.status).toBe(
+        'validated',
+      ),
+    )
+    expect(screen.queryByRole('dialog', { name: 'Récupération' })).not.toBeInTheDocument()
+    expect((await store.loadDraft())?.timerEndsAt).toBe(Number(deadline) + 30_000)
+  })
+
+  it('refuse d’ouvrir la récup avant une écriture réussie, puis permet la reprise sans réouverture automatique', async () => {
+    await prepareRecovery()
+    // IndexedDB garde ses tâches réelles ; seules l’horloge et les boucles du chrono
+    // sont pilotées, pour que l’expiration ne dépende pas du rythme du serveur CI.
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] })
+    vi.setSystemTime(MARDI)
+    const view = render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Reprendre la séance' }))
+    const save = vi.spyOn(store, 'saveDraft').mockRejectedValueOnce(new Error('panne écriture'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Valider' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Sauvegarde impossible')
+    expect(screen.queryByRole('dialog', { name: 'Récupération' })).not.toBeInTheDocument()
+    save.mockRestore()
+    fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }))
+    await screen.findByRole('dialog', { name: 'Récupération' })
+    const deadline = (await store.loadDraft())?.timerEndsAt
+    view.unmount()
+    vi.setSystemTime(new Date(MARDI.getTime() + 30_000))
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Reprendre la séance' }))
+    expect(screen.queryByRole('dialog', { name: 'Récupération' })).not.toBeInTheDocument()
+    expect(screen.getByRole('timer')).toHaveTextContent('2:00')
+    expect((await store.loadDraft())?.timerEndsAt).toBe(deadline)
+    fireEvent.click(screen.getByRole('button', { name: 'Agrandir le chrono' }))
+    const recovery = screen.getByRole('dialog', { name: 'Récupération' })
+    fireEvent.click(within(recovery).getByRole('timer'))
+    expect(screen.queryByRole('dialog', { name: 'Récupération' })).not.toBeInTheDocument()
+    expect((await store.loadDraft())?.timerEndsAt).toBe(deadline)
+    const input = screen.getByRole('textbox', { name: 'Répétitions' })
+    fireEvent.change(input, { target: { value: '7' } })
+    const vibrate = vi.fn()
+    Object.defineProperty(navigator, 'vibrate', { value: vibrate, configurable: true })
+    try {
+      fireEvent.click(screen.getByRole('button', { name: 'Agrandir le chrono' }))
+      expect(screen.getByRole('dialog', { name: 'Récupération' })).toBeInTheDocument()
+      act(() => {
+        vi.setSystemTime(new Date(Number(deadline) - 250))
+        vi.advanceTimersByTime(250)
+      })
+      expect(screen.queryByRole('dialog', { name: 'Récupération' })).not.toBeInTheDocument()
+      expect(input).toHaveValue('7')
+      expect(vibrate).toHaveBeenCalledTimes(1)
+    } finally {
+      Reflect.deleteProperty(navigator, 'vibrate')
+    }
   })
 })

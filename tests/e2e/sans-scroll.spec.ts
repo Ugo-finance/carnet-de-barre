@@ -163,6 +163,8 @@ test('l’accueil, les cibles et la série courante tiennent chacun dans une pag
   await expectPageToFit(page, top.getByRole('button', { name: 'Valider' }))
   await top.getByRole('button', { name: 'Valider' }).click()
   await expect(page.getByRole('timer')).toBeVisible()
+  const retourRecup = page.getByRole('button', { name: 'Revenir à la saisie' })
+  if (await retourRecup.isVisible()) await retourRecup.click()
 
   const timedSet = page.getByRole('article').first()
   await expectPageToFit(page, timedSet.getByRole('button', { name: 'Valider' }))
