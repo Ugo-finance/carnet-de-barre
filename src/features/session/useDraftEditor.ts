@@ -29,7 +29,15 @@ function withValidatedSet(
     sets: current.sets.map((set) =>
       set.id === setId ? { ...set, ...value, status: 'validated' } : set,
     ),
-    ...(timer === null ? {} : { timerEndsAt: now + timer.seconds * 1000, timerLabel: timer.label }),
+    // Le début part dans la **même** écriture que l'échéance : deux commits laisseraient
+    // une fenêtre où la barre se calculerait sur un début périmé.
+    ...(timer === null
+      ? {}
+      : {
+          timerEndsAt: now + timer.seconds * 1000,
+          timerLabel: timer.label,
+          timerStartedAt: now,
+        }),
   }
 }
 
@@ -329,7 +337,12 @@ export function useDraftEditor(store: DraftPort, initialDraft?: Draft) {
   )
 
   const stopTimer = useCallback(() => {
-    commit((current) => ({ ...current, timerEndsAt: null, timerLabel: null }))
+    commit((current) => ({
+      ...current,
+      timerEndsAt: null,
+      timerLabel: null,
+      timerStartedAt: null,
+    }))
   }, [commit])
 
   return {

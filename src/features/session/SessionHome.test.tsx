@@ -24,6 +24,7 @@ function draftFor(type: SeanceType, date: string): Draft {
     rushed: false,
     timerEndsAt: null,
     timerLabel: null,
+    timerStartedAt: null,
     keepAwake: false,
     startedAt: 1,
     baseTargets: TARGETS,

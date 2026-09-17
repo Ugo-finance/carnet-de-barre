@@ -328,6 +328,82 @@ describe('navigation depuis le point d’entrée réel', () => {
     expect((await store.loadDraft())?.timerEndsAt).toBe(Number(deadline) + 30_000)
   })
 
+  it('garde la progression de récupération après un rechargement', async () => {
+    // CB-77, P3 de la revue #70. La durée totale vivait en état React : après un
+    // rechargement en pleine récup, le chiffre restait juste et **la barre repartait de
+    // zéro** — 60 s écoulées sur 150 affichaient `max=90 value=0`. Elle disait donc
+    // « tu viens de poser la barre » à un Ugo qui souffle depuis une minute.
+    //
+    // Le parcours part de la base réelle et passe par un démontage : c'est le seul
+    // montage qui exerce le défaut, et un test sur le composant isolé ne pourrait pas le
+    // voir, puisqu'on lui passerait la durée à la main.
+    const { warmup } = await prepareRecovery()
+    const view = render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Reprendre la séance' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Valider' }))
+    const recovery = await screen.findByRole('dialog', { name: 'Récupération' })
+    const barre = within(recovery).getByRole('progressbar', {
+      name: 'Temps de récupération écoulé',
+    })
+    expect(barre).toHaveAttribute('max', '150')
+    expect(barre).toHaveAttribute('value', '0')
+    const debut = (await store.loadDraft())?.timerStartedAt
+    expect(debut).toBe(MARDI.getTime())
+
+    // Rechargement une minute plus tard : l'app est relancée, le brouillon relu.
+    view.unmount()
+    vi.setSystemTime(new Date(MARDI.getTime() + 60_000))
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Reprendre la séance' }))
+    // La récup ne se rouvre pas toute seule — CB-74. On y revient par le geste explicite.
+    fireEvent.click(screen.getByRole('button', { name: 'Agrandir le chrono' }))
+    const reprise = screen.getByRole('dialog', { name: 'Récupération' })
+    const barreReprise = within(reprise).getByRole('progressbar', {
+      name: 'Temps de récupération écoulé',
+    })
+    expect(within(reprise).getByRole('timer')).toHaveTextContent('1:30')
+    expect(barreReprise).toHaveAttribute('max', '150')
+    expect(barreReprise).toHaveAttribute('value', '60')
+    expect((await store.loadDraft())?.timerStartedAt).toBe(debut)
+    expect(warmup).toBeDefined()
+  })
+
+  it('ajoute 30 s sans faire reculer le temps déjà écoulé', async () => {
+    // Le critère de cohérence des ±30 s, et il ne se voit **pas** au moment du clic :
+    // à cet instant l'écoulé vaut zéro des deux côtés, et `max` se rabat sur le restant
+    // quand il le dépasse. Une première version de ce test s'arrêtait là et ne
+    // distinguait rien — aucune mutation ne la faisait rougir.
+    //
+    // Ce qui distingue, c'est l'**écoulé** une fois qu'il est non nul. Un +30 s doit
+    // agrandir le total sans déplacer ce qu'Ugo a déjà attendu : la barre avance, elle
+    // ne recule jamais. Faire glisser le début avec l'échéance lui volerait 30 s.
+    await prepareRecovery()
+    const view = render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Reprendre la séance' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Valider' }))
+    const recovery = await screen.findByRole('dialog', { name: 'Récupération' })
+    const debut = (await store.loadDraft())?.timerStartedAt
+    const echeance = (await store.loadDraft())?.timerEndsAt
+    fireEvent.click(within(recovery).getByRole('button', { name: '+30 s' }))
+    await waitFor(async () =>
+      expect((await store.loadDraft())?.timerEndsAt).toBe(Number(echeance) + 30_000),
+    )
+    // Le début ne bouge pas : c'est lui qui fait que l'écoulé ne recule pas.
+    expect((await store.loadDraft())?.timerStartedAt).toBe(debut)
+
+    view.unmount()
+    vi.setSystemTime(new Date(MARDI.getTime() + 60_000))
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Reprendre la séance' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Agrandir le chrono' }))
+    const reprise = screen.getByRole('dialog', { name: 'Récupération' })
+    const barre = within(reprise).getByRole('progressbar', {
+      name: 'Temps de récupération écoulé',
+    })
+    expect(barre).toHaveAttribute('max', '180')
+    expect(barre).toHaveAttribute('value', '60')
+  })
+
   it('refuse d’ouvrir la récup avant une écriture réussie, puis permet la reprise sans réouverture automatique', async () => {
     await prepareRecovery()
     // IndexedDB garde ses tâches réelles ; seules l’horloge et les boucles du chrono
