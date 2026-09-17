@@ -15,7 +15,7 @@ Mesuré sur la production, iPhone 15 Pro dans un onglet Safari — 393 × 659 :
 | Charge de la série | — | 50 px |
 | Espace libre sous la carte | **127 px** | — |
 
-L'app affiche donc en 54 px **ce qu'Ugo vient de soulever**, et en 20 px **ce qu'il est en train
+L'app affiche donc en 50 px **ce qu'Ugo vient de soulever**, et en 20 px **ce qu'il est en train
 d'attendre**. L'inversion est complète, et elle est arrivée sans que personne la décide : la barre
 a été dimensionnée quand l'écran était plein, et CB-73 a libéré la place sans redistribuer.
 

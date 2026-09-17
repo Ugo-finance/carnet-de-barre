@@ -89,9 +89,11 @@ Deux collections, et non un fichier unique.
 | `seances` | `id` de la séance | la séance telle que l'export la produit | ajout, quasi jamais modification |
 | `cibles` | document unique | l'objet `targets` | réécriture après chaque séance |
 
-**Un fichier unique aurait été plus simple aujourd'hui et ferait tout jeter demain** : deux
-appareils qui réécrivent le même blob ne peuvent pas fusionner, et le dernier écrase l'autre sans
-que rien ne proteste. Une ligne par séance coûte à peine plus maintenant et rend la fusion future
+**Un fichier unique serait plus simple aujourd'hui et coûterait plus cher demain.** Il n'interdit
+pas de détecter un conflit — un instantané versionné le détecte très bien — mais il oblige, le jour
+où deux appareils écrivent, à réconcilier un blob entier là où des ajouts disjoints se fusionnent
+d'eux-mêmes. C'est un argument de coût de fusion, pas une impossibilité : une première version de ce
+plan l'énonçait comme une fatalité, et Codex a eu raison de le reprendre deux fois. Une ligne par séance coûte à peine plus maintenant et rend la fusion future
 naturelle, puisque des ajouts disjoints se fusionnent tout seuls.
 
 ### La révision porte sur le **carnet**, pas sur chaque document
@@ -210,13 +212,21 @@ Ils ne portent ni sur un fournisseur, ni sur le fait d'envoyer ses données d'en
 son téléphone. P2-3 de Codex, fondé : **une connexion déjà présente sur son poste ne vaut pas
 validation**, et UGO-177 reste « Décision requise » sans commentaire.
 
-À consigner explicitement avant toute mise en place, sous son nom et non sous le nôtre :
+Trois points étaient à consigner sous son nom. **Deux sont tranchés**, relayés ici sous mon
+marqueur avec la question et la réponse.
 
-- le **fournisseur** retenu ;
-- le changement de la décision qui fixe que les données restent locales — Codex l'appelle D3 ; je
-  n'ai pas pu en relire le texte, Linear étant tombé de mon côté, et **il faut le citer avant de le
-  modifier** ;
-- toute **nouvelle dépendance** ajoutée au bundle.
+1. **Les données peuvent quitter le téléphone.** Question posée le 17.09.2026, en listant ce qui
+   part — dates, exercices, charges, répétitions, RPE, notes de séance, plus une adresse e-mail
+   pour l'authentification. Réponse : **oui**.
+2. **Le fournisseur est Supabase.** Même date, même question. Réponse : **ok**. Le motif de la
+   proposition était qu'il est au dossier depuis CB-51 et déjà connecté à son poste ; ce n'est pas
+   ce qui vaut validation, c'est sa réponse.
+3. **La décision qui fixe que les données restent locales — D3 — reste à citer.** Ugo a répondu
+   « je regarde » le 17.09. Je n'ai pas pu en relire le texte, Linear étant tombé de mon côté.
+   **Rien ne se met en place avant** : on ne modifie pas une règle qu'on n'a pas sous les yeux.
+
+Reste aussi à consigner toute **nouvelle dépendance** ajoutée au bundle, au moment où elle est
+proposée et non après.
 
 ### Proposition technique, à valider et non à appliquer
 
