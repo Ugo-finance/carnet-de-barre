@@ -28,6 +28,7 @@ function draftFixture(): Draft {
     rushed: false,
     timerEndsAt: null,
     timerLabel: null,
+    timerStartedAt: null,
     keepAwake: false,
     startedAt: null,
     baseTargets: {

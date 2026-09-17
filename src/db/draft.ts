@@ -179,6 +179,7 @@ export function buildDraft(
     rushed: options.preferences?.modePresseParDefaut ?? false,
     timerEndsAt: null,
     timerLabel: null,
+    timerStartedAt: null,
     keepAwake: options.preferences?.ecranAllume ?? false,
     baseTargets: structuredClone(targets),
     // Ouvrir n'est pas démarrer : l'accueil construit un brouillon au simple affichage.
@@ -195,8 +196,8 @@ export function buildDraft(
  * ajouté est donc absent de toute ligne déjà en base, y compris celle d'une séance
  * ouverte au moment de la mise à jour.
  */
-export type StoredDraft = Omit<Draft, 'keepAwake' | 'startedAt'> &
-  Partial<Pick<Draft, 'keepAwake' | 'startedAt'>>
+export type StoredDraft = Omit<Draft, 'keepAwake' | 'startedAt' | 'timerStartedAt'> &
+  Partial<Pick<Draft, 'keepAwake' | 'startedAt' | 'timerStartedAt'>>
 
 /**
  * Complète une ligne relue avec les champs apparus depuis qu'elle a été écrite.
@@ -211,6 +212,9 @@ export function hydrateDraft(row: StoredDraft): Draft {
     ...row,
     keepAwake: row.keepAwake ?? false,
     startedAt: row.startedAt ?? null,
+    // Une récupération armée avant CB-77 n'a pas de début enregistré. Elle reste
+    // reprenable : le chiffre est juste, et la barre retombe sur l'approximation d'avant.
+    timerStartedAt: row.timerStartedAt ?? null,
     notes: fusionnerAccessoires(row),
     accessories: [],
   }

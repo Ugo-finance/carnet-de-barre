@@ -3,6 +3,7 @@ import type { CarnetStore, FinalizeResult } from '../../db/contracts'
 import { apercuSeance, resumeAccueil, type ResumeAccueil } from '../../db/selectors'
 import { formatDate } from '../../domain/format'
 import type { Preferences } from '../../domain/preferences'
+import { dureeRecuperation } from '../../domain/recuperation'
 import { currentSession, todayInZurich, type UpcomingSession } from '../../domain/schedule'
 import type { Draft, Seance, SeanceType, Targets } from '../../domain/types'
 import { useDraftEditor } from './useDraftEditor'
@@ -101,7 +102,6 @@ function SessionEditor({
   onViewHistory?: () => void
 }) {
   const editor = useDraftEditor(store, state.draft)
-  const [recoveryDuration, setRecoveryDuration] = useState<number>()
   const [recoveryOpen, setRecoveryOpen] = useState(false)
   const [writing, setWriting] = useState(false)
   const [finalizing, setFinalizing] = useState(false)
@@ -196,7 +196,10 @@ function SessionEditor({
                   setRecoveryOpen(false)
                   editor.stopTimer()
                 },
-                durationSeconds: recoveryDuration,
+                // Dérivée du brouillon, jamais d'un état React — CB-77. L'ancienne
+                // version la gardait en mémoire de composant : après un rechargement en
+                // pleine récup, le chiffre restait juste et la barre repartait de zéro.
+                durationSeconds: dureeRecuperation(draft),
                 fullScreen: recoveryOpen,
                 onOpen: () => setRecoveryOpen(true),
                 onClose: () => setRecoveryOpen(false),
@@ -228,7 +231,6 @@ function SessionEditor({
             )
             .then(() => {
               if (item.set.role !== 'warmup') {
-                setRecoveryDuration(item.exercise.restSeconds)
                 setRecoveryOpen(true)
               }
             })

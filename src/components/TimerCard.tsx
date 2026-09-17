@@ -35,6 +35,9 @@ export function TimerCard({
   const { sound, vibration } = notifications
   const notify = useCallback(() => notifyTimerDone({ sound, vibration }), [sound, vibration])
   const remaining = useRecoveryTimer(endsAt, notify)
+  // Repli, et rien d'autre : `durationSeconds` est fourni dès que le brouillon porte le
+  // début de la récupération (CB-77). Il ne reste que pour un brouillon écrit avant, où
+  // la barre repart alors du restant au montage — approximatif, mais reprenable.
   const [duration] = useState(() => Math.max(1, Math.ceil((endsAt - Date.now()) / 1000)))
   const expanded = fullScreen && remaining > 0 && next !== undefined
   useEffect(() => {

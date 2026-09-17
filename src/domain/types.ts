@@ -202,6 +202,22 @@ export interface Draft {
   /** Libellé affiché sous le chrono (« Récup top set »). */
   timerLabel: string | null
   /**
+   * Instant où la récupération a commencé (epoch ms), ou `null` si aucun chrono ne court.
+   *
+   * **Un début, et non une durée** — CB-77. La barre de progression du mode récup a
+   * besoin de savoir *sur quoi* le temps restant se compte ; sans rien de persisté, elle
+   * repartait de zéro après un rechargement, le chiffre restant juste et la barre mentant.
+   *
+   * Stocker une durée en aurait fait un second compteur à tenir synchronisé avec
+   * `timerEndsAt` à chaque ±30 s — et l'ajustement **écrête** : un −30 s sur 20 s
+   * restantes n'en retire que 20, un +30 s sur un chrono expiré repart de maintenant. Une
+   * durée mise à jour de ±30 s nominaux divergerait donc du temps réellement ajouté.
+   *
+   * Avec le début, il n'y a rien à synchroniser : la durée se dérive
+   * (`timerEndsAt − timerStartedAt`) et suit l'écrêtage toute seule.
+   */
+  timerStartedAt: number | null
+  /**
    * Garder l'écran allumé pendant toute la séance (Wake Lock) — arbitrage d'Ugo du
    * 13.09.2026 : la préférence vaut pour la séance, pas pour un seul décompte.
    *
