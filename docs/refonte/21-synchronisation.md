@@ -10,11 +10,20 @@ de faire des exports ou des copier-coller, c'est chiant ».
 La gêne est réelle, mais elle n'est pas le vrai enjeu. **Ses données sont exposées à une perte
 silencieuse, aujourd'hui.**
 
-Safari efface le stockage d'un site après **sept jours d'utilisation du navigateur sans interaction
+WebKit efface le stockage d'un site après **sept jours d'utilisation du navigateur sans interaction
 avec ce site**. IndexedDB en fait partie. Les applications **installées sur l'écran d'accueil** en
-sont exemptées — mais Ugo ouvre l'app dans un onglet, et on le sait de façon certaine : la hauteur
-utile de 659 px mesurée le 15.09 est celle d'un onglet Safari avec ses barres, pas celle d'une PWA
-installée, qui en fait 759.
+sont exemptées — mais Ugo ouvre l'app dans un onglet, et la hauteur utile de 659 px mesurée le 15.09
+est celle d'un onglet avec ses barres, pas celle d'une application installée, qui en fait 759.
+
+**Dans quel navigateur, exactement ?** Ugo a répondu sur UGO-179 / Q3 : « iphone 15 pro et
+**j'utilise chrome**, mais je peux enregistrer la webapp dans safari ». Sur iOS, Chrome s'exécute
+sur WebKit comme Safari : la politique de stockage est la même, et le risque est identique. Ce qui
+change est le **point de départ du transfert** — et c'est ce qui compte ici, parce que chaque
+navigateur a son propre stockage.
+
+**Son carnet est là où il a saisi sa séance.** Exporter depuis le mauvais navigateur donnerait un
+carnet vide ou amorcé au dossier de départ, et l'importer ensuite écraserait le vrai. La procédure
+ci-dessous commence donc par identifier ce navigateur, pas par supposer lequel c'est.
 
 Conséquence : **deux semaines sans s'entraîner peuvent effacer tout son carnet**, sans message et
 sans recours. Le seul filet actuel est un export manuel qu'il trouve pénible — donc qu'il ne fera
@@ -33,10 +42,13 @@ première sauvegarde partie de ce contexte neuf **sauvegarderait le mauvais carn
 Ce plan ne demande donc aucun changement de point d'entrée avant que le transfert soit fait et
 **vérifié**. Procédure, dans cet ordre :
 
-1. **dans Safari**, là où sont les données, exporter le carnet et le conserver hors de l'app ;
-2. **ensuite** seulement, ajouter l'app à l'écran d'accueil ;
-3. dans l'app installée, importer par le chemin existant — `previewImport` puis `importReplace` ;
-4. **vérifier avant de faire confiance** : nombre de séances, date de la plus récente, et les cinq
+1. **ouvrir l'app dans le navigateur où la séance du 15.09 a été saisie** — la vérification est
+   immédiate : l'historique doit montrer cette séance. S'il ne la montre pas, ce n'est pas le bon
+   navigateur, et il ne faut rien exporter depuis celui-là ;
+2. y exporter le carnet et le conserver hors de l'app ;
+3. **ensuite** seulement, ajouter l'app à l'écran d'accueil ;
+4. dans l'app installée, importer par le chemin existant — `previewImport` puis `importReplace` ;
+5. **vérifier avant de faire confiance** : nombre de séances, date de la plus récente, et les cinq
    cibles. Ce sont les trois choses qu'un import raté rend visiblement fausses.
 
 Le chemin d'export manuel **ne doit pas être retiré** tant que ce transfert n'est pas fait. C'est
@@ -221,9 +233,23 @@ marqueur avec la question et la réponse.
 2. **Le fournisseur est Supabase.** Même date, même question. Réponse : **ok**. Le motif de la
    proposition était qu'il est au dossier depuis CB-51 et déjà connecté à son poste ; ce n'est pas
    ce qui vaut validation, c'est sa réponse.
-3. **La décision qui fixe que les données restent locales — D3 — reste à citer.** Ugo a répondu
-   « je regarde » le 17.09. Je n'ai pas pu en relire le texte, Linear étant tombé de mon côté.
-   **Rien ne se met en place avant** : on ne modifie pas une règle qu'on n'a pas sous les yeux.
+3. **D3 n'a pas à être modifiée** — texte retrouvé le 17.09 dans `PLAN.md`, une fois Linear
+   rebranché :
+
+   > **D3 — Pas de backend en V1.** Supabase reste une option **M5** (sync multi-appareils,
+   > alimentation de la tâche planifiée Outlook).
+
+   Elle ne dit pas « les données restent locales ». Elle dit **pas de backend en V1**, et elle
+   **nomme Supabase** comme l'option du jalon M5, pour cet usage exact. Or M5 s'intitule « Après la
+   première séance réelle », et Ugo l'a faite le 15.09.2026.
+
+   Ni Codex ni moi n'avions ce texte sous les yeux, et nous avons tous les deux parlé d'un
+   « changement de D3 » qui n'a pas lieu d'être. **La décision n'est pas rouverte : sa condition
+   est remplie.** Ce qui restait à trancher, D3 le déléguait explicitement à M5 — et c'est ce
+   qu'Ugo vient de trancher aux points 1 et 2.
+
+   UGO-177 / CB-51 porte déjà le jalon M5 et le label « Décision requise ». C'est ce ticket qui se
+   débloque, pas une règle qu'on réécrit.
 
 Reste aussi à consigner toute **nouvelle dépendance** ajoutée au bundle, au moment où elle est
 proposée et non après.
