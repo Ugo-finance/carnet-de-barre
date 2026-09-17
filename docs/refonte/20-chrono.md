@@ -173,8 +173,13 @@ au vert sans avoir exercé son sujet — c'est le motif des 25 tests morts de CB
 - [ ] L'expiration ne déclenche **qu'une** alarme, carte montée sous le mode récup comprise.
       Mutation : abonner le mode récup à son propre `useRecoveryTimer` doit rougir sur le compte.
 - [ ] Les commandes du mode récup ne déclenchent pas la sortie par propagation.
-- [ ] La **dernière série** de la séance passe à la clôture **sans ouvrir** le mode récup. Mutation :
-      remplacer la condition de série suivante par `true` doit rougir.
+- [ ] La **dernière série** de la séance passe à la clôture **sans ouvrir** le mode récup. La
+      mutation qui l'exerce dépend du montage : dans l'implémentation de CB-74, l'écran de clôture
+      est rendu **avant** que le chrono ne soit monté, donc forcer la condition de série suivante
+      ne touche pas ce chemin. C'est **réintroduire la vue de récupération dans le retour de
+      clôture** qui doit faire rougir. P3 de Codex : le critère produit était juste, la mutation
+      décrite ne l'était pas — une mutation qui n'atteint pas le chemin ne prouve rien, et c'est
+      exactement ce que je lui reprochais il y a deux jours.
 - [ ] Avec **Réduire les animations**, la bascule est immédiate.
 - [ ] Le texte sur l'absence d'alarme écran verrouillé reste présent tant que le ticket push n'est
       pas livré **et vérifié sur l'appareil**.

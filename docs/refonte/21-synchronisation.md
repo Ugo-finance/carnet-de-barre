@@ -15,11 +15,14 @@ avec ce site**. IndexedDB en fait partie. Les applications **installées sur l'�
 sont exemptées — mais Ugo ouvre l'app dans un onglet, et la hauteur utile de 659 px mesurée le 15.09
 est celle d'un onglet avec ses barres, pas celle d'une application installée, qui en fait 759.
 
-**Dans quel navigateur, exactement ?** Ugo a répondu sur UGO-179 / Q3 : « iphone 15 pro et
-**j'utilise chrome**, mais je peux enregistrer la webapp dans safari ». Sur iOS, Chrome s'exécute
-sur WebKit comme Safari : la politique de stockage est la même, et le risque est identique. Ce qui
-change est le **point de départ du transfert** — et c'est ce qui compte ici, parce que chaque
-navigateur a son propre stockage.
+**Dans quel navigateur, exactement ?** La question s'est posée parce que sa réponse de septembre
+sur UGO-179 / Q3 disait « j'utilise chrome ». **Il a tranché le 17.09.2026 : c'est Safari** — « pour
+chrome oublie, je sors la webapp depuis safari ».
+
+La vérification reste néanmoins dans la procédure ci-dessous, et ce n'est pas de la méfiance : sur
+iOS **chaque navigateur a son propre stockage**, et l'app a pu être ouverte dans les deux à des
+moments différents. Le carnet est là où la séance a été saisie, et c'est une chose qui se constate
+en deux secondes plutôt qu'elle ne se déduit d'une réponse donnée quatre jours plus tôt.
 
 **Son carnet est là où il a saisi sa séance.** Exporter depuis le mauvais navigateur donnerait un
 carnet vide ou amorcé au dossier de départ, et l'importer ensuite écraserait le vrai. La procédure
@@ -42,9 +45,8 @@ première sauvegarde partie de ce contexte neuf **sauvegarderait le mauvais carn
 Ce plan ne demande donc aucun changement de point d'entrée avant que le transfert soit fait et
 **vérifié**. Procédure, dans cet ordre :
 
-1. **ouvrir l'app dans le navigateur où la séance du 15.09 a été saisie** — la vérification est
-   immédiate : l'historique doit montrer cette séance. S'il ne la montre pas, ce n'est pas le bon
-   navigateur, et il ne faut rien exporter depuis celui-là ;
+1. **ouvrir l'app dans Safari et vérifier que l'historique montre bien la séance du 15.09.** S'il
+   ne la montre pas, ce n'est pas le bon point de départ, et il ne faut rien exporter de là ;
 2. y exporter le carnet et le conserver hors de l'app ;
 3. **ensuite** seulement, ajouter l'app à l'écran d'accueil ;
 4. dans l'app installée, importer par le chemin existant — `previewImport` puis `importReplace` ;
@@ -243,10 +245,14 @@ marqueur avec la question et la réponse.
    **nomme Supabase** comme l'option du jalon M5, pour cet usage exact. Or M5 s'intitule « Après la
    première séance réelle », et Ugo l'a faite le 15.09.2026.
 
-   Ni Codex ni moi n'avions ce texte sous les yeux, et nous avons tous les deux parlé d'un
-   « changement de D3 » qui n'a pas lieu d'être. **La décision n'est pas rouverte : sa condition
-   est remplie.** Ce qui restait à trancher, D3 le déléguait explicitement à M5 — et c'est ce
-   qu'Ugo vient de trancher aux points 1 et 2.
+   **La décision n'est pas rouverte : sa condition est remplie.** Ce qui restait à trancher, D3 le
+   déléguait explicitement à M5 — et c'est ce qu'Ugo vient de trancher aux points 1 et 2.
+
+   Une première version de ce paragraphe écrivait que ni Codex ni moi n'avions ce texte sous les
+   yeux. **C'est faux pour lui** : il l'a cité intégralement le 16.09.2026 à 14:41 sur la PR #68.
+   Son erreur portait sur ce qu'il fallait en faire — parler d'un « changement de D3 » — pas sur
+   une lecture manquante. La mienne était de ne pas avoir cherché le texte là où il vivait,
+   `PLAN.md` à la racine, et d'avoir attribué mon angle mort à l'autre.
 
    UGO-177 / CB-51 porte déjà le jalon M5 et le label « Décision requise ». C'est ce ticket qui se
    débloque, pas une règle qu'on réécrit.
