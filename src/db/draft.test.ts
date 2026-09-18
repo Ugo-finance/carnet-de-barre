@@ -51,3 +51,31 @@ describe('préférence d’écran allumé', () => {
     expect(hydrate.baseTargets).toEqual(ancien.baseTargets)
   })
 })
+
+describe('début de récupération — CB-77', () => {
+  it('part absent sur un brouillon neuf, puisque aucun chrono ne court', () => {
+    expect(neuf().timerStartedAt).toBe(null)
+  })
+
+  it('complète une récupération armée avant que le début ne soit persisté', () => {
+    // Le cas réel : Ugo a une séance en cours, armée par une version d'avant ce lot.
+    // La ligne n'a pas le champ. Elle doit rester **reprenable** — l'échéance suffit au
+    // chiffre, seule la barre retombe sur son approximation. Refuser, ou laisser
+    // `undefined` circuler, perdrait une séance en salle pour une barre de progression.
+    const { timerStartedAt: _absent, ...ancien } = {
+      ...neuf(),
+      timerEndsAt: 1_000_000,
+      timerLabel: 'Récup Squat',
+    }
+
+    const hydrate = hydrateDraft(ancien as StoredDraft)
+
+    expect(hydrate.timerStartedAt).toBe(null)
+    expect(hydrate.timerEndsAt).toBe(1_000_000)
+    expect(hydrate.timerLabel).toBe('Récup Squat')
+  })
+
+  it('ne réécrit pas un début déjà enregistré', () => {
+    expect(hydrateDraft({ ...neuf(), timerStartedAt: 42 }).timerStartedAt).toBe(42)
+  })
+})
