@@ -23,7 +23,12 @@ import type {
   Targets,
 } from '../domain/types.ts'
 import type { ExportFile } from '../domain/schema.ts'
-import type { CarnetStore, FinalizeResult, ImportPreview } from './contracts.ts'
+import type {
+  CarnetStore,
+  FinalizeResult,
+  IdentiteComparaison,
+  ImportPreview,
+} from './contracts.ts'
 import { StoreError } from './contracts.ts'
 import {
   SEEDED_KEY,
@@ -49,7 +54,7 @@ import {
 import { applyProgression, draftToSeance, targetsDiverged } from './derive.ts'
 import { applyTargetPatch, type TargetPatch } from './targets.ts'
 import { seanceSchema } from '../domain/schema.ts'
-import { buildExport, describeImport, validateImport } from './exchange.ts'
+import { buildExport, describeImport, empreinteCarnet, validateImport } from './exchange.ts'
 import { todayInZurich } from '../domain/schedule.ts'
 
 /**
@@ -528,11 +533,14 @@ export class DexieStore implements DraftStore {
 
   async previewImport(input: unknown): Promise<ImportPreview> {
     const candidate = validateImport(input)
-    const [seanceCount, targets] = await Promise.all([
-      this.database.seances.count(),
+    // L'historique entier, et non son décompte : l'empreinte porte sur le contenu, seule
+    // façon de voir qu'une séance passée a été corrigée entre l'aperçu et la
+    // confirmation. Le carnet pèse 5 Ko, la lecture est sans conséquence.
+    const [seances, targets] = await Promise.all([
+      this.database.seances.toArray(),
       this.getTargets(),
     ])
-    return describeImport(candidate, { seanceCount, targetsUpdatedAt: targets.updatedAt })
+    return describeImport(candidate, { seances, targets })
   }
 
   /**
@@ -550,8 +558,21 @@ export class DexieStore implements DraftStore {
    * brouillon. L'import passerait le contrôle puis effacerait une séance qu'Ugo est en
    * train de saisir — précisément ce que ce refus existe pour empêcher.
    */
-  async importReplace(input: unknown): Promise<{ seanceCount: number; targets: Targets }> {
+  async importReplace(
+    input: unknown,
+    identite: IdentiteComparaison,
+  ): Promise<{ seanceCount: number; targets: Targets }> {
     const candidate = validateImport(input)
+
+    // Le fichier confirmé n'est pas forcément celui qui a été comparé : rien n'empêche
+    // de coller un autre export entre l'aperçu et le bouton. Ce contrôle-ci ne lit pas
+    // la base, il reste donc dehors.
+    if (empreinteCarnet(candidate) !== identite.candidat) {
+      throw new StoreError(
+        'stale-preview',
+        'Le fichier a changé depuis la comparaison. Refais un aperçu avant de remplacer.',
+      )
+    }
 
     return this.database.transaction(
       'rw',
@@ -564,6 +585,22 @@ export class DexieStore implements DraftStore {
           throw new StoreError(
             'draft-in-progress',
             'Une séance est en cours. Termine-la ou abandonne-la avant de remplacer tes données.',
+          )
+        }
+
+        // **Dans** la transaction, et avant la première écriture destructive. Le vérifier
+        // dehors laisserait la même fenêtre que pour le brouillon : une autre fenêtre du
+        // navigateur, ou l'app installée qui partage la base, peut avoir écrit depuis
+        // l'aperçu. Ugo confirmerait alors un remplacement de ce qu'il a vu, et
+        // détruirait ce qu'il n'a pas vu.
+        const [seances, targets] = await Promise.all([
+          this.database.seances.toArray(),
+          this.getTargets(),
+        ])
+        if (empreinteCarnet({ seances, targets }) !== identite.local) {
+          throw new StoreError(
+            'stale-preview',
+            'Tes données ont changé depuis la comparaison. Refais un aperçu avant de remplacer.',
           )
         }
 

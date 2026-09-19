@@ -255,12 +255,40 @@ export function prochaineAction(
  * indiscernable de celui d'un autre appareil, et les deux écritures pouvaient atterrir
  * dans le désordre. Un réessai de la **même** génération reste permis — c'est la reprise,
  * et elle est idempotente par construction.
+ *
+ * ## Les deux bornes, et pourquoi elles ne sont pas décoratives
+ *
+ * P2 de Codex sur #71, fondé, et ce qu'il visait n'était pas le code mais **ma
+ * justification** : j'avais écrit que l'invariant « un envoi en vol porte toujours plus
+ * que la borne acquittée » tenait *par construction*. Il ne tenait que tant que
+ * l'appelant était correct, ce qui n'est pas la même chose.
+ *
+ * - **Borne basse.** Renvoyer une génération déjà acquittée recrée une trace que plus
+ *   rien n'efface : `acquitter` la court-circuite par son retour précoce, donc
+ *   `envoiNonResolu` la signale indéfiniment et l'app reprend pour toujours un envoi
+ *   déjà arrivé. Le scénario n'est pas théorique — une décision de réessai calculée
+ *   avant une réponse et enregistrée après elle suffit.
+ * - **Borne haute.** Envoyer une génération jamais écrite promet au serveur une donnée
+ *   qui n'existe pas.
+ *
+ * Les deux lèvent plutôt que de corriger en silence : un appelant qui viole la
+ * précondition a un défaut, et le masquer le rendrait introuvable.
  */
 export function envoyer(
   etat: EtatSauvegarde,
   generation: number,
   appareil: string,
 ): EtatSauvegarde {
+  if (generation > etat.generationLocale) {
+    throw new Error(
+      `Envoi de la génération ${generation}, jamais écrite (locale : ${etat.generationLocale}).`,
+    )
+  }
+  if (generation <= etat.generationAcquittee) {
+    throw new Error(
+      `Envoi de la génération ${generation}, déjà acquittée (acquittée : ${etat.generationAcquittee}).`,
+    )
+  }
   const enVol = envoiNonResolu(etat)
   if (enVol && enVol.generation !== generation) {
     throw new Error(
@@ -270,6 +298,36 @@ export function envoyer(
   return {
     ...etat,
     envoiEnVol: { generation, operation: operationPour(appareil, generation) },
+  }
+}
+
+/**
+ * « J'ai vu l'autre carnet, garde le mien » — la seule sortie d'un conflit.
+ *
+ * Sans elle, un conflit est **définitif** : rien n'avance `revisionAcquittee`, donc
+ * `prochaineAction` répond `conflit` à chaque appel, et comme le conflit passe avant
+ * l'envoi, plus aucune série ne repart. La sauvegarde se désactive en silence à partir
+ * du premier conflit. Constaté en exécutant le scénario de l'écran de Codex contre ce
+ * module : trois séries validées après le conflit, toujours `conflit`, toujours rien
+ * d'envoyé.
+ *
+ * **Jamais automatique.** C'est une perte assumée de ce que porte le distant, et seul
+ * Ugo peut l'accepter. Le module n'émet donc aucune action qui la propose : elle entre
+ * ici par un geste, pas par une décision du protocole.
+ *
+ * **Liée à la révision exactement observée.** `revision` est celle qui a été *montrée*
+ * à Ugo, pas la dernière connue du transport. Le transport doit conditionner son
+ * écriture à cette révision : si le distant a bougé depuis l'affichage, l'écriture
+ * échoue et le conflit se repose sur le nouvel état. Accepter aveuglément écraserait un
+ * changement que personne n'a jamais vu — c'est la même règle que l'aperçu avant
+ * restauration, et elle vaut ici pour la même raison.
+ */
+export function garderLeMien(etat: EtatSauvegarde, revision: number): EtatSauvegarde {
+  return {
+    ...etat,
+    // La borne ne recule pas : `Math.max` protège du cas où l'écran montrerait une
+    // révision plus ancienne que celle déjà acquittée.
+    revisionAcquittee: Math.max(etat.revisionAcquittee ?? 0, revision),
   }
 }
 
