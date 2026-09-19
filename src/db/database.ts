@@ -15,6 +15,8 @@ import Dexie, { type Table } from 'dexie'
 import type { Seance, Targets } from '../domain/types.ts'
 import type { StoredDraft } from './draft.ts'
 import { loadSeed } from './seed.ts'
+import { empreinteCarnet } from './exchange.ts'
+import { noterMutation, SAUVEGARDE_INITIALE, SAUVEGARDE_KEY } from './sauvegarde.ts'
 
 /** Clé de la ligne unique qui porte les cibles courantes. */
 export const TARGETS_KEY = 'current'
@@ -69,7 +71,10 @@ export interface SeedOutcome {
 export async function ensureSeeded(database: CarnetDatabase = db): Promise<SeedOutcome> {
   return database.transaction('rw', database.seances, database.targets, database.meta, async () => {
     const marker = await database.meta.get(SEEDED_KEY)
-    if (marker) return { applied: false, seanceCount: await database.seances.count() }
+    if (marker) {
+      await migrerEtatSauvegarde(database)
+      return { applied: false, seanceCount: await database.seances.count() }
+    }
 
     const { seances, targets } = loadSeed()
     await database.seances.bulkPut(seances)
@@ -78,7 +83,50 @@ export async function ensureSeeded(database: CarnetDatabase = db): Promise<SeedO
       key: SEEDED_KEY,
       value: { at: new Date().toISOString(), seanceCount: seances.length },
     })
+    await migrerEtatSauvegarde(database)
     return { applied: true, seanceCount: seances.length }
+  })
+}
+
+/**
+ * Donne un état de sauvegarde aux bases écrites **avant** CB-79b — P1 de Codex sur #75.
+ *
+ * Le défaut qu'elle ferme visait la base réelle d'Ugo, pas un cas de corruption. Absence
+ * de clé voulait dire « génération 0 », donc « rien n'a jamais été saisi », donc *rien à
+ * envoyer*. Or sa base contient ses vraies séances, écrites par une version d'avant ce
+ * lot. Son carnet ne serait donc parti **qu'à sa prochaine mutation** : jusque-là, une
+ * perte de stockage aurait emporté exactement ce que la sauvegarde existe pour protéger,
+ * et sans même afficher une attente.
+ *
+ * La distinction n'est donc pas « la clé existe-t-elle » mais **« ce carnet a-t-il déjà
+ * divergé du dossier de départ »** :
+ *
+ * - identique à l'amorçage → génération 0, rien à envoyer. C'est la règle qui empêche des
+ *   données de démonstration d'écraser une vraie sauvegarde distante ;
+ * - différent, pour quelque raison que ce soit — séance ajoutée, corrigée, supprimée,
+ *   cible ajustée, historique vidé volontairement → une génération en attente, et le
+ *   carnet part dès que le distant a été lu.
+ *
+ * La comparaison porte sur le **contenu**, parce qu'une correction de séance ne change ni
+ * le nombre ni les dates.
+ *
+ * Migration dans la transaction d'amorçage : elle lit les trois tables qui la décident, et
+ * les verrous sont déjà pris ici.
+ */
+async function migrerEtatSauvegarde(database: CarnetDatabase): Promise<void> {
+  if (await database.meta.get(SAUVEGARDE_KEY)) return
+
+  const row = await database.targets.get(TARGETS_KEY)
+  if (!row) return
+  const { key: _key, ...targets } = row
+  const seances = await database.seances.toArray()
+
+  const amorce = loadSeed()
+  const intact = empreinteCarnet({ seances, targets }) === empreinteCarnet(amorce)
+
+  await database.meta.put({
+    key: SAUVEGARDE_KEY,
+    value: intact ? SAUVEGARDE_INITIALE : noterMutation(SAUVEGARDE_INITIALE),
   })
 }
 

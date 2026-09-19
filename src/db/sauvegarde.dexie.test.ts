@@ -16,6 +16,7 @@ import { describe, expect, it } from 'vitest'
 import { CarnetDatabase } from './database.ts'
 import { DexieStore } from './store.ts'
 import { SAUVEGARDE_KEY } from './sauvegarde.ts'
+import { TARGETS_KEY } from './database.ts'
 import type { LectureDistante } from '../domain/sauvegarde.ts'
 import { setId } from './draft.ts'
 
@@ -156,11 +157,95 @@ describe('la génération avance avec la donnée qu’elle couvre', () => {
     expect((await store.listSeances()).find((s) => s.id === seance.id)?.notes).toBe(seance.notes)
   })
 
-  it('repart de zéro sur une base écrite avant ce lot', async () => {
-    const { base, store } = await magasinPret()
+  it('repart de zéro sur une base d’avant le lot restée au dossier de départ', async () => {
+    const { base } = await magasinPret()
     await base.meta.delete(SAUVEGARDE_KEY)
 
-    expect(await generation(store)).toBe(0)
+    const apresMiseAJour = new DexieStore(base)
+    await apresMiseAJour.ready()
+
+    expect(await generation(apresMiseAJour)).toBe(0)
+  })
+
+  it('met en attente le carnet réel d’une base écrite avant ce lot', async () => {
+    // **P1 de Codex sur #75, et il visait la base réelle d'Ugo.** Absence de clé voulait
+    // dire « génération 0 », donc « rien n'a jamais été saisi », donc rien à envoyer. Or
+    // sa base contient ses vraies séances, écrites par une version d'avant ce lot : son
+    // carnet ne serait parti qu'à sa **prochaine** mutation. Jusque-là, une perte de
+    // stockage aurait emporté exactement ce que la sauvegarde existe pour protéger, et
+    // sans même afficher une attente.
+    const { base, store } = await magasinPret()
+    const [modele] = await store.listSeances()
+    // Ce que l'ancienne version aurait écrit : une séance réelle, et pas de clé.
+    await base.seances.put({ ...modele, id: 'seance-reelle-15-09', date: '2026-09-15', notes: '' })
+    await base.meta.delete(SAUVEGARDE_KEY)
+
+    const apresMiseAJour = new DexieStore(base)
+    await apresMiseAJour.ready()
+
+    expect(await generation(apresMiseAJour)).toBe(1)
+    const prepare = await apresMiseAJour.preparerEnvoi(APPAREIL, VIDE)
+    expect(prepare.action).toMatchObject({ type: 'envoyer', generation: 1 })
+    expect(prepare.carnet?.seances.map((s) => s.id)).toContain('seance-reelle-15-09')
+  })
+
+  it('met aussi en attente un historique volontairement vidé avant le lot', async () => {
+    // Vider son historique est une décision d'Ugo, donc une divergence à propager. La
+    // traiter comme « jamais saisi » laisserait une vieille sauvegarde distante le
+    // ressusciter au premier rapprochement.
+    const { base } = await magasinPret()
+    await base.seances.clear()
+    await base.meta.delete(SAUVEGARDE_KEY)
+
+    const apresMiseAJour = new DexieStore(base)
+    await apresMiseAJour.ready()
+
+    expect(await generation(apresMiseAJour)).toBe(1)
+  })
+
+  it('met en attente une séance corrigée avant le lot, à nombre et dates inchangés', async () => {
+    // Le cas qui interdit de comparer des compteurs, et celui que mes premiers gardes
+    // ne couvraient pas : ils ajoutaient ou retiraient des séances, donc une migration
+    // fondée sur le nombre les passait tous. Une correction ne change ni le nombre, ni
+    // les dates — seul le contenu bouge.
+    const { base, store } = await magasinPret()
+    const [modele] = await store.listSeances()
+    await base.seances.put({ ...modele, notes: 'corrigée avant la mise à jour' })
+    await base.meta.delete(SAUVEGARDE_KEY)
+
+    const apresMiseAJour = new DexieStore(base)
+    await apresMiseAJour.ready()
+
+    expect(await apresMiseAJour.listSeances()).toHaveLength((await store.listSeances()).length)
+    expect(await generation(apresMiseAJour)).toBe(1)
+  })
+
+  it('met en attente une cible ajustée avant le lot', async () => {
+    // L'état le plus disputé du carnet, et il ne touche pas du tout aux séances.
+    const { base, store } = await magasinPret()
+    const cibles = await store.getTargets()
+    await base.targets.put({ key: TARGETS_KEY, ...cibles, squat: { ...cibles.squat, w: 85 } })
+    await base.meta.delete(SAUVEGARDE_KEY)
+
+    const apresMiseAJour = new DexieStore(base)
+    await apresMiseAJour.ready()
+
+    expect(await generation(apresMiseAJour)).toBe(1)
+  })
+
+  it('ne rejoue pas la migration au lancement suivant', async () => {
+    // Elle doit être idempotente : deux démarrages ne font pas deux générations.
+    const { base, store } = await magasinPret()
+    const [modele] = await store.listSeances()
+    await base.seances.put({ ...modele, id: 'seance-reelle', date: '2026-09-15' })
+    await base.meta.delete(SAUVEGARDE_KEY)
+
+    const premier = new DexieStore(base)
+    await premier.ready()
+    const second = new DexieStore(base)
+    await second.ready()
+
+    expect(await generation(second)).toBe(1)
   })
 })
 
