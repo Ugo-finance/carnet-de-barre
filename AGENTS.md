@@ -36,7 +36,38 @@ npm run dev            serveur de développement
 npm run check          lint + format + typecheck + tests + build (ce que la CI exécute)
 npm run test:watch     Vitest en continu
 npm run format         Prettier
+npm run test:sql       garanties du schéma distant (exige Docker et `npx supabase start`)
+npm run ports          les ports de cette copie du dépôt
 ```
+
+## Cloisonnement des projets — règle dure
+
+Sur la machine d'Ugo tournent au moins **trois** choses qui se ressemblent :
+
+1. ce dépôt ;
+2. **le worktree de l'autre agent**, même projet et donc **même configuration** ;
+3. **Portail Paie**, son autre projet, avec sa propre pile Supabase.
+
+**Ne jamais lancer `fuser -k <port>/tcp`, ni `pkill`, ni `kill` sur un pid qu'on n'a pas
+attribué.** Le port `4173` est le défaut de `vite preview` : c'est celui de *toutes* les
+copies du projet. Le libérer de force interrompt la suite de tests de l'autre agent, et
+l'échec ressemble alors à un test instable — personne ne cherche un conflit.
+
+À la place :
+
+- **les ports se dérivent du chemin de la copie** (`scripts/ports.mjs`). Deux worktrees
+  sont à des chemins différents, donc sur des ports différents, sans coordination ;
+- **`scripts/liberer-port.sh <port>`** ne tue qu'un processus dont il a *vérifié* qu'il
+  vient de cette copie. Un port occupé par un propriétaire non identifiable — un
+  conteneur Docker, par exemple — est **intouchable**, et le script refuse au lieu de
+  prétendre que le port est libre ;
+- **`strictPort`** est activé : Vite échoue bruyamment plutôt que de glisser sur le port
+  voisin, qui pourrait appartenir à quelqu'un d'autre.
+
+**Une seule copie à la fois fait tourner la pile Supabase locale.** Les conteneurs sont
+nommés d'après `project_id`, identique dans les deux worktrees : deux `supabase start`
+ne créent pas deux piles, ils se disputent la même. Avant d'en lancer une, vérifier
+`docker ps`, et l'arrêter avec `npx supabase stop` en partant.
 
 ## Propriété des fichiers
 

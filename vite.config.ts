@@ -2,9 +2,17 @@ import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import { PORT_APERCU, PORT_DEV } from './scripts/ports.mjs'
 
 // https://vite.dev/config/
 export default defineConfig({
+  // Ports dérivés du chemin de cette copie — CB-81. Les défauts de Vite (5173 et 4173)
+  // sont ceux de *toutes* les copies du projet, worktree de Codex compris, et deux
+  // serveurs qui se disputent un port produisent un échec qui ne ressemble pas à un
+  // conflit. `strictPort` fait échouer bruyamment plutôt que glisser sur le port voisin,
+  // qui pourrait appartenir à quelqu'un d'autre.
+  server: { port: PORT_DEV, strictPort: true },
+  preview: { port: PORT_APERCU, strictPort: true },
   plugins: [
     react(),
     tailwindcss(),
