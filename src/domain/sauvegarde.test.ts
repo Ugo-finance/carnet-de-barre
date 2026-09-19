@@ -3,6 +3,7 @@ import {
   acquitter,
   envoiNonResolu,
   envoyer,
+  garderLeMien,
   ETAT_INITIAL,
   jamaisSaisi,
   muter,
@@ -432,6 +433,119 @@ describe('les séquences complètes', () => {
       type: 'envoyer',
       generation: 2,
       operation: 'iphone-15-pro:2',
+    })
+  })
+})
+
+describe('les bornes d’envoyer', () => {
+  // P2 de Codex sur #71. Ce qu'il visait n'était pas le code mais ma justification :
+  // j'avais écrit que l'invariant tenait « par construction », alors qu'il ne tenait
+  // que tant que l'appelant était correct. Ce n'est pas la même chose, et la différence
+  // est exactement ce qui se paie plus tard.
+
+  it('refuse une génération déjà acquittée, et laisse l’état intact', () => {
+    // Sa reproduction, rejouée. Sans la borne, la trace recréée ne disparaissait plus :
+    // `acquitter` la court-circuite par son retour précoce, donc l'app reprenait pour
+    // toujours un envoi déjà arrivé.
+    const apres = coherent(acquitter(envoyer(muter(ETAT_INITIAL), 1, APPAREIL), 1, 1))
+
+    expect(() => envoyer(apres, 1, APPAREIL)).toThrow(/déjà acquittée/)
+    // L'état n'a pas bougé : rien à faire, et aucune trace en vol.
+    expect(prochaineAction(apres, lu(1, operationPour(APPAREIL, 1)), APPAREIL)).toEqual({
+      type: 'rien',
+    })
+    expect(envoiNonResolu(apres)).toBeNull()
+  })
+
+  it('refuse une génération jamais écrite', () => {
+    expect(() => envoyer(carnetAJour(2, 5), 3, APPAREIL)).toThrow(/jamais écrite/)
+  })
+
+  it('laisse passer la génération courante en retard', () => {
+    const enRetard = muter(carnetAJour(2, 5))
+
+    expect(envoyer(enRetard, 3, APPAREIL).envoiEnVol).toEqual({
+      generation: 3,
+      operation: 'iphone-15-pro:3',
+    })
+  })
+})
+
+describe('sortir d’un conflit', () => {
+  /** Deux appareils ont écrit, et Ugo continue sa séance sur celui-ci. */
+  function enConflit(): EtatSauvegarde {
+    return muter(carnetAJour(2, 5))
+  }
+  const DISTANT_TIERS = lu(9, 'macbook:4')
+
+  it('sans résolution, le conflit ne se lève jamais et plus rien ne part', () => {
+    // Le défaut tel qu'Ugo l'aurait vécu, et la raison d'être de `garderLeMien`.
+    // Constaté en exécutant le scénario de l'écran de Codex contre ce module.
+    let courant = enConflit()
+    expect(prochaineAction(courant, DISTANT_TIERS, APPAREIL).type).toBe('conflit')
+
+    // Il quitte l'écran en gardant son carnet : aucune décision n'est enregistrée.
+    expect(prochaineAction(courant, DISTANT_TIERS, APPAREIL).type).toBe('conflit')
+
+    // Il valide trois séries de plus. Elles ne partiront pas davantage.
+    courant = muter(muter(muter(courant)))
+    expect(prochaineAction(courant, DISTANT_TIERS, APPAREIL)).toEqual({
+      type: 'conflit',
+      generationLocale: 6,
+      revision: 9,
+    })
+  })
+
+  it('après « garde le mien », l’envoi reprend à la génération courante', () => {
+    const resolu = garderLeMien(enConflit(), 9)
+
+    expect(prochaineAction(resolu, DISTANT_TIERS, APPAREIL)).toEqual({
+      type: 'envoyer',
+      generation: 3,
+      operation: 'iphone-15-pro:3',
+    })
+  })
+
+  it('ne touche à aucune génération : rien n’est déclaré parti', () => {
+    // La résolution dit « ignore ce qu'il y a en face », jamais « c'est envoyé ».
+    const avant = enConflit()
+    const apres = coherent(garderLeMien(avant, 9))
+
+    expect(apres.generationLocale).toBe(avant.generationLocale)
+    expect(apres.generationAcquittee).toBe(avant.generationAcquittee)
+  })
+
+  it('ne fait pas reculer la borne si l’écran montrait une révision plus ancienne', () => {
+    const aJour = carnetAJour(2, 14)
+
+    expect(garderLeMien(aJour, 9).revisionAcquittee).toBe(14)
+  })
+
+  it('laisse en place un envoi dont le sort reste inconnu', () => {
+    // Résoudre un conflit ne résout pas une opération en vol : ce sont deux questions
+    // distinctes, et les confondre ferait repartir g+1 avant que g ne soit tranché.
+    const enVol = envoyer(muter(carnetAJour(2, 5)), 3, APPAREIL)
+
+    const resolu = garderLeMien(enVol, 9)
+
+    expect(envoiNonResolu(resolu)).toEqual({ generation: 3, operation: 'iphone-15-pro:3' })
+    expect(prochaineAction(resolu, DISTANT_TIERS, APPAREIL)).toEqual({
+      type: 'envoyer',
+      generation: 3,
+      operation: 'iphone-15-pro:3',
+    })
+  })
+
+  it('n’empêche pas un conflit ultérieur, sur une révision plus récente', () => {
+    // La résolution vaut pour ce qui a été vu, pas pour l'avenir. Un nouvel écart
+    // distant redevient un conflit, sinon « garde le mien » serait un interrupteur
+    // qui éteint l'alarme pour de bon.
+    const resolu = garderLeMien(enConflit(), 9)
+
+    expect(prochaineAction(resolu, lu(12, 'macbook:5'), APPAREIL)).toEqual({
+      type: 'conflit',
+      generationLocale: 3,
+      revision: 12,
     })
   })
 })

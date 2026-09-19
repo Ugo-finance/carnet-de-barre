@@ -11,14 +11,14 @@
 
 import { useCallback, useState } from 'react'
 import { exportFilename, serializeExport } from '../../db/exchange.ts'
-import type { ImportPreview } from '../../db/contracts.ts'
+import type { IdentiteComparaison, ImportPreview } from '../../db/contracts.ts'
 import type { ExportFile } from '../../domain/schema.ts'
 import { formatDate } from '../../domain/format.ts'
 
 export interface ExchangePort {
   exportAll(): Promise<ExportFile>
   previewImport(input: unknown): Promise<ImportPreview>
-  importReplace(input: unknown): Promise<{ seanceCount: number }>
+  importReplace(input: unknown, identite: IdentiteComparaison): Promise<{ seanceCount: number }>
 }
 
 type Status =
@@ -114,9 +114,14 @@ export function ExportPanel({
   }, [store, texte])
 
   const remplacer = useCallback(async () => {
+    // Sans aperçu, rien à confirmer : le bouton n'existe pas, et ce garde ferme le cas
+    // où il existerait quand même.
+    if (!apercu) return
     setStatus({ kind: 'busy' })
     try {
-      const { seanceCount } = await store.importReplace(JSON.parse(texte))
+      // L'identité vient de l'aperçu **affiché**, jamais d'un recalcul : recalculer
+      // ici rendrait la garde tautologique, puisqu'elle se comparerait à elle-même.
+      const { seanceCount } = await store.importReplace(JSON.parse(texte), apercu.identite)
       setApercu(null)
       setTexte('')
       setStatus({
@@ -126,7 +131,7 @@ export function ExportPanel({
     } catch (error) {
       setStatus({ kind: 'error', message: messageOf(error) })
     }
-  }, [store, texte])
+  }, [apercu, store, texte])
 
   const occupe = status.kind === 'busy'
 

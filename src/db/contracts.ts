@@ -37,6 +37,13 @@ export type StoreErrorCode =
   | 'stale-targets'
   /** Écriture refusée par le navigateur : quota, mode privé, base fermée. */
   | 'storage-unavailable'
+  /**
+   * La confirmation porte sur un aperçu qui ne décrit plus la réalité — CB-79a.
+   *
+   * Le carnet local a changé depuis la comparaison, ou le fichier candidat n'est plus
+   * celui qui a été comparé. Appliquer remplacerait un état qu'Ugo n'a jamais vu.
+   */
+  | 'stale-preview'
 
 export class StoreError extends Error {
   readonly code: StoreErrorCode
@@ -58,14 +65,37 @@ export interface FinalizeResult {
 }
 
 /** Ce que remplace un import, annoncé avant confirmation. */
+/**
+ * L'identité des deux états comparés, à repasser à `importReplace` — CB-79a.
+ *
+ * Elle porte sur le **contenu**, pas sur des compteurs : corriger une séance passée
+ * (D6) ne change ni le nombre de séances, ni sa date, ni son `ts`, et un résumé
+ * laisserait donc passer une confirmation qui l'écraserait sans rien dire.
+ */
+export interface IdentiteComparaison {
+  /** Le carnet du téléphone, tel qu'il était au moment de l'aperçu. */
+  local: string
+  /** Le fichier proposé, tel qu'il a été validé et affiché. */
+  candidat: string
+}
+
 export interface ImportPreview {
   format: 'seed' | 'current'
   seanceCount: number
   /** Bornes de l'historique importé, `null` si aucune séance. */
   firstDate: string | null
   lastDate: string | null
-  /** Ce qui sera écrasé. */
-  replacing: { seanceCount: number; targetsUpdatedAt: string }
+  /** Les cibles que l'import poserait, états d'échec compris. */
+  targets: Targets
+  /** Ce qui sera écrasé, du même détail que le candidat pour que la comparaison ait un sens. */
+  replacing: {
+    seanceCount: number
+    targetsUpdatedAt: string
+    /** Date de la séance locale la plus récente, `null` si l'historique est vide. */
+    lastDate: string | null
+    targets: Targets
+  }
+  identite: IdentiteComparaison
 }
 
 export interface CarnetStore {
@@ -198,6 +228,17 @@ export interface CarnetStore {
   /**
    * Remplace intégralement séances et cibles. Atomique : en cas d'erreur, rien n'est
    * écrit et l'état précédent reste intact. Refusé si un brouillon est ouvert.
+   *
+   * **`identite` est obligatoire**, et vient de l'aperçu qui a été montré. Le contrôle a
+   * lieu *dans* la transaction : entre l'aperçu et la confirmation, une autre fenêtre ou
+   * l'app installée qui partage la base peut avoir écrit. Une signature où l'identité
+   * serait facultative serait une garde qu'on peut oublier d'appeler, c'est-à-dire pas
+   * une garde.
+   *
+   * Lève `stale-preview` si le carnet local ou le fichier candidat ont changé depuis.
    */
-  importReplace(input: unknown): Promise<{ seanceCount: number; targets: Targets }>
+  importReplace(
+    input: unknown,
+    identite: IdentiteComparaison,
+  ): Promise<{ seanceCount: number; targets: Targets }>
 }

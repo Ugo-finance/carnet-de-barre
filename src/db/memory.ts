@@ -24,7 +24,12 @@ import type {
 import type { ExportFile } from '../domain/schema.ts'
 import { todayInZurich } from '../domain/schedule.ts'
 import { applyTargetPatch, type TargetPatch } from './targets.ts'
-import { StoreError, type FinalizeResult, type ImportPreview } from './contracts.ts'
+import {
+  StoreError,
+  type FinalizeResult,
+  type IdentiteComparaison,
+  type ImportPreview,
+} from './contracts.ts'
 import { seanceSchema } from '../domain/schema.ts'
 import { loadSeed } from './seed.ts'
 import { buildDraft, isDraftActive, reprendreAvecMode, reutilisable, startDraft } from './draft.ts'
@@ -35,7 +40,7 @@ import {
   type StoredPreferences,
 } from '../domain/preferences.ts'
 import { applyProgression, draftToSeance, targetsDiverged } from './derive.ts'
-import { buildExport, describeImport, validateImport } from './exchange.ts'
+import { buildExport, describeImport, empreinteCarnet, validateImport } from './exchange.ts'
 import type { DraftStore } from './store.ts'
 
 export class MemoryStore implements DraftStore {
@@ -265,17 +270,25 @@ export class MemoryStore implements DraftStore {
   async previewImport(input: unknown): Promise<ImportPreview> {
     const candidate = validateImport(input)
     const targets = await this.getTargets()
-    return describeImport(candidate, {
-      seanceCount: this.seances.length,
-      targetsUpdatedAt: targets.updatedAt,
-    })
+    return describeImport(candidate, { seances: this.seances, targets })
   }
 
-  async importReplace(input: unknown): Promise<{ seanceCount: number; targets: Targets }> {
+  async importReplace(
+    input: unknown,
+    identite: IdentiteComparaison,
+  ): Promise<{ seanceCount: number; targets: Targets }> {
     // Même ordre que l'adaptateur Dexie : le fichier est validé d'abord (c'est pur et
-    // ça ne lit pas la base), le brouillon ensuite. Inverser ici ferait qu'un même
-    // import rendrait deux erreurs différentes selon l'implémentation.
+    // ça ne lit pas la base), le brouillon ensuite, l'aperçu enfin. Inverser ici ferait
+    // qu'un même import rendrait deux erreurs différentes selon l'implémentation — et
+    // les tests qui s'appuient sur ce magasin cesseraient de dire quelque chose du vrai.
     const candidate = validateImport(input)
+
+    if (empreinteCarnet(candidate) !== identite.candidat) {
+      throw new StoreError(
+        'stale-preview',
+        'Le fichier a changé depuis la comparaison. Refais un aperçu avant de remplacer.',
+      )
+    }
 
     if (this.draft) {
       throw new StoreError(
@@ -283,6 +296,17 @@ export class MemoryStore implements DraftStore {
         'Une séance est en cours. Termine-la ou abandonne-la avant de remplacer tes données.',
       )
     }
+
+    // `getTargets` sème au besoin : lire `this.targets` cru rendrait `null` sur un
+    // magasin jamais amorcé, et l'empreinte ne correspondrait à rien de comparé.
+    const localTargets = await this.getTargets()
+    if (empreinteCarnet({ seances: this.seances, targets: localTargets }) !== identite.local) {
+      throw new StoreError(
+        'stale-preview',
+        'Tes données ont changé depuis la comparaison. Refais un aperçu avant de remplacer.',
+      )
+    }
+
     this.seances = structuredClone(candidate.seances)
     this.targets = structuredClone(candidate.targets)
     this.events.clear()

@@ -21,6 +21,7 @@
  */
 
 import { SCHEMA_VERSION, parseImport, type ExportFile } from '../domain/schema.ts'
+import { empreinte } from '../domain/empreinte.ts'
 import type { Seance, Targets } from '../domain/types.ts'
 import { StoreError, type ImportPreview } from './contracts.ts'
 import { legacySeanceId } from './seed.ts'
@@ -114,10 +115,33 @@ export function validateImport(input: unknown): ValidatedImport {
   }
 }
 
+/**
+ * Un carnet réduit à ce qu'un remplacement détruit.
+ *
+ * Les deux côtés de la comparaison passent par la **même** forme, et c'est voulu : deux
+ * empreintes calculées sur des formes différentes ne seraient jamais comparables, et le
+ * défaut ne se verrait qu'au premier refus inexplicable.
+ */
+export interface CarnetComparable {
+  targets: Targets
+  seances: Seance[]
+}
+
+/** L'empreinte de contenu d'un carnet, locale ou candidate. */
+export function empreinteCarnet(carnet: CarnetComparable): string {
+  return empreinte({ targets: carnet.targets, seances: carnet.seances })
+}
+
+/** La date de la séance la plus récente, `null` si l'historique est vide. */
+function derniereDate(seances: Seance[]): string | null {
+  const dates = seances.map((seance) => seance.date).toSorted()
+  return dates[dates.length - 1] ?? null
+}
+
 /** Ce qu'un import remplacerait, à montrer avant de demander confirmation. */
 export function describeImport(
   candidate: ValidatedImport,
-  current: { seanceCount: number; targetsUpdatedAt: string },
+  current: CarnetComparable,
 ): ImportPreview {
   const dates = candidate.seances.map((seance) => seance.date).toSorted()
   return {
@@ -125,6 +149,16 @@ export function describeImport(
     seanceCount: candidate.seances.length,
     firstDate: dates[0] ?? null,
     lastDate: dates[dates.length - 1] ?? null,
-    replacing: current,
+    targets: structuredClone(candidate.targets),
+    replacing: {
+      seanceCount: current.seances.length,
+      targetsUpdatedAt: current.targets.updatedAt,
+      lastDate: derniereDate(current.seances),
+      targets: structuredClone(current.targets),
+    },
+    identite: {
+      local: empreinteCarnet(current),
+      candidat: empreinteCarnet(candidate),
+    },
   }
 }

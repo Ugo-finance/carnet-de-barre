@@ -9,7 +9,7 @@ import {
 } from './exchange.ts'
 import { setId } from './draft.ts'
 import seedJson from '../domain/seed.json' with { type: 'json' }
-import type { Draft, SetLog } from '../domain/types.ts'
+import type { Draft, Seance, SetLog, Targets } from '../domain/types.ts'
 
 function validate(
   draft: Draft,
@@ -159,24 +159,117 @@ describe('refus, avant toute écriture', () => {
   })
 })
 
+const CIBLES_LOCALES: Targets = { ...seedJson.targets, updatedAt: '2026-09-20' } as Targets
+
+/** Un carnet local minimal, du même détail que le candidat. */
+function localAvec(seances: Seance[], targets: Targets = CIBLES_LOCALES) {
+  return { seances, targets }
+}
+
+const seanceLocale = (date: string): Seance => ({
+  id: `locale-${date}`,
+  date,
+  type: 'A',
+  lines: [],
+  tops: {},
+  notes: '',
+})
+
 describe('aperçu avant remplacement', () => {
-  it('annonce ce qui arrive et ce qui part', () => {
+  it('annonce ce qui arrive et ce qui part, des deux côtés', () => {
     const candidate = validateImport(seedJson)
-    const preview = describeImport(candidate, { seanceCount: 3, targetsUpdatedAt: '2026-09-20' })
-    expect(preview).toEqual({
-      format: 'seed',
-      seanceCount: 12,
-      firstDate: '2026-07-22',
-      lastDate: '2026-09-10',
-      replacing: { seanceCount: 3, targetsUpdatedAt: '2026-09-20' },
-    })
+    const local = localAvec([seanceLocale('2026-09-14'), seanceLocale('2026-09-18')])
+
+    const preview = describeImport(candidate, local)
+
+    expect(preview.format).toBe('seed')
+    expect(preview.seanceCount).toBe(12)
+    expect(preview.firstDate).toBe('2026-07-22')
+    expect(preview.lastDate).toBe('2026-09-10')
+    expect(preview.targets).toEqual(candidate.targets)
+    expect(preview.replacing.seanceCount).toBe(2)
+    expect(preview.replacing.lastDate).toBe('2026-09-18')
+    expect(preview.replacing.targets).toEqual(CIBLES_LOCALES)
+    expect(preview.replacing.targetsUpdatedAt).toBe('2026-09-20')
+  })
+
+  it('donne les cibles des deux côtés, états d’échec compris', () => {
+    // C'est l'état le plus disputé du carnet, et celui qu'Ugo doit pouvoir comparer
+    // avant d'accepter un remplacement. Un aperçu qui ne les montre pas lui fait
+    // signer à l'aveugle.
+    const enEchec: Targets = {
+      ...CIBLES_LOCALES,
+      squat: { ...CIBLES_LOCALES.squat, fail: 1 },
+    }
+    const candidate = validateImport(seedJson)
+
+    const preview = describeImport(candidate, localAvec([], enEchec))
+
+    expect(preview.replacing.targets.squat.fail).toBe(1)
+    expect(preview.targets.squat.fail).toBeNull()
   })
 
   it('tient le cas d’un fichier sans aucune séance', () => {
     const candidate = validateImport({ ...seedJson, seances: [] })
-    const preview = describeImport(candidate, { seanceCount: 12, targetsUpdatedAt: '2026-09-12' })
+
+    const preview = describeImport(candidate, localAvec([seanceLocale('2026-09-14')]))
+
     expect(preview.seanceCount).toBe(0)
     expect(preview.firstDate).toBeNull()
+    expect(preview.lastDate).toBeNull()
+  })
+
+  it('tient le cas d’un carnet local vide', () => {
+    const candidate = validateImport(seedJson)
+
+    expect(describeImport(candidate, localAvec([])).replacing.lastDate).toBeNull()
+  })
+})
+
+describe('identité de la comparaison', () => {
+  const candidate = validateImport(seedJson)
+  const local = { seances: [], targets: seedJson.targets as Targets }
+
+  it('distingue les deux côtés quand ils diffèrent', () => {
+    const { identite } = describeImport(candidate, local)
+
+    expect(identite.local).not.toBe(identite.candidat)
+  })
+
+  it('ne bouge pas quand rien ne bouge', () => {
+    expect(describeImport(candidate, local).identite).toEqual(
+      describeImport(candidate, local).identite,
+    )
+  })
+
+  it('change quand une séance locale est corrigée sans changer ni nombre ni date', () => {
+    // Le cas qui interdit de résumer le carnet par des compteurs. D6 permet de corriger
+    // une séance passée : ni le nombre, ni la date, ni `ts` ne bougent, et une
+    // confirmation prise avant la correction l'écraserait sans que rien ne proteste.
+    const seance: Seance = {
+      id: 'locale-1',
+      date: '2026-09-14',
+      type: 'A',
+      lines: ['Squat : 75×4'],
+      tops: {},
+      notes: '',
+    }
+    const corrigee: Seance = { ...seance, lines: ['Squat : 77,5×4'] }
+
+    const avant = describeImport(candidate, { seances: [seance], targets: local.targets })
+    const apres = describeImport(candidate, { seances: [corrigee], targets: local.targets })
+
+    expect(avant.replacing.seanceCount).toBe(apres.replacing.seanceCount)
+    expect(avant.replacing.lastDate).toBe(apres.replacing.lastDate)
+    expect(avant.identite.local).not.toBe(apres.identite.local)
+  })
+
+  it('change quand une cible locale change', () => {
+    const autres: Targets = { ...local.targets, squat: { ...local.targets.squat, w: 80 } }
+
+    expect(describeImport(candidate, local).identite.local).not.toBe(
+      describeImport(candidate, { ...local, targets: autres }).identite.local,
+    )
   })
 })
 

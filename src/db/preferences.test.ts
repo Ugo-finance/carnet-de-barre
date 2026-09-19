@@ -125,11 +125,9 @@ describe('les réglages sur une vraie base', () => {
     await store.ready()
     await store.savePreferences({ vibration: false })
 
-    await store.importReplace({
-      schemaVersion: 2,
-      targets: await store.getTargets(),
-      seances: [],
-    })
+    const fichier = { schemaVersion: 2, targets: await store.getTargets(), seances: [] }
+    const apercu = await store.previewImport(fichier)
+    await store.importReplace(fichier, apercu.identite)
 
     expect((await store.getPreferences()).vibration).toBe(false)
   })
