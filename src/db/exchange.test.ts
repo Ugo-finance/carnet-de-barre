@@ -3,6 +3,7 @@ import { MemoryStore } from './memory.ts'
 import {
   buildExport,
   describeImport,
+  empreinteCarnet,
   exportFilename,
   serializeExport,
   validateImport,
@@ -280,5 +281,36 @@ describe('nom de fichier', () => {
     // tardive se serait classé au mauvais jour, sans que rien ne le signale.
     expect(exportFilename(new Date('2026-09-19T22:30:00Z'))).toBe('carnet-de-barre-2026-09-20.json')
     expect(exportFilename(new Date('2026-09-20T14:00:00Z'))).toBe('carnet-de-barre-2026-09-20.json')
+  })
+})
+
+describe('l’empreinte d’un carnet', () => {
+  const seance = (id: string): Seance => ({
+    id,
+    date: '2026-09-15',
+    type: 'A',
+    lines: [],
+    tops: {},
+    notes: '',
+  })
+  const cibles = seedJson.targets as Targets
+
+  it('ne dépend pas de l’ordre de lecture des séances', () => {
+    // Un historique est un ensemble, pas une liste ordonnée. Deux lectures de la même
+    // base peuvent le rendre dans un ordre différent, et prendre ce réordonnancement
+    // pour une modification produirait un refus de confirmation que rien ne justifie —
+    // ou, à la migration, une génération en attente pour un carnet intact.
+    expect(empreinteCarnet({ seances: [seance('a'), seance('b')], targets: cibles })).toBe(
+      empreinteCarnet({ seances: [seance('b'), seance('a')], targets: cibles }),
+    )
+  })
+
+  it('change quand le contenu d’une séance change, à ordre égal', () => {
+    expect(empreinteCarnet({ seances: [seance('a')], targets: cibles })).not.toBe(
+      empreinteCarnet({
+        seances: [{ ...seance('a'), notes: 'corrigée' }],
+        targets: cibles,
+      }),
+    )
   })
 })

@@ -23,6 +23,8 @@ import type {
 } from '../domain/types.ts'
 import type { ExportFile } from '../domain/schema.ts'
 import type { Preferences } from '../domain/preferences.ts'
+import type { ActionSauvegarde, EtatSauvegarde, LectureDistante } from '../domain/sauvegarde.ts'
+import type { CarnetComparable } from './exchange.ts'
 
 /** Échec attendu et nommé, par opposition à une exception de stockage. */
 export type StoreErrorCode =
@@ -96,6 +98,38 @@ export interface ImportPreview {
     targets: Targets
   }
   identite: IdentiteComparaison
+}
+
+/**
+ * Ce que `preparerEnvoi` rend : la décision du protocole, et le carnet figé quand il y a
+ * quelque chose à envoyer — CB-79b.
+ *
+ * `carnet` n'est renseigné que pour `{ type: 'envoyer' }`. C'est **l'instantané de la
+ * génération partie**, pas le carnet courant : un réessai porte la même identité
+ * d'opération, donc il doit porter le même contenu.
+ */
+export interface EnvoiPrepare {
+  action: ActionSauvegarde
+  carnet: CarnetComparable | null
+}
+
+/**
+ * Ce dont un écran de sauvegarde a besoin, et rien de plus — CB-79b.
+ *
+ * Étroit **délibérément** : l'écran n'a aucune raison de pouvoir écrire une séance, et
+ * un port large l'y autoriserait. Il se feint aussi en quelques lignes, ce qu'un magasin
+ * entier ne permet pas.
+ *
+ * Aucun réseau ici. `preparerEnvoi` dit *quoi* envoyer et fige *quoi* exactement ; le
+ * transport qui s'en sert n'existe pas encore, et tant qu'il n'existe pas, **rien n'est
+ * sauvegardé nulle part**. L'écran ne doit pas laisser croire le contraire.
+ */
+export interface SauvegardePort {
+  etatSauvegarde(): Promise<EtatSauvegarde>
+  preparerEnvoi(appareil: string, distant: LectureDistante): Promise<EnvoiPrepare>
+  acquitterEnvoi(generation: number, revision: number): Promise<EtatSauvegarde>
+  /** Le geste explicite d'Ugo devant un conflit. `revision` est celle qui lui a été montrée. */
+  resoudreConflit(revision: number): Promise<EtatSauvegarde>
 }
 
 export interface CarnetStore {

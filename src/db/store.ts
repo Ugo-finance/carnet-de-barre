@@ -25,6 +25,8 @@ import type {
 import type { ExportFile } from '../domain/schema.ts'
 import type {
   CarnetStore,
+  EnvoiPrepare,
+  SauvegardePort,
   FinalizeResult,
   IdentiteComparaison,
   ImportPreview,
@@ -55,6 +57,21 @@ import { applyProgression, draftToSeance, targetsDiverged } from './derive.ts'
 import { applyTargetPatch, type TargetPatch } from './targets.ts'
 import { seanceSchema } from '../domain/schema.ts'
 import { buildExport, describeImport, empreinteCarnet, validateImport } from './exchange.ts'
+import {
+  lireSauvegarde,
+  noterMutation,
+  SAUVEGARDE_KEY,
+  type InstantaneEnVol,
+  type LigneSauvegarde,
+} from './sauvegarde.ts'
+import {
+  acquitter,
+  envoyer,
+  garderLeMien,
+  prochaineAction,
+  type EtatSauvegarde,
+  type LectureDistante,
+} from '../domain/sauvegarde.ts'
 import { todayInZurich } from '../domain/schedule.ts'
 
 /**
@@ -109,7 +126,7 @@ export type DraftStore = Pick<
   | 'importReplace'
 >
 
-export class DexieStore implements DraftStore {
+export class DexieStore implements DraftStore, SauvegardePort {
   private readonly database: CarnetDatabase
 
   constructor(database: CarnetDatabase = defaultDb) {
@@ -344,6 +361,8 @@ export class DexieStore implements DraftStore {
         await this.database.seances.put(seance)
         await this.database.targets.put({ key: TARGETS_KEY, ...targets })
         await this.database.meta.put({ key: eventsKey(seance.id), value: events })
+        // La séance vient d'entrer au carnet : elle doit partir. Même transaction.
+        await this.noterMutationCarnet()
         await this.database.drafts.delete(draftId)
 
         return { seance, targets, events, applied: true }
@@ -405,6 +424,7 @@ export class DexieStore implements DraftStore {
         if (targets === courant) return targets
 
         await this.database.targets.put({ key: TARGETS_KEY, ...targets })
+        await this.noterMutationCarnet()
         const journal = await this.database.meta.get(ADJUSTMENTS_KEY)
         const precedents = (journal?.value ?? []) as TargetAdjustment[]
         const trace: TargetAdjustment = { at, lift, before: courant[lift], after: targets[lift] }
@@ -461,8 +481,120 @@ export class DexieStore implements DraftStore {
    * `importReplace` : puisque rien ne bouge côté cibles, `targetsDiverged` ne verra
    * aucune divergence et une séance en cours reste finalisable.
    */
+  /**
+   * Fait avancer la génération de sauvegarde — CB-79b.
+   *
+   * **À appeler depuis l'intérieur d'une transaction qui verrouille déjà `meta`**, et
+   * dans la même que la donnée couverte. Deux transactions séparées laisseraient exister
+   * un instant où la séance est écrite et la génération ne l'est pas ; un plantage là —
+   * iOS tue un onglet en arrière-plan sans prévenir — et la séance ne partirait jamais,
+   * sans que rien ne le signale.
+   */
+  private async noterMutationCarnet(): Promise<void> {
+    const stocke = await this.database.meta.get(SAUVEGARDE_KEY)
+    const ligne = noterMutation(lireSauvegarde(stocke?.value))
+    await this.database.meta.put({ key: SAUVEGARDE_KEY, value: ligne })
+  }
+
+  /** L'état du protocole tel qu'il est enregistré. */
+  async etatSauvegarde(): Promise<EtatSauvegarde> {
+    const stocke = await this.database.meta.get(SAUVEGARDE_KEY)
+    return lireSauvegarde(stocke?.value).etat
+  }
+
+  /**
+   * Décide quoi faire, et **fige** ce qui part — CB-79b.
+   *
+   * Tout se joue dans une transaction : la décision est prise sur l'état canonique, pas
+   * sur une copie que l'appelant tiendrait depuis un moment. C'est ce que demandait la
+   * précondition d'`envoyer` — une décision calculée avant une réponse et enregistrée
+   * après elle ferait renaître un envoi déjà acquitté.
+   *
+   * L'instantané n'est pris qu'**une fois par génération**. Un réessai porte la même
+   * identité d'opération, donc il doit porter le même contenu : renvoyer le carnet
+   * d'aujourd'hui sous l'identité d'hier ferait diverger ce que le serveur a enregistré
+   * de ce que nous croyons lui avoir envoyé.
+   */
+  async preparerEnvoi(appareil: string, distant: LectureDistante): Promise<EnvoiPrepare> {
+    return this.database.transaction(
+      'rw',
+      this.database.seances,
+      this.database.targets,
+      this.database.meta,
+      async () => {
+        const stocke = await this.database.meta.get(SAUVEGARDE_KEY)
+        const ligne = lireSauvegarde(stocke?.value)
+        const action = prochaineAction(ligne.etat, distant, appareil)
+        if (action.type !== 'envoyer') return { action, carnet: null }
+
+        const dejaFige =
+          ligne.instantane?.generation === action.generation ? ligne.instantane : null
+        const instantane =
+          dejaFige ??
+          ({
+            generation: action.generation,
+            carnet: {
+              seances: await this.database.seances.toArray(),
+              targets: await this.getTargets(),
+            },
+          } satisfies InstantaneEnVol)
+
+        await this.database.meta.put({
+          key: SAUVEGARDE_KEY,
+          value: {
+            etat: envoyer(ligne.etat, action.generation, appareil),
+            instantane,
+          } satisfies LigneSauvegarde,
+        })
+        return { action, carnet: instantane.carnet }
+      },
+    )
+  }
+
+  /** Prendre acte d'un envoi confirmé, et libérer son instantané. */
+  async acquitterEnvoi(generation: number, revision: number): Promise<EtatSauvegarde> {
+    return this.database.transaction('rw', this.database.meta, async () => {
+      const stocke = await this.database.meta.get(SAUVEGARDE_KEY)
+      const ligne = lireSauvegarde(stocke?.value)
+      const etat = acquitter(ligne.etat, generation, revision)
+      // L'instantané ne se libère que s'il portait la génération confirmée. Un envoi
+      // plus récent garde le sien, puisqu'il attend encore sa propre réponse.
+      const instantane =
+        ligne.instantane && ligne.instantane.generation > generation ? ligne.instantane : null
+      await this.database.meta.put({
+        key: SAUVEGARDE_KEY,
+        value: { etat, instantane } satisfies LigneSauvegarde,
+      })
+      return etat
+    })
+  }
+
+  /**
+   * « J'ai vu l'autre carnet, garde le mien. »
+   *
+   * Le geste explicite d'Ugo, jamais une décision de l'app. `revision` est celle qui lui
+   * a été **montrée** : le transport devra conditionner son écriture à celle-là, pour
+   * qu'un distant ayant bougé depuis l'affichage repose le conflit au lieu d'être écrasé
+   * sans que personne ne l'ait vu. Ce conditionnement viendra avec le transport ; tant
+   * qu'il n'existe pas, cette opération n'envoie rien par elle-même.
+   */
+  async resoudreConflit(revision: number): Promise<EtatSauvegarde> {
+    return this.database.transaction('rw', this.database.meta, async () => {
+      const stocke = await this.database.meta.get(SAUVEGARDE_KEY)
+      const ligne = lireSauvegarde(stocke?.value)
+      const etat = garderLeMien(ligne.etat, revision)
+      await this.database.meta.put({
+        key: SAUVEGARDE_KEY,
+        value: { ...ligne, etat } satisfies LigneSauvegarde,
+      })
+      return etat
+    })
+  }
+
   async updateSeance(id: string, patch: Partial<Omit<Seance, 'id'>>): Promise<Seance> {
-    return this.database.transaction('rw', this.database.seances, async () => {
+    // `meta` entre dans le verrou : la génération de sauvegarde s'écrit avec la
+    // correction, pas après elle.
+    return this.database.transaction('rw', this.database.seances, this.database.meta, async () => {
       const courante = await this.database.seances.get(id)
       if (!courante) {
         throw new StoreError('storage-unavailable', 'Cette séance n’existe pas ou plus.')
@@ -477,6 +609,7 @@ export class DexieStore implements DraftStore {
       }
 
       await this.database.seances.put(verdict.data)
+      await this.noterMutationCarnet()
       return verdict.data
     })
   }
@@ -491,7 +624,13 @@ export class DexieStore implements DraftStore {
    * geste explicite, journalisé.
    */
   async deleteSeance(id: string): Promise<void> {
-    await this.database.seances.delete(id)
+    // Une suppression n'avait pas de transaction du tout : elle n'écrivait qu'une ligne.
+    // Elle en a une maintenant, parce qu'elle en écrit deux — la séance qui part et la
+    // génération qui dit qu'il faut le faire savoir.
+    await this.database.transaction('rw', this.database.seances, this.database.meta, async () => {
+      await this.database.seances.delete(id)
+      await this.noterMutationCarnet()
+    })
   }
 
   // ---- échange ----
@@ -614,6 +753,8 @@ export class DexieStore implements DraftStore {
           key: SEEDED_KEY,
           value: { at: new Date().toISOString(), seanceCount: candidate.seances.length },
         })
+        // Un import remplace tout le carnet : c'est la plus grosse mutation qui soit.
+        await this.noterMutationCarnet()
         return { seanceCount: candidate.seances.length, targets: candidate.targets }
       },
     )

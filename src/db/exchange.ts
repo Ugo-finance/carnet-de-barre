@@ -127,9 +127,18 @@ export interface CarnetComparable {
   seances: Seance[]
 }
 
-/** L'empreinte de contenu d'un carnet, locale ou candidate. */
+/**
+ * L'empreinte de contenu d'un carnet, locale ou candidate.
+ *
+ * Les séances sont **triées par identifiant** avant d'être empreintées. Un historique est
+ * un ensemble, pas une liste ordonnée : deux lectures de la même base peuvent le rendre
+ * dans un ordre différent, et prendre ce réordonnancement pour une modification
+ * produirait un refus de confirmation que rien ne justifie. Le contenu, lui, est
+ * intégralement couvert.
+ */
 export function empreinteCarnet(carnet: CarnetComparable): string {
-  return empreinte({ targets: carnet.targets, seances: carnet.seances })
+  const seances = carnet.seances.toSorted((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+  return empreinte({ targets: carnet.targets, seances })
 }
 
 /** La date de la séance la plus récente, `null` si l'historique est vide. */
