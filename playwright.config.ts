@@ -1,6 +1,16 @@
 import { defineConfig } from '@playwright/test'
+import { PORT_APERCU } from './scripts/ports.mjs'
 
-const port = process.env.PLAYWRIGHT_PORT ?? '4173'
+/**
+ * Le port de l'aperçu se **dérive du chemin de cette copie** — CB-81.
+ *
+ * `4173` est le défaut de `vite preview`, donc le port que prend *toute* copie du
+ * projet. Le worktree de Codex est le même projet avec la même configuration : deux
+ * suites lancées en même temps se battaient pour le même port, et le réflexe « libérer
+ * le port » de l'un tuait le serveur de l'autre en pleine exécution. L'échec ressemblait
+ * alors à un test instable.
+ */
+const port = process.env.PLAYWRIGHT_PORT ?? String(PORT_APERCU)
 const baseURL = `http://127.0.0.1:${port}`
 
 export default defineConfig({

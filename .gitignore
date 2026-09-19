@@ -12,3 +12,17 @@ playwright-report
 *.log
 .DS_Store
 dev-dist
+
+# Supabase — artefacts locaux, jamais versionnés (CB-81).
+#
+# Ces règles vivent **ici** et non dans `supabase/.gitignore`, qui est le fichier généré
+# par `supabase init`. Le 19.09, ce fichier n'existait que sur une branche non fusionnée :
+# revenir sur `main` l'a supprimé, les artefacts sont redevenus visibles, et un
+# `git add -A` a embarqué `start-secrets/…/docker.env`. GitHub a refusé le push pour
+# « Supabase Secret Key », ce qui a évité la publication — mais une protection distante
+# n'est pas une règle locale.
+#
+# `start-secrets` contient les clés de la pile **locale**. Elles ne donnent accès à rien
+# de distant, et c'est précisément pourquoi il serait facile de les laisser passer.
+supabase/.temp/
+supabase/.branches/
