@@ -36,6 +36,21 @@ end $$;
 select pg_temp.claims('11111111-1111-1111-1111-111111111111');
 set local role authenticated;
 
+-- Un premier envoi refusé ne laisse **aucune** trace. P1 de Codex : la ligne était
+-- créée avant la comparaison, et un refus fabriquait un carnet distant vide — donc un
+-- « une sauvegarde existe » là où il n'y avait rien.
+do $$
+declare r jsonb;
+begin
+  r := public.appliquer_sauvegarde('iphone:egare', 7, 2, 'iphone-15-pro', '[]'::jsonb, '{}'::jsonb);
+  -- L'état d'abord : c'est la propriété qui compte. La forme de la réponse ensuite, pour
+  -- qu'une assertion sur le message ne masque jamais un carnet fabriqué.
+  perform pg_temp.exiger((select count(*) from public.carnet) = 0, 'un refus ne doit créer aucun carnet');
+  perform pg_temp.exiger((select count(*) from public.seance) = 0, 'ni aucune séance');
+  perform pg_temp.exiger(r ->> 'motif' = 'revision-perimee', 'un premier envoi hors révision 0 doit être refusé');
+  perform pg_temp.exiger(r -> 'revision' = 'null'::jsonb, 'sans carnet distant, la révision répondue est nulle, pas 0');
+end $$;
+
 do $$
 declare r jsonb;
 begin

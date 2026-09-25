@@ -21,7 +21,7 @@ if ! docker ps --format '{{.Names}}' | grep -q "^${CONTENEUR}$"; then
 fi
 
 echo "→ remise à neuf depuis les migrations"
-(cd "${RACINE}" && npx --yes supabase@latest db reset --local --no-seed >/dev/null)
+(cd "${RACINE}" && npx --no-install supabase db reset --local --no-seed >/dev/null)
 
 echo "→ assertions sur une connexion"
 docker cp "${RACINE}/supabase/tests/carnet.sql" "${CONTENEUR}:/tmp/carnet.sql" >/dev/null

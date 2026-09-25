@@ -179,8 +179,23 @@ begin
     from public.carnet where user_id = v_user for update;
     exit when found;
 
-    -- Personne encore : on crée. Deux premières sauvegardes simultanées peuvent se
-    -- croiser ici ; celle qui perd repasse par le verrou plutôt que d'échouer.
+    -- Personne encore. **On ne crée que pour un premier envoi légitime**, c'est-à-dire
+    -- parti de la révision 0.
+    --
+    -- P1 de Codex sur la tête précédente : la boucle créait la ligne *avant* de comparer
+    -- la révision attendue. Un envoi refusé laissait donc derrière lui un carnet vide à
+    -- révision 0, sans enveloppe — alors que la réponse disait « refusé ». Or c'est
+    -- exactement la distinction qui décide si un carnet local peut partir : « rien en
+    -- face » ou « une sauvegarde existe ». Un refus qui fabrique un état la détruit.
+    --
+    -- `revision` vaut `null` dans la réponse : il n'y a **aucun** carnet distant, et
+    -- répondre 0 le confondrait avec un carnet existant jamais écrit.
+    if p_revision_attendue <> 0 then
+      return jsonb_build_object('applique', false, 'motif', 'revision-perimee', 'revision', null);
+    end if;
+
+    -- Deux premières sauvegardes simultanées peuvent se croiser ici ; celle qui perd
+    -- repasse par le verrou plutôt que d'échouer.
     begin
       insert into public.carnet (user_id) values (v_user);
       v_revision := 0;

@@ -15,7 +15,9 @@
     "test:watch": "vitest",
     "check": "npm run lint && npm run format:check && npm run typecheck && npm run test && npm run build",
     "ports": "node -e \"import('./scripts/ports.mjs').then(m=>console.log(m.expliquer()))\"",
-    "test:sql": "bash scripts/test-sql.sh"
+    "test:sql": "bash scripts/test-sql.sh",
+    "supabase:cible": "bash scripts/supabase-cible.sh",
+    "supabase:pousser": "bash scripts/supabase-cible.sh && supabase db push"
   },
   "dependencies": {
     "dexie": "^4.4.6",
@@ -36,6 +38,7 @@
     "jsdom": "^30.0.1",
     "oxlint": "^1.81.0",
     "prettier": "^3.9.6",
+    "supabase": "2.117.0",
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.2",
     "vite": "^8.3.0",
