@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { store } from './db/store'
+import { useHauteurVisible } from './app/clavier'
 import { BottomNav, type AppTab } from './components/BottomNav'
 import { SessionHome } from './features/session/SessionHome'
 import { SettingsPanel } from './features/export/SettingsPanel'
@@ -125,6 +126,8 @@ export default function App() {
   const [onglet, setOnglet] = useState<AppTab>('session')
   const [generationSeance, setGenerationSeance] = useState(0)
   const [sessionActive, setSessionActive] = useState(false)
+  // En séance seulement : c'est là qu'on tape des charges au clavier. CB-82.
+  useHauteurVisible(sessionActive)
   const handleSessionActiveChange = useCallback((active: boolean) => {
     setSessionActive(active)
     if (active) setOnglet('session')
@@ -148,8 +151,22 @@ export default function App() {
      * tenue par la disparition de ce qui dépasse. Un écran trop court, un texte iOS
      * agrandi ou un exercice plus bavard rendent le contenu accessible au lieu de le
      * faire disparaître.
+     *
+     * La hauteur n'est plus `dvh` en séance, mais **la hauteur réellement visible** —
+     * CB-82. Sur iOS, le clavier ne change pas `dvh` : le conteneur croyait avoir tout
+     * l'écran, n'avait rien à faire défiler, et « Valider » restait sous le clavier dès
+     * qu'Ugo tapait une charge. `--hauteur-visible` vient de `visualViewport` ; sans lui,
+     * on retombe sur `100dvh`, c'est-à-dire sur le comportement d'avant.
+     *
+     * La classe `h-dvh` reste, alors que le style en ligne l'emporte sur elle : la garde
+     * `compaction-carte.spec.ts` localise ce conteneur **par ses classes**. La retirer
+     * faisait attendre ce test indéfiniment sur un sélecteur vide — un échec qui se lisait
+     * comme une lenteur, pas comme un conteneur disparu.
      */
-    <div className={sessionActive ? 'h-dvh overflow-y-auto' : 'min-h-dvh'}>
+    <div
+      className={sessionActive ? 'h-dvh overflow-y-auto' : 'min-h-dvh'}
+      style={sessionActive ? { height: 'var(--hauteur-visible, 100dvh)' } : undefined}
+    >
       {sessionActive ? null : (
         <div className="px-3">
           <UpdatePrompt store={store} />
