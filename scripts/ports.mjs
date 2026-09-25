@@ -22,8 +22,13 @@
  * penser ni à coordonner quoi que ce soit. Et il reste stable pour une copie donnée,
  * donc on peut le noter dans un signet.
  *
- * On ne choisit pas un port « probablement libre » : on choisit un port **qui n'est celui
- * de personne d'autre**, ce qui n'est pas la même chose.
+ * **Ce que la dérivation garantit, exactement** — et une première version l'exagérait :
+ * les copies *connues* (`gym-chad`, `carnet-de-barre-codex`) tombent sur des ports
+ * distincts, vérifiés. Deux chemins quelconques ont en revanche **une chance sur cent**
+ * de recevoir le même couple, puisque le décalage est un reste modulo 100. Cette
+ * collision n'est pas empêchée : elle est **rendue bruyante** par `strictPort`, qui fait
+ * échouer le second serveur au lieu de lui laisser prendre le port de l'autre. P2 de
+ * Codex sur #78 : j'avais écrit « un port qui n'est celui de personne d'autre ».
  */
 
 import { createHash } from 'node:crypto'
@@ -36,9 +41,8 @@ export const racine = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 /**
  * Un décalage de 0 à 99, stable pour un chemin donné.
  *
- * Volontairement petit : les plages restent lisibles, et une collision entre deux
- * worktrees supposerait le même reste sur cent, ce que le contrôle d'occupation attrape
- * de toute façon avant de lancer quoi que ce soit.
+ * Volontairement petit : les plages restent lisibles. Le prix est une collision
+ * possible entre deux copies sur cent ; `strictPort` la transforme en échec visible.
  */
 function decalage(chemin = racine) {
   const empreinte = createHash('sha256').update(chemin).digest()

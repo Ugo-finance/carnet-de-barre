@@ -20,6 +20,28 @@ set -euo pipefail
 PORT="${1:?usage: liberer-port.sh <port>}"
 RACINE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+# Un entier entre 1 et 65535, et rien d'autre. P2 de Codex : `liberer-port.sh abc`
+# répondait « Port abc libre. » avec le code 0, parce que `ss` rejetait le filtre en
+# silence et qu'une réponse vide se lisait comme un port libre. Un filtre invalide ou
+# élargi ne doit jamais pouvoir passer pour une vérification réussie.
+if ! [[ "${PORT}" =~ ^[0-9]+$ ]] || (( PORT < 1 || PORT > 65535 )); then
+  echo "REFUS : « ${PORT} » n'est pas un numéro de port (1 à 65535)." >&2
+  exit 2
+fi
+
+# Attend que le port cesse d'écouter, au plus deux secondes.
+#
+# P2 de Codex : le script sortait avec le code 0 juste après `kill`, alors que le port
+# écoutait encore — un signal envoyé n'est pas un processus arrêté. Une commande
+# enchaînée échouait alors de façon intermittente, ce qui ressemble à un test instable.
+attendre_liberation() {
+  for _ in $(seq 1 20); do
+    [[ -z "$(ss -ltnH "sport = :${PORT}" 2>/dev/null)" ]] && return 0
+    sleep 0.1
+  done
+  return 1
+}
+
 # 1. Le port est-il pris ? Sans `-p`, donc sans dépendre des permissions.
 if [[ -z "$(ss -ltnH "sport = :${PORT}" 2>/dev/null)" ]]; then
   echo "Port ${PORT} libre."
@@ -55,3 +77,9 @@ for pid in ${occupants}; do
 done
 
 [[ "${refus}" -eq 0 ]] || { echo "" >&2; echo "Rien n'a été tué hors de ce dépôt." >&2; exit 1; }
+if ! attendre_liberation; then
+  echo "ÉCHEC : le port ${PORT} écoute encore deux secondes après l'arrêt demandé." >&2
+  exit 1
+fi
+echo "Port ${PORT} libéré."
+

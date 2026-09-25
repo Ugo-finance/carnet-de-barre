@@ -36,7 +36,6 @@ npm run dev            serveur de développement
 npm run check          lint + format + typecheck + tests + build (ce que la CI exécute)
 npm run test:watch     Vitest en continu
 npm run format         Prettier
-npm run test:sql       garanties du schéma distant (exige Docker et `npx supabase start`)
 npm run ports          les ports de cette copie du dépôt
 ```
 
@@ -55,8 +54,10 @@ l'échec ressemble alors à un test instable — personne ne cherche un conflit.
 
 À la place :
 
-- **les ports se dérivent du chemin de la copie** (`scripts/ports.mjs`). Deux worktrees
-  sont à des chemins différents, donc sur des ports différents, sans coordination ;
+- **les ports se dérivent du chemin de la copie** (`scripts/ports.mjs`). Les deux copies
+  connues sont sur des ports distincts, sans coordination. Deux chemins quelconques ont
+  une chance sur cent de collision : elle n'est pas empêchée, mais `strictPort` la rend
+  bruyante au lieu de laisser un serveur prendre le port de l'autre ;
 - **`scripts/liberer-port.sh <port>`** ne tue qu'un processus dont il a *vérifié* qu'il
   vient de cette copie. Un port occupé par un propriétaire non identifiable — un
   conteneur Docker, par exemple — est **intouchable**, et le script refuse au lieu de
