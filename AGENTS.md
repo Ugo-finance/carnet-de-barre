@@ -26,7 +26,9 @@ PWA mobile de carnet de musculation pour un seul utilisateur (Ugo), offline-firs
   - exécution : `react`, `react-dom`, `dexie`, `zod` ;
   - build : `vite`, `@vitejs/plugin-react`, `typescript`, `tailwindcss`, `@tailwindcss/vite`, `vite-plugin-pwa` ;
   - tests et qualité : `vitest`, `jsdom`, `@testing-library/react`, `@testing-library/jest-dom`, `fake-indexeddb`, `@playwright/test`, `oxlint`, `prettier` ;
-  - types : `@types/node`, `@types/react`, `@types/react-dom`.
+  - types : `@types/node`, `@types/react`, `@types/react-dom` ;
+  - schéma distant : `supabase` (la CLI), **épinglée à une version exacte** — arbitrage
+    d'Ugo du 20.09.2026. Un `@latest` ferait changer le banc sans que le dépôt change.
   Toute autre dépendance, y compris de test, remonte à Ugo avant installation.
 
 ## Commandes
@@ -37,6 +39,9 @@ npm run check          lint + format + typecheck + tests + build (ce que la CI e
 npm run test:watch     Vitest en continu
 npm run format         Prettier
 npm run ports          les ports de cette copie du dépôt
+npm run test:sql       garanties du schéma distant, base remise à neuf (Docker + `npx supabase start`)
+npm run supabase:cible vérifie que la cible distante est bien le projet du carnet
+npm run supabase:pousser  pousse les migrations — **seul chemin autorisé**, voir ci-dessous
 ```
 
 ## Cloisonnement des projets — règle dure
@@ -69,6 +74,20 @@ l'échec ressemble alors à un test instable — personne ne cherche un conflit.
 nommés d'après `project_id`, identique dans les deux worktrees : deux `supabase start`
 ne créent pas deux piles, ils se disputent la même. Avant d'en lancer une, vérifier
 `docker ps`, et l'arrêter avec `npx supabase stop` en partant.
+
+**Un seul projet Supabase distant : `rtxdtiysrdgzsomatwon`** (`carnet-de-barre`). Consigne
+d'Ugo du 25.09.2026 : ne jamais écrire sur l'autre projet — Portail Paie, la base de paie
+d'un cabinet fiduciaire. Une migration poussée au mauvais endroit y écrirait sans bruit :
+`supabase db push` pousse vers la ref liée, quelle qu'elle soit.
+
+- **Toute poussée distante passe par `npm run supabase:pousser`**, qui exécute d'abord
+  `scripts/supabase-cible.sh`. Ne jamais lancer `supabase db push` directement : cela
+  court-circuite le contrôle, et c'est le seul geste qui le rend inutile.
+- Ne jamais `supabase link` vers une autre ref que `rtxdtiysrdgzsomatwon`.
+- Par un connecteur MCP, tout appel qui écrit (`apply_migration`, `execute_sql` hors
+  lecture, `deploy_edge_function`) exige un `project_id` égal à cette ref, vérifié avant
+  l'appel. Qu'un connecteur ne voie aujourd'hui qu'un projet n'est pas une garantie.
+- Au moindre doute sur la cible, s'arrêter et demander à Ugo.
 
 ## Propriété des fichiers
 

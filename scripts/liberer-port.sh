@@ -24,7 +24,10 @@ RACINE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # répondait « Port abc libre. » avec le code 0, parce que `ss` rejetait le filtre en
 # silence et qu'une réponse vide se lisait comme un port libre. Un filtre invalide ou
 # élargi ne doit jamais pouvoir passer pour une vérification réussie.
-if ! [[ "${PORT}" =~ ^[0-9]+$ ]] || (( PORT < 1 || PORT > 65535 )); then
+# `^[1-9][0-9]*$` et non `^[0-9]+$` : Bash lit un nombre à zéro initial en octal, et
+# `08` faisait échouer la comparaison puis annoncer « libre » avec le code 0 — le défaut
+# que ce contrôle existe pour fermer. P3 de Codex sur #78.
+if ! [[ "${PORT}" =~ ^[1-9][0-9]*$ ]] || (( 10#${PORT} > 65535 )); then
   echo "REFUS : « ${PORT} » n'est pas un numéro de port (1 à 65535)." >&2
   exit 2
 fi
@@ -82,4 +85,3 @@ if ! attendre_liberation; then
   exit 1
 fi
 echo "Port ${PORT} libéré."
-
