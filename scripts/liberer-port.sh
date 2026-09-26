@@ -27,7 +27,10 @@ RACINE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # `^[1-9][0-9]*$` et non `^[0-9]+$` : Bash lit un nombre à zéro initial en octal, et
 # `08` faisait échouer la comparaison puis annoncer « libre » avec le code 0 — le défaut
 # que ce contrôle existe pour fermer. P3 de Codex sur #78.
-if ! [[ "${PORT}" =~ ^[1-9][0-9]*$ ]] || (( 10#${PORT} > 65535 )); then
+# Cinq chiffres au plus, vérifiés **avant** l'arithmétique : un entier trop grand pour
+# Bash débordait pendant la comparaison et passait pour un port valide —
+# `18446744073709551617` répondait « libre », code 0. P3 de Codex sur #77.
+if ! [[ "${PORT}" =~ ^[1-9][0-9]{0,4}$ ]] || (( 10#${PORT} > 65535 )); then
   echo "REFUS : « ${PORT} » n'est pas un numéro de port (1 à 65535)." >&2
   exit 2
 fi
