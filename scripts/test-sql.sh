@@ -16,7 +16,7 @@ CONTENEUR=supabase_db_carnet-de-barre
 RACINE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 if ! docker ps --format '{{.Names}}' | grep -q "^${CONTENEUR}$"; then
-  echo "La base locale n'est pas démarrée. Lance : npx supabase start" >&2
+  echo "La base locale n'est pas démarrée. Lance : npx --no-install supabase start" >&2
   exit 1
 fi
 
