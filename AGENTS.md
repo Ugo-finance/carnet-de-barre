@@ -39,7 +39,7 @@ npm run check          lint + format + typecheck + tests + build (ce que la CI e
 npm run test:watch     Vitest en continu
 npm run format         Prettier
 npm run ports          les ports de cette copie du dépôt
-npm run test:sql       garanties du schéma distant, base remise à neuf (Docker + `npx supabase start`)
+npm run test:sql       garanties du schéma distant, base remise à neuf (Docker + `npx --no-install supabase start`)
 npm run supabase:cible vérifie que la cible distante est bien le projet du carnet
 npm run supabase:pousser  pousse les migrations — **seul chemin autorisé**, voir ci-dessous
 ```
@@ -73,7 +73,7 @@ l'échec ressemble alors à un test instable — personne ne cherche un conflit.
 **Une seule copie à la fois fait tourner la pile Supabase locale.** Les conteneurs sont
 nommés d'après `project_id`, identique dans les deux worktrees : deux `supabase start`
 ne créent pas deux piles, ils se disputent la même. Avant d'en lancer une, vérifier
-`docker ps`, et l'arrêter avec `npx supabase stop` en partant.
+`docker ps`, et l'arrêter avec `npx --no-install supabase stop` en partant.
 
 **Un seul projet Supabase distant : `rtxdtiysrdgzsomatwon`** (`carnet-de-barre`). Consigne
 d'Ugo du 25.09.2026 : ne jamais écrire sur l'autre projet — Portail Paie, la base de paie
