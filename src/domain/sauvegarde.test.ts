@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   acquitter,
+  constaterDisparition,
   envoiNonResolu,
   envoyer,
   garderLeMien,
@@ -546,6 +547,54 @@ describe('sortir d’un conflit', () => {
       type: 'conflit',
       generationLocale: 3,
       revision: 12,
+    })
+  })
+})
+
+describe('une sauvegarde distante disparue — CB-84', () => {
+  // « Rien en face » n'a pas le même sens selon qu'on a déjà sauvegardé. Le protocole
+  // répondait `rien` dans les deux cas, et l'écran aurait affiché « sauvegardé » sans
+  // qu'aucune sauvegarde n'existe plus.
+
+  it('est nommée quand on avait acquitté et qu’il n’y a plus rien en face', () => {
+    expect(prochaineAction(carnetAJour(3, 7), VIDE, APPAREIL)).toEqual({
+      type: 'sauvegarde-disparue',
+      revision: 7,
+    })
+  })
+
+  it('passe avant la reprise d’un envoi en vol, dont le destinataire a disparu aussi', () => {
+    const enVol = envoyer(muter(carnetAJour(2, 5)), 3, APPAREIL)
+
+    expect(prochaineAction(enVol, VIDE, APPAREIL)).toEqual({
+      type: 'sauvegarde-disparue',
+      revision: 5,
+    })
+  })
+
+  it('ne concerne pas un carnet jamais envoyé : l’absence y est normale', () => {
+    expect(prochaineAction(ETAT_INITIAL, VIDE, APPAREIL)).toEqual({ type: 'rien' })
+    expect(prochaineAction(muter(ETAT_INITIAL), VIDE, APPAREIL)).toMatchObject({ type: 'envoyer' })
+  })
+
+  it('se constate en oubliant l’acquis, sans toucher à ce qui est écrit', () => {
+    const avant = envoyer(muter(carnetAJour(3, 7)), 4, APPAREIL)
+
+    const apres = coherent(constaterDisparition(avant))
+
+    expect(apres.generationLocale).toBe(avant.generationLocale)
+    expect(apres.generationAcquittee).toBe(0)
+    expect(apres.revisionAcquittee).toBeNull()
+    expect(apres.envoiEnVol).toBeNull()
+  })
+
+  it('et après l’avoir constatée, tout le carnet repart', () => {
+    const apres = constaterDisparition(carnetAJour(3, 7))
+
+    expect(prochaineAction(apres, VIDE, APPAREIL)).toEqual({
+      type: 'envoyer',
+      generation: 3,
+      operation: 'iphone-15-pro:3',
     })
   })
 })

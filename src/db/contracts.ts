@@ -111,6 +111,12 @@ export interface ImportPreview {
 export interface EnvoiPrepare {
   action: ActionSauvegarde
   carnet: CarnetComparable | null
+  /**
+   * Présent quand la sauvegarde distante avait **disparu** et que cet envoi la
+   * reconstitue — CB-84. Facultatif et additif : un port feint qui l'ignore reste juste,
+   * il perd seulement la possibilité de le dire à Ugo.
+   */
+  reconstitution?: { revisionDisparue: number }
 }
 
 /**
