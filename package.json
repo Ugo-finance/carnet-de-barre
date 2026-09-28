@@ -17,9 +17,11 @@
     "ports": "node -e \"import('./scripts/ports.mjs').then(m=>console.log(m.expliquer()))\"",
     "test:sql": "bash scripts/test-sql.sh",
     "supabase:cible": "bash scripts/supabase-cible.sh",
-    "supabase:pousser": "bash scripts/supabase-cible.sh && supabase db push"
+    "supabase:pousser": "bash scripts/supabase-cible.sh && supabase db push",
+    "test:transport": "bash scripts/test-transport.sh"
   },
   "dependencies": {
+    "@supabase/supabase-js": "2.117.2",
     "dexie": "^4.4.6",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
