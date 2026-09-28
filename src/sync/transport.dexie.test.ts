@@ -302,6 +302,46 @@ describe('une sauvegarde distante disparue — CB-84', () => {
   })
 })
 
+describe('une sauvegarde distante reculée — P1 de Codex sur #83', () => {
+  it('remonte une décision, n’affiche pas « à jour », et n’écrase rien', async () => {
+    const store = await magasinPret()
+    await store.adjustTarget('squat', { w: 80 })
+    const serveur = new FauxServeur()
+    await synchroniser(store, serveur, APPAREIL) // révision 1
+    await store.adjustTarget('bench', { w: 75 })
+    await synchroniser(store, serveur, APPAREIL) // révision 2
+
+    // Le serveur est restauré à sa révision 1 : plus ancienne que ce qu'on a acquitté.
+    serveur.revision = 1
+    serveur.derniere = 'restauration'
+
+    const issue = await synchroniser(store, serveur, APPAREIL)
+    expect(issue).toEqual({
+      issue: 'decision',
+      action: { type: 'sauvegarde-reculee', revision: 1, revisionAcquittee: 2 },
+    })
+    expect(serveur.ecritures).toBe(2)
+  })
+
+  it('et « garde le mien » renvoie tout contre la révision restaurée', async () => {
+    const store = await magasinPret()
+    await store.adjustTarget('squat', { w: 80 })
+    const serveur = new FauxServeur()
+    await synchroniser(store, serveur, APPAREIL)
+    await store.adjustTarget('bench', { w: 75 })
+    await synchroniser(store, serveur, APPAREIL)
+    serveur.revision = 1
+    serveur.derniere = 'restauration'
+    await synchroniser(store, serveur, APPAREIL)
+
+    await store.resoudreConflit(1)
+
+    expect(await synchroniser(store, serveur, APPAREIL)).toEqual({ issue: 'envoye', revision: 2 })
+    expect(serveur.carnet?.targets.bench.w).toBe(75)
+    expect(await synchroniser(store, serveur, APPAREIL)).toEqual({ issue: 'a-jour' })
+  })
+})
+
 describe('lire la réponse du serveur', () => {
   it('accepte les trois motifs attendus', () => {
     expect(lireResultat({ motif: 'applique', revision: 3 })).toEqual({

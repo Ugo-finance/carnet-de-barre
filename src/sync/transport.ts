@@ -131,6 +131,7 @@ export async function synchroniser(
 
     case 'proposer-restauration':
     case 'conflit':
+    case 'sauvegarde-reculee':
       return { issue: 'decision', action }
   }
 }

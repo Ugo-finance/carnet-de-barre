@@ -141,6 +141,17 @@ export type ActionSauvegarde =
    * croyait acquis (`constaterDisparition`), puis tout renvoyer.
    */
   | { type: 'sauvegarde-disparue'; revision: number }
+  /**
+   * La sauvegarde distante a **reculé** : on avait acquitté `revisionAcquittee`, et le
+   * distant porte une révision plus ancienne — typiquement une restauration du serveur.
+   * P1 de Codex sur #83 : `sauvegarde-disparue` ne couvrait que l'absence, et un distant
+   * revenu en arrière s'affichait encore « à jour ».
+   *
+   * Contrairement à la disparition, **rien ne part tout seul** : le distant existe, et
+   * Ugo l'a peut-être restauré exprès. Écraser serait choisir à sa place. L'action
+   * remonte donc comme une décision, résolue par `garderLeMien` ou par une restauration.
+   */
+  | { type: 'sauvegarde-reculee'; revision: number; revisionAcquittee: number }
 
 /**
  * Le carnet ne porte-t-il encore aucune saisie d'Ugo ?
@@ -224,6 +235,17 @@ export function prochaineAction(
         type: 'acquitter-envoi',
         generation: etat.envoiEnVol.generation,
         revision: distant.revision,
+      }
+    }
+
+    // Un distant **plus ancien** que ce qu'on avait acquitté n'est ni « à jour », ni un
+    // conflit ordinaire : il a été ramené en arrière. Le laisser tomber dans `rien`
+    // redonnait le mensonge que CB-84 ferme pour une sauvegarde disparue.
+    if (etat.revisionAcquittee !== null && distant.revision < etat.revisionAcquittee) {
+      return {
+        type: 'sauvegarde-reculee',
+        revision: distant.revision,
+        revisionAcquittee: etat.revisionAcquittee,
       }
     }
 
@@ -361,12 +383,19 @@ export function constaterDisparition(etat: EtatSauvegarde): EtatSauvegarde {
  * restauration, et elle vaut ici pour la même raison.
  */
 export function garderLeMien(etat: EtatSauvegarde, revision: number): EtatSauvegarde {
-  return {
-    ...etat,
-    // La borne ne recule pas : `Math.max` protège du cas où l'écran montrerait une
-    // révision plus ancienne que celle déjà acquittée.
-    revisionAcquittee: Math.max(etat.revisionAcquittee ?? 0, revision),
+  // Face à une sauvegarde **reculée** — révision montrée plus ancienne que l'acquise —
+  // garder le mien veut dire tout renvoyer contre ce distant-là : la borne descend à la
+  // révision vue et toutes les générations redeviennent en retard. Une première version
+  // faisait `Math.max` ici, en supposant qu'une révision plus ancienne ne pouvait venir
+  // que d'un écran périmé ; la borne restait alors au-dessus du distant, l'envoi partait
+  // contre une révision que le serveur n'avait plus, et le refus se répétait sans fin.
+  //
+  // Si c'était bien un écran périmé et que le distant n'a pas reculé, rien n'est perdu :
+  // le serveur compare sous verrou, refuse l'envoi, et le cycle suivant relit l'état réel.
+  if (etat.revisionAcquittee !== null && revision < etat.revisionAcquittee) {
+    return { ...etat, generationAcquittee: 0, revisionAcquittee: revision, envoiEnVol: null }
   }
+  return { ...etat, revisionAcquittee: Math.max(etat.revisionAcquittee ?? 0, revision) }
 }
 
 /**
