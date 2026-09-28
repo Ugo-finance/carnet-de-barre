@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Preferences } from '../../domain/preferences'
+import { EmailCodeLogin, type EmailCodeAuthPort } from './EmailCodeLogin'
 import { ExportPanel, type ExchangePort } from './ExportPanel'
 
 export interface SettingsPort extends ExchangePort {
@@ -8,9 +9,9 @@ export interface SettingsPort extends ExchangePort {
 }
 
 type PreferenceKey = keyof Preferences
-type SettingsPage = 'preferences' | 'hardware' | 'export' | 'import'
+type SettingsPage = 'preferences' | 'hardware' | 'backup' | 'export' | 'import'
 
-const PAGES: readonly SettingsPage[] = ['preferences', 'hardware', 'export', 'import']
+const PAGES: readonly SettingsPage[] = ['preferences', 'hardware', 'backup', 'export', 'import']
 
 const CONTROLS: readonly {
   key: PreferenceKey
@@ -45,9 +46,11 @@ function messageFor(error: unknown): string {
 
 export function SettingsPanel({
   store,
+  backupAuth,
   onPreferencesChange,
 }: {
   store: SettingsPort
+  backupAuth?: EmailCodeAuthPort
   onPreferencesChange?: () => void
 }) {
   const [preferences, setPreferences] = useState<Preferences>()
@@ -91,8 +94,11 @@ export function SettingsPanel({
           <p className="text-sm font-semibold text-accent-readable">Carnet local</p>
           <h1 className="display mt-1 text-4xl">Réglages</h1>
         </div>
-        <p className="num pb-1 text-xs text-muted" aria-label={`Page ${pageIndex + 1} sur 4`}>
-          {pageIndex + 1} / 4
+        <p
+          className="num pb-1 text-xs text-muted"
+          aria-label={`Page ${pageIndex + 1} sur ${PAGES.length}`}
+        >
+          {pageIndex + 1} / {PAGES.length}
         </p>
       </header>
 
@@ -170,6 +176,30 @@ export function SettingsPanel({
         </section>
       ) : null}
 
+      {page === 'backup' ? (
+        <section className="rounded-2xl border border-line bg-surface p-4">
+          <h2 className="text-lg font-bold">Sauvegarde</h2>
+          <p className="mt-2 text-sm leading-5 text-muted">
+            Sauvegarde sur Supabase : dates, exercices, charges, répétitions, RPE et notes de
+            séance. Une adresse e-mail sert à la connexion.
+          </p>
+          <p className="mt-2 text-xs leading-4 text-muted">
+            Les séries de la séance en cours restent sur ce téléphone. La sauvegarde couvre le
+            carnet finalisé, pas le brouillon actif. Si le stockage du téléphone est effacé pendant
+            une séance, ce brouillon ne peut pas être récupéré.
+          </p>
+          <div className="mt-4 border-t border-line pt-4">
+            {backupAuth ? (
+              <EmailCodeLogin auth={backupAuth} />
+            ) : (
+              <p className="text-sm text-bad" role="alert">
+                La connexion à la sauvegarde n’est pas configurée sur cette installation.
+              </p>
+            )}
+          </div>
+        </section>
+      ) : null}
+
       {page === 'export' ? <ExportPanel store={store} section="export" /> : null}
       {page === 'import' ? <ExportPanel store={store} section="import" /> : null}
 
@@ -191,8 +221,10 @@ export function SettingsPanel({
           {page === 'preferences'
             ? 'Suivant : Matériel'
             : page === 'hardware'
-              ? 'Suivant : Export'
-              : 'Suivant : Import'}
+              ? 'Suivant : Sauvegarde'
+              : page === 'backup'
+                ? 'Suivant : Export'
+                : 'Suivant : Import'}
         </button>
       </nav>
     </main>
