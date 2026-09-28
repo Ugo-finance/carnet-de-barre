@@ -4,28 +4,43 @@ Ce runbook ferme la différence entre un écran compilé et une connexion réell
 utilisable. La cible unique est le projet Supabase `carnet-de-barre`, ref
 `rtxdtiysrdgzsomatwon`. Une autre ref arrête la procédure.
 
-## Préconditions qui nécessitent Ugo
+## Arbitrage d'Ugo
 
-1. Ugo confirme l'adresse e-mail unique à autoriser. Une adresse trouvée dans Git ou dans
-   une autre application n'est pas un consentement à créer le compte.
-2. Le projet doit pouvoir personnaliser le modèle d'e-mail. Pour ce projet Free créé
-   après le 03.06.2026, Supabase refuse cette personnalisation avec son fournisseur par
-   défaut. Ugo choisit donc un SMTP personnalisé ou une offre Supabase qui l'autorise.
-3. Les identifiants SMTP restent dans Supabase. Ils ne vont ni dans Git, ni dans Vercel,
-   ni dans le paquet public de la PWA.
+Ugo a confirmé le 28.09.2026 :
+
+- le compte Auth unique est l’adresse personnelle d’Ugo ;
+- le projet reste sur l'offre Supabase gratuite ;
+- l'envoi du code utilise donc un SMTP personnalisé gratuit.
+
+Pour ce projet Free créé après le 03.06.2026, Supabase refuse la personnalisation du
+modèle avec son fournisseur d'e-mail par défaut. Le SMTP Gmail du compte confirmé permet
+de rester sur l'offre gratuite :
+
+- serveur `smtp.gmail.com` ;
+- port `587` avec TLS/STARTTLS ;
+- utilisateur et expéditeur l’adresse personnelle d’Ugo ;
+- nom d'expéditeur `Carnet de barre` ;
+- mot de passe d'application Google à 16 caractères, créé après activation de la
+  validation en deux étapes.
+
+Le mot de passe d'application est saisi directement dans Supabase. Il ne va ni dans Git,
+ni dans Vercel, ni dans le paquet public de la PWA, ni dans un commentaire de ticket.
 
 ## Configuration Supabase
 
 Dans le tableau de bord du projet exact :
 
-1. **Authentication → Users → Add user** : créer uniquement l'adresse confirmée par Ugo
-   et marquer l'e-mail confirmé. Cette création d'administration reste possible avec les
-   inscriptions publiques fermées.
-2. **Authentication → Sign In / Providers → Email** : désactiver la création de nouveaux
+1. **Authentication → Users → Add user** : créer uniquement
+   l’adresse personnelle d’Ugo et marquer l'e-mail confirmé. Cette création
+   d'administration reste possible avec les inscriptions publiques fermées.
+2. **Authentication → Emails → SMTP Settings** : activer le SMTP personnalisé et saisir
+   les paramètres Gmail ci-dessus, dont le mot de passe d'application directement dans
+   le tableau de bord.
+3. **Authentication → Sign In / Providers → Email** : désactiver la création de nouveaux
    utilisateurs. Le réglage global `enable_signup` et le réglage e-mail
    `auth.email.enable_signup` doivent tous deux être à `false`.
-3. Régler la longueur de l'OTP e-mail à **6**.
-4. **Authentication → Email Templates → Magic Link** : remplacer le lien par un code et
+4. Régler la longueur de l'OTP e-mail à **6**.
+5. **Authentication → Email Templates → Magic Link** : remplacer le lien par un code et
    conserver la variable exacte `{{ .Token }}`. Exemple minimal :
 
    ```html
@@ -70,10 +85,18 @@ La clé publishable est publique par nature. Ne jamais exposer une clé secrète
 La synchronisation du carnet utilisera le `client` rendu par
 `configureEmailCodeAuth`; elle ne crée pas une seconde instance Supabase concurrente.
 
+## Après une période sans utilisation
+
+Le plan Free peut mettre le projet en pause après une période sans activité. Si la
+connexion ou la sauvegarde ne répond plus au retour d’une coupure, vérifier dans le
+tableau de bord Supabase que le projet est actif et le réactiver avant de reprendre la
+recette.
+
 ## État constaté le 28.09.2026
 
 Les variables Vercel Preview/Production sont présentes. Le projet a été réactivé, les
-inscriptions globales et e-mail sont fermées, et l'OTP vaut six chiffres. Aucun compte
-Auth n'existe encore. Le modèle `{{ .Token }}` reste bloqué tant qu'Ugo n'a pas choisi
-SMTP personnalisé ou offre Supabase payante ; la recette réelle ne peut pas commencer
-avant ces deux préconditions.
+inscriptions globales et e-mail sont fermées, et l'OTP vaut six chiffres. L'adresse et le
+maintien sur l'offre gratuite sont arbitrés. Aucun compte Auth n'existe encore. Il reste à
+créer le mot de passe d'application Google, configurer le SMTP personnalisé directement
+dans Supabase, créer le compte Auth puis poser le modèle `{{ .Token }}` avant la recette
+réelle.
