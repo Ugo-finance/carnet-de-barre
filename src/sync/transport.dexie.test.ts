@@ -65,6 +65,13 @@ class FauxServeur implements Transport {
     return { motif: 'applique', revision: this.revision }
   }
 
+  /** Le projet distant est vidé : plus aucun carnet en face. */
+  vider(): void {
+    this.revision = null
+    this.derniere = null
+    this.carnet = null
+  }
+
   /** Un autre appareil écrit. */
   ecritureTierce(): void {
     this.revision = (this.revision ?? 0) + 1
@@ -232,6 +239,66 @@ describe('la course entre lecture et écriture', () => {
       issue: 'decision',
       action: { type: 'conflit', revision: 2 },
     })
+  })
+})
+
+describe('une sauvegarde distante disparue — CB-84', () => {
+  it('se reconstitue en entier, et le cycle le dit au lieu d’afficher « à jour »', async () => {
+    // La reproduction qui a ouvert le ticket : une écriture, puis « à jour » pour toujours.
+    const store = await magasinPret()
+    await store.adjustTarget('squat', { w: 80 })
+    const serveur = new FauxServeur()
+    await synchroniser(store, serveur, APPAREIL)
+
+    serveur.vider()
+
+    expect(await synchroniser(store, serveur, APPAREIL)).toEqual({
+      issue: 'reconstituee',
+      revision: 1,
+      revisionDisparue: 1,
+    })
+    expect(serveur.carnet?.targets.squat.w).toBe(80)
+    expect(serveur.carnet?.seances).toHaveLength((await store.listSeances()).length)
+    expect(await synchroniser(store, serveur, APPAREIL)).toEqual({ issue: 'a-jour' })
+    expect(serveur.ecritures).toBe(2)
+  })
+
+  it('emporte aussi ce qui attendait encore au moment de la disparition', async () => {
+    const store = await magasinPret()
+    await store.adjustTarget('squat', { w: 80 })
+    const serveur = new FauxServeur()
+    await synchroniser(store, serveur, APPAREIL)
+    await store.adjustTarget('bench', { w: 75 })
+
+    serveur.vider()
+
+    expect(await synchroniser(store, serveur, APPAREIL)).toMatchObject({ issue: 'reconstituee' })
+    expect(serveur.carnet?.targets.bench.w).toBe(75)
+  })
+
+  it('survit à une réponse perdue pendant la reconstitution', async () => {
+    // L'oubli de l'acquis est persisté avec l'envoi en vol : au cycle suivant, notre
+    // commit est reconnu en face, et ni la disparition ni l'envoi ne se rejouent.
+    const store = await magasinPret()
+    await store.adjustTarget('squat', { w: 80 })
+    const serveur = new FauxServeur()
+    await synchroniser(store, serveur, APPAREIL)
+    serveur.vider()
+    serveur.perdreLaReponse = true
+
+    await expect(synchroniser(store, serveur, APPAREIL)).rejects.toThrow(/perdue/)
+
+    expect(await synchroniser(store, serveur, APPAREIL)).toEqual({ issue: 'envoye', revision: 1 })
+    expect(serveur.ecritures).toBe(2)
+  })
+
+  it('ne se déclenche jamais pour un carnet resté au dossier de départ', async () => {
+    const store = await magasinPret()
+    const serveur = new FauxServeur()
+
+    expect(await synchroniser(store, serveur, APPAREIL)).toEqual({ issue: 'a-jour' })
+    expect(await synchroniser(store, serveur, APPAREIL)).toEqual({ issue: 'a-jour' })
+    expect(serveur.ecritures).toBe(0)
   })
 })
 

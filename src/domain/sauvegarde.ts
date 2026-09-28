@@ -131,6 +131,16 @@ export type ActionSauvegarde =
    * qu'Ugo tranche.
    */
   | { type: 'conflit'; generationLocale: number; revision: number }
+  /**
+   * La sauvegarde distante a **disparu** : on avait acquitté `revision`, et il n'y a plus
+   * rien en face — projet réinitialisé, lignes effacées, restauration du serveur. CB-84.
+   *
+   * Sans cette action, le protocole répondait `rien` : rien n'était « en retard », donc
+   * l'écran aurait affiché « sauvegardé » indéfiniment alors qu'aucune sauvegarde
+   * n'existait plus. Elle n'est pas un envoi : il faut d'abord **oublier** ce qu'on
+   * croyait acquis (`constaterDisparition`), puis tout renvoyer.
+   */
+  | { type: 'sauvegarde-disparue'; revision: number }
 
 /**
  * Le carnet ne porte-t-il encore aucune saisie d'Ugo ?
@@ -231,6 +241,15 @@ export function prochaineAction(
     }
   }
 
+  // « Rien en face » n'a pas le même sens selon qu'on a déjà sauvegardé. Jamais rien
+  // envoyé : l'absence est normale, et un carnet seulement amorcé ne doit rien envoyer.
+  // Déjà acquitté : l'absence veut dire que la sauvegarde **a disparu**. Encore la famille
+  // de « pas encore lu » contre « rien en face » (P2-1 de #71) — un état qui en cache un
+  // autre, et que la réponse `rien` rendait invisible.
+  if (distant.etat === 'absente' && etat.revisionAcquittee !== null) {
+    return { type: 'sauvegarde-disparue', revision: etat.revisionAcquittee }
+  }
+
   // Un envoi sans réponse se reprend sous sa propre identité. Rien de plus récent ne part
   // tant qu'il n'est pas résolu : voir « un seul envoi en vol » en tête de fichier.
   const enVol = envoiNonResolu(etat)
@@ -299,6 +318,25 @@ export function envoyer(
     ...etat,
     envoiEnVol: { generation, operation: operationPour(appareil, generation) },
   }
+}
+
+/**
+ * Oublier une sauvegarde qui n'existe plus — CB-84.
+ *
+ * Remet l'état dans celui d'un carnet **jamais envoyé**, sans toucher à la génération
+ * locale : tout ce qui est écrit ici redevient « en retard », donc part en entier au
+ * prochain envoi, qui créera un carnet neuf depuis la révision 0.
+ *
+ * Pourquoi remettre à zéro plutôt que renvoyer « par-dessus » : la borne basse d'`envoyer`
+ * refuse une génération déjà acquittée, à juste titre (P2 de #71). Ce n'est pas elle qu'il
+ * faut contourner, c'est l'acquittement qu'il faut **retirer**, puisqu'il décrit une
+ * sauvegarde qui n'existe plus. Un envoi en vol est oublié aussi : son destinataire a
+ * disparu avec le reste.
+ *
+ * Renvoyer vers un distant vide ne peut rien perdre : il n'y a rien en face à écraser.
+ */
+export function constaterDisparition(etat: EtatSauvegarde): EtatSauvegarde {
+  return { ...etat, generationAcquittee: 0, revisionAcquittee: null, envoiEnVol: null }
 }
 
 /**
