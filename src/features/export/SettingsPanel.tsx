@@ -47,10 +47,12 @@ function messageFor(error: unknown): string {
 export function SettingsPanel({
   store,
   backupAuth,
+  backupAuthError,
   onPreferencesChange,
 }: {
   store: SettingsPort
   backupAuth?: EmailCodeAuthPort
+  backupAuthError?: string
   onPreferencesChange?: () => void
 }) {
   const [preferences, setPreferences] = useState<Preferences>()
@@ -193,7 +195,8 @@ export function SettingsPanel({
               <EmailCodeLogin auth={backupAuth} />
             ) : (
               <p className="text-sm text-bad" role="alert">
-                La connexion à la sauvegarde n’est pas configurée sur cette installation.
+                {backupAuthError ??
+                  'La connexion à la sauvegarde n’est pas configurée sur cette installation.'}
               </p>
             )}
           </div>

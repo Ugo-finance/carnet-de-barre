@@ -12,10 +12,16 @@ import { useHauteurVisible } from './app/clavier'
 import { BottomNav, type AppTab } from './components/BottomNav'
 import { SessionHome } from './features/session/SessionHome'
 import { SettingsPanel } from './features/export/SettingsPanel'
+import { configureEmailCodeAuth } from './features/export/supabaseAuth'
 import { ProgressionPanel } from './features/history/ProgressionPanel'
 import { HistoryPanel } from './features/history/HistoryPanel'
 import { UpdatePrompt } from './pwa/UpdatePrompt'
 import type { Draft, Seance, Targets } from './domain/types'
+
+const backupAuthConfiguration = configureEmailCodeAuth({
+  VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL,
+  VITE_SUPABASE_PUBLISHABLE_KEY: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+})
 
 /**
  * La progression est chargée à la demande, pas au démarrage.
@@ -204,6 +210,8 @@ export default function App() {
         {onglet === 'settings' ? (
           <SettingsPanel
             store={store}
+            backupAuth={backupAuthConfiguration.auth}
+            backupAuthError={backupAuthConfiguration.error}
             onPreferencesChange={() => setGenerationSeance((n) => n + 1)}
           />
         ) : null}
