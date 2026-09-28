@@ -66,6 +66,7 @@ import {
 } from './sauvegarde.ts'
 import {
   acquitter,
+  constaterDisparition,
   envoyer,
   garderLeMien,
   prochaineAction,
@@ -523,9 +524,26 @@ export class DexieStore implements DraftStore, SauvegardePort {
       this.database.meta,
       async () => {
         const stocke = await this.database.meta.get(SAUVEGARDE_KEY)
-        const ligne = lireSauvegarde(stocke?.value)
-        const action = prochaineAction(ligne.etat, distant, appareil)
-        if (action.type !== 'envoyer') return { action, carnet: null }
+        let ligne = lireSauvegarde(stocke?.value)
+        let action = prochaineAction(ligne.etat, distant, appareil)
+
+        // La sauvegarde distante a disparu — CB-84. On oublie ce qu'on croyait acquis et
+        // on décide de nouveau, **dans la même transaction** : entre l'oubli et l'envoi,
+        // aucune écriture ne doit pouvoir s'intercaler, sinon l'état persisté décrirait
+        // un carnet jamais envoyé sans qu'aucun envoi ne soit en route.
+        let reconstitution: EnvoiPrepare['reconstitution']
+        if (action.type === 'sauvegarde-disparue') {
+          reconstitution = { revisionDisparue: action.revision }
+          ligne = { etat: constaterDisparition(ligne.etat), instantane: null }
+          action = prochaineAction(ligne.etat, distant, appareil)
+        }
+
+        if (action.type !== 'envoyer') {
+          if (reconstitution) {
+            await this.database.meta.put({ key: SAUVEGARDE_KEY, value: ligne })
+          }
+          return { action, carnet: null, ...(reconstitution ? { reconstitution } : {}) }
+        }
 
         const dejaFige =
           ligne.instantane?.generation === action.generation ? ligne.instantane : null
@@ -546,7 +564,7 @@ export class DexieStore implements DraftStore, SauvegardePort {
             instantane,
           } satisfies LigneSauvegarde,
         })
-        return { action, carnet: instantane.carnet }
+        return { action, carnet: instantane.carnet, ...(reconstitution ? { reconstitution } : {}) }
       },
     )
   }

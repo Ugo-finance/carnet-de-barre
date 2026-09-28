@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   acquitter,
+  constaterDisparition,
   envoiNonResolu,
   envoyer,
   garderLeMien,
@@ -515,10 +516,22 @@ describe('sortir d’un conflit', () => {
     expect(apres.generationAcquittee).toBe(avant.generationAcquittee)
   })
 
-  it('ne fait pas reculer la borne si l’écran montrait une révision plus ancienne', () => {
-    const aJour = carnetAJour(2, 14)
+  it('face à une sauvegarde reculée, descend à la révision vue et renvoie tout', () => {
+    // Ce test affirmait l'inverse : « la borne ne recule pas si l'écran montre une
+    // révision plus ancienne », en supposant qu'une telle révision venait d'un écran
+    // périmé. P1 de Codex sur #83 : elle peut venir d'une **restauration du serveur**. Avec
+    // l'ancienne règle, la borne restait à 14 au-dessus d'un distant à 9, l'envoi partait
+    // contre une révision que le serveur n'avait plus, et le refus se répétait sans fin.
+    // Si c'était bien un écran périmé, le verrou du serveur refuse l'envoi et rien n'est
+    // perdu.
+    const apres = coherent(garderLeMien(carnetAJour(2, 14), 9))
 
-    expect(garderLeMien(aJour, 9).revisionAcquittee).toBe(14)
+    expect(apres.revisionAcquittee).toBe(9)
+    expect(apres.generationAcquittee).toBe(0)
+    expect(prochaineAction(apres, lu(9), APPAREIL)).toMatchObject({
+      type: 'envoyer',
+      generation: 2,
+    })
   })
 
   it('laisse en place un envoi dont le sort reste inconnu', () => {
@@ -546,6 +559,78 @@ describe('sortir d’un conflit', () => {
       type: 'conflit',
       generationLocale: 3,
       revision: 12,
+    })
+  })
+})
+
+describe('une sauvegarde distante disparue — CB-84', () => {
+  // « Rien en face » n'a pas le même sens selon qu'on a déjà sauvegardé. Le protocole
+  // répondait `rien` dans les deux cas, et l'écran aurait affiché « sauvegardé » sans
+  // qu'aucune sauvegarde n'existe plus.
+
+  it('est nommée quand on avait acquitté et qu’il n’y a plus rien en face', () => {
+    expect(prochaineAction(carnetAJour(3, 7), VIDE, APPAREIL)).toEqual({
+      type: 'sauvegarde-disparue',
+      revision: 7,
+    })
+  })
+
+  it('passe avant la reprise d’un envoi en vol, dont le destinataire a disparu aussi', () => {
+    const enVol = envoyer(muter(carnetAJour(2, 5)), 3, APPAREIL)
+
+    expect(prochaineAction(enVol, VIDE, APPAREIL)).toEqual({
+      type: 'sauvegarde-disparue',
+      revision: 5,
+    })
+  })
+
+  it('ne concerne pas un carnet jamais envoyé : l’absence y est normale', () => {
+    expect(prochaineAction(ETAT_INITIAL, VIDE, APPAREIL)).toEqual({ type: 'rien' })
+    expect(prochaineAction(muter(ETAT_INITIAL), VIDE, APPAREIL)).toMatchObject({ type: 'envoyer' })
+  })
+
+  it('se constate en oubliant l’acquis, sans toucher à ce qui est écrit', () => {
+    const avant = envoyer(muter(carnetAJour(3, 7)), 4, APPAREIL)
+
+    const apres = coherent(constaterDisparition(avant))
+
+    expect(apres.generationLocale).toBe(avant.generationLocale)
+    expect(apres.generationAcquittee).toBe(0)
+    expect(apres.revisionAcquittee).toBeNull()
+    expect(apres.envoiEnVol).toBeNull()
+  })
+
+  it('et après l’avoir constatée, tout le carnet repart', () => {
+    const apres = constaterDisparition(carnetAJour(3, 7))
+
+    expect(prochaineAction(apres, VIDE, APPAREIL)).toEqual({
+      type: 'envoyer',
+      generation: 3,
+      operation: 'iphone-15-pro:3',
+    })
+  })
+})
+
+describe('une sauvegarde distante reculée — P1 de Codex sur #83', () => {
+  it('est nommée, au lieu de répondre « rien »', () => {
+    // Son scénario exact : tout acquitté à 7, distant restauré à 5.
+    expect(prochaineAction(carnetAJour(3, 7), lu(5), APPAREIL)).toEqual({
+      type: 'sauvegarde-reculee',
+      revision: 5,
+      revisionAcquittee: 7,
+    })
+  })
+
+  it('est nommée aussi quand du local attend, plutôt que de partir contre 7', () => {
+    expect(prochaineAction(muter(carnetAJour(3, 7)), lu(5), APPAREIL)).toMatchObject({
+      type: 'sauvegarde-reculee',
+    })
+  })
+
+  it('ne concerne ni un distant à jour, ni un distant en avance', () => {
+    expect(prochaineAction(carnetAJour(3, 7), lu(7), APPAREIL)).toEqual({ type: 'rien' })
+    expect(prochaineAction(carnetAJour(3, 7), lu(9), APPAREIL)).toMatchObject({
+      type: 'proposer-restauration',
     })
   })
 })

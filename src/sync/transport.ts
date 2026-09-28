@@ -58,6 +58,12 @@ export type IssueCycle =
   | { issue: 'a-jour' }
   /** Un envoi est parti et a été confirmé à cette révision. */
   | { issue: 'envoye'; revision: number }
+  /**
+   * La sauvegarde distante avait **disparu**, et cet envoi l'a reconstituée en entier —
+   * CB-84. Distincte d'`envoye` pour que l'écran puisse le dire : une sauvegarde qui
+   * s'évapore sans qu'Ugo le sache est une chose qu'il doit apprendre, même réparée.
+   */
+  | { issue: 'reconstituee'; revision: number; revisionDisparue: number }
   /** Le distant a bougé entre la lecture et l'écriture. Le cycle suivant tranchera. */
   | { issue: 'a-relire' }
   /** Le protocole demande une décision d'Ugo : restauration proposée ou conflit. */
@@ -77,7 +83,7 @@ export async function synchroniser(
   appareil: string,
 ): Promise<IssueCycle> {
   const distant = await transport.lire()
-  const { action, carnet } = await port.preparerEnvoi(appareil, distant)
+  const { action, carnet, reconstitution } = await port.preparerEnvoi(appareil, distant)
 
   switch (action.type) {
     case 'rien':
@@ -103,8 +109,20 @@ export async function synchroniser(
       })
       if (resultat.motif === 'revision-perimee') return { issue: 'a-relire' }
       await port.acquitterEnvoi(action.generation, resultat.revision)
-      return { issue: 'envoye', revision: resultat.revision }
+      return reconstitution
+        ? {
+            issue: 'reconstituee',
+            revision: resultat.revision,
+            revisionDisparue: reconstitution.revisionDisparue,
+          }
+        : { issue: 'envoye', revision: resultat.revision }
     }
+
+    case 'sauvegarde-disparue':
+      // Le magasin la traite lui-même, dans la transaction qui prépare l'envoi : elle ne
+      // devrait jamais arriver jusqu'ici. Si elle arrive, un port ne l'a pas prise en
+      // charge, et continuer ferait croire qu'une sauvegarde existe encore.
+      throw new Error('Sauvegarde distante disparue, non prise en charge par le magasin.')
 
     case 'lire-distant':
       // Impossible ici : la lecture vient d'avoir lieu. Si le protocole la redemande,
@@ -113,6 +131,7 @@ export async function synchroniser(
 
     case 'proposer-restauration':
     case 'conflit':
+    case 'sauvegarde-reculee':
       return { issue: 'decision', action }
   }
 }

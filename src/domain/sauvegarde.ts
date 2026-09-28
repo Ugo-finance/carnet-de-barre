@@ -131,6 +131,27 @@ export type ActionSauvegarde =
    * qu'Ugo tranche.
    */
   | { type: 'conflit'; generationLocale: number; revision: number }
+  /**
+   * La sauvegarde distante a **disparu** : on avait acquitté `revision`, et il n'y a plus
+   * rien en face — projet réinitialisé, lignes effacées, restauration du serveur. CB-84.
+   *
+   * Sans cette action, le protocole répondait `rien` : rien n'était « en retard », donc
+   * l'écran aurait affiché « sauvegardé » indéfiniment alors qu'aucune sauvegarde
+   * n'existait plus. Elle n'est pas un envoi : il faut d'abord **oublier** ce qu'on
+   * croyait acquis (`constaterDisparition`), puis tout renvoyer.
+   */
+  | { type: 'sauvegarde-disparue'; revision: number }
+  /**
+   * La sauvegarde distante a **reculé** : on avait acquitté `revisionAcquittee`, et le
+   * distant porte une révision plus ancienne — typiquement une restauration du serveur.
+   * P1 de Codex sur #83 : `sauvegarde-disparue` ne couvrait que l'absence, et un distant
+   * revenu en arrière s'affichait encore « à jour ».
+   *
+   * Contrairement à la disparition, **rien ne part tout seul** : le distant existe, et
+   * Ugo l'a peut-être restauré exprès. Écraser serait choisir à sa place. L'action
+   * remonte donc comme une décision, résolue par `garderLeMien` ou par une restauration.
+   */
+  | { type: 'sauvegarde-reculee'; revision: number; revisionAcquittee: number }
 
 /**
  * Le carnet ne porte-t-il encore aucune saisie d'Ugo ?
@@ -217,6 +238,17 @@ export function prochaineAction(
       }
     }
 
+    // Un distant **plus ancien** que ce qu'on avait acquitté n'est ni « à jour », ni un
+    // conflit ordinaire : il a été ramené en arrière. Le laisser tomber dans `rien`
+    // redonnait le mensonge que CB-84 ferme pour une sauvegarde disparue.
+    if (etat.revisionAcquittee !== null && distant.revision < etat.revisionAcquittee) {
+      return {
+        type: 'sauvegarde-reculee',
+        revision: distant.revision,
+        revisionAcquittee: etat.revisionAcquittee,
+      }
+    }
+
     const distantAAvance =
       etat.revisionAcquittee === null || distant.revision > etat.revisionAcquittee
     if (distantAAvance) {
@@ -229,6 +261,15 @@ export function prochaineAction(
         revision: distant.revision,
       }
     }
+  }
+
+  // « Rien en face » n'a pas le même sens selon qu'on a déjà sauvegardé. Jamais rien
+  // envoyé : l'absence est normale, et un carnet seulement amorcé ne doit rien envoyer.
+  // Déjà acquitté : l'absence veut dire que la sauvegarde **a disparu**. Encore la famille
+  // de « pas encore lu » contre « rien en face » (P2-1 de #71) — un état qui en cache un
+  // autre, et que la réponse `rien` rendait invisible.
+  if (distant.etat === 'absente' && etat.revisionAcquittee !== null) {
+    return { type: 'sauvegarde-disparue', revision: etat.revisionAcquittee }
   }
 
   // Un envoi sans réponse se reprend sous sa propre identité. Rien de plus récent ne part
@@ -302,6 +343,25 @@ export function envoyer(
 }
 
 /**
+ * Oublier une sauvegarde qui n'existe plus — CB-84.
+ *
+ * Remet l'état dans celui d'un carnet **jamais envoyé**, sans toucher à la génération
+ * locale : tout ce qui est écrit ici redevient « en retard », donc part en entier au
+ * prochain envoi, qui créera un carnet neuf depuis la révision 0.
+ *
+ * Pourquoi remettre à zéro plutôt que renvoyer « par-dessus » : la borne basse d'`envoyer`
+ * refuse une génération déjà acquittée, à juste titre (P2 de #71). Ce n'est pas elle qu'il
+ * faut contourner, c'est l'acquittement qu'il faut **retirer**, puisqu'il décrit une
+ * sauvegarde qui n'existe plus. Un envoi en vol est oublié aussi : son destinataire a
+ * disparu avec le reste.
+ *
+ * Renvoyer vers un distant vide ne peut rien perdre : il n'y a rien en face à écraser.
+ */
+export function constaterDisparition(etat: EtatSauvegarde): EtatSauvegarde {
+  return { ...etat, generationAcquittee: 0, revisionAcquittee: null, envoiEnVol: null }
+}
+
+/**
  * « J'ai vu l'autre carnet, garde le mien » — la seule sortie d'un conflit.
  *
  * Sans elle, un conflit est **définitif** : rien n'avance `revisionAcquittee`, donc
@@ -323,12 +383,19 @@ export function envoyer(
  * restauration, et elle vaut ici pour la même raison.
  */
 export function garderLeMien(etat: EtatSauvegarde, revision: number): EtatSauvegarde {
-  return {
-    ...etat,
-    // La borne ne recule pas : `Math.max` protège du cas où l'écran montrerait une
-    // révision plus ancienne que celle déjà acquittée.
-    revisionAcquittee: Math.max(etat.revisionAcquittee ?? 0, revision),
+  // Face à une sauvegarde **reculée** — révision montrée plus ancienne que l'acquise —
+  // garder le mien veut dire tout renvoyer contre ce distant-là : la borne descend à la
+  // révision vue et toutes les générations redeviennent en retard. Une première version
+  // faisait `Math.max` ici, en supposant qu'une révision plus ancienne ne pouvait venir
+  // que d'un écran périmé ; la borne restait alors au-dessus du distant, l'envoi partait
+  // contre une révision que le serveur n'avait plus, et le refus se répétait sans fin.
+  //
+  // Si c'était bien un écran périmé et que le distant n'a pas reculé, rien n'est perdu :
+  // le serveur compare sous verrou, refuse l'envoi, et le cycle suivant relit l'état réel.
+  if (etat.revisionAcquittee !== null && revision < etat.revisionAcquittee) {
+    return { ...etat, generationAcquittee: 0, revisionAcquittee: revision, envoiEnVol: null }
   }
+  return { ...etat, revisionAcquittee: Math.max(etat.revisionAcquittee ?? 0, revision) }
 }
 
 /**
