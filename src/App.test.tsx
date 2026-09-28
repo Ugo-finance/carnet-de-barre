@@ -91,7 +91,7 @@ describe('navigation depuis le point d’entrée réel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Suivant : Matériel' }))
     fireEvent.click(screen.getByRole('button', { name: 'Suivant : Sauvegarde' }))
     expect(screen.getByRole('heading', { name: 'Sauvegarde' })).toBeInTheDocument()
-    expect(screen.getByRole('alert')).toHaveTextContent(
+    expect(await screen.findByRole('alert')).toHaveTextContent(
       'La connexion à la sauvegarde n’est pas configurée',
     )
     fireEvent.click(screen.getByRole('button', { name: 'Suivant : Export' }))

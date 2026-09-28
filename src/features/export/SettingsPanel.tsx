@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Preferences } from '../../domain/preferences'
 import { EmailCodeLogin, type EmailCodeAuthPort } from './EmailCodeLogin'
 import { ExportPanel, type ExchangePort } from './ExportPanel'
+import type { EmailAuthConfiguration } from './supabaseAuth'
 
 export interface SettingsPort extends ExchangePort {
   getPreferences(): Promise<Preferences>
@@ -44,15 +45,59 @@ function messageFor(error: unknown): string {
   return error instanceof Error ? error.message : 'Écriture impossible.'
 }
 
+async function loadConfiguredEmailAuth(): Promise<EmailAuthConfiguration> {
+  const module = await import('./supabaseAuth')
+  return module.configureEmailCodeAuthFromVite()
+}
+
+function LazyEmailCodeLogin({
+  load = loadConfiguredEmailAuth,
+}: {
+  load?: () => Promise<EmailAuthConfiguration>
+}) {
+  const [configuration, setConfiguration] = useState<EmailAuthConfiguration>()
+
+  useEffect(() => {
+    let active = true
+    void load().then(
+      (value) => active && setConfiguration(value),
+      () =>
+        active &&
+        setConfiguration({
+          error: 'Le module de connexion ne peut pas être chargé sur cette installation.',
+        }),
+    )
+    return () => {
+      active = false
+    }
+  }, [load])
+
+  if (!configuration) {
+    return (
+      <p className="text-sm text-muted" role="status">
+        Préparation de la connexion…
+      </p>
+    )
+  }
+  if (configuration.auth) return <EmailCodeLogin auth={configuration.auth} />
+  return (
+    <p className="text-sm text-bad" role="alert">
+      {configuration.error}
+    </p>
+  )
+}
+
 export function SettingsPanel({
   store,
   backupAuth,
   backupAuthError,
+  loadBackupAuth,
   onPreferencesChange,
 }: {
   store: SettingsPort
   backupAuth?: EmailCodeAuthPort
   backupAuthError?: string
+  loadBackupAuth?: () => Promise<EmailAuthConfiguration>
   onPreferencesChange?: () => void
 }) {
   const [preferences, setPreferences] = useState<Preferences>()
@@ -193,11 +238,12 @@ export function SettingsPanel({
           <div className="mt-4 border-t border-line pt-4">
             {backupAuth ? (
               <EmailCodeLogin auth={backupAuth} />
-            ) : (
+            ) : backupAuthError ? (
               <p className="text-sm text-bad" role="alert">
-                {backupAuthError ??
-                  'La connexion à la sauvegarde n’est pas configurée sur cette installation.'}
+                {backupAuthError}
               </p>
+            ) : (
+              <LazyEmailCodeLogin load={loadBackupAuth} />
             )}
           </div>
         </section>

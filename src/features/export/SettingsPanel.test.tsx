@@ -105,12 +105,19 @@ describe('réglages', () => {
   })
 
   it('explique explicitement une installation sans configuration distante', async () => {
-    render(<SettingsPanel store={settingsStore()} />)
+    render(
+      <SettingsPanel
+        store={settingsStore()}
+        loadBackupAuth={vi.fn(async () => ({
+          error: 'La connexion à la sauvegarde n’est pas configurée sur cette installation.',
+        }))}
+      />,
+    )
     await screen.findByRole('switch', { name: 'Vibration' })
     fireEvent.click(screen.getByRole('button', { name: 'Suivant : Matériel' }))
     fireEvent.click(screen.getByRole('button', { name: 'Suivant : Sauvegarde' }))
 
-    expect(screen.getByRole('alert')).toHaveTextContent(
+    expect(await screen.findByRole('alert')).toHaveTextContent(
       'La connexion à la sauvegarde n’est pas configurée',
     )
     expect(screen.getByRole('button', { name: 'Suivant : Export' })).toBeInTheDocument()
