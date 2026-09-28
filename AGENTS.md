@@ -29,6 +29,8 @@ PWA mobile de carnet de musculation pour un seul utilisateur (Ugo), offline-firs
   - types : `@types/node`, `@types/react`, `@types/react-dom` ;
   - schéma distant : `supabase` (la CLI), **épinglée à une version exacte** — arbitrage
     d'Ugo du 20.09.2026. Un `@latest` ferait changer le banc sans que le dépôt change.
+  - sauvegarde : `@supabase/supabase-js`, **épinglé à une version exacte** — arbitrage
+    d'Ugo du 28.09.2026. Seul module qui parle au projet distant.
   Toute autre dépendance, y compris de test, remonte à Ugo avant installation.
 
 ## Commandes
@@ -40,6 +42,7 @@ npm run test:watch     Vitest en continu
 npm run format         Prettier
 npm run ports          les ports de cette copie du dépôt
 npm run test:sql       garanties du schéma distant, base remise à neuf (Docker + `npx supabase start`)
+npm run test:transport transport contre la pile locale ; refuse toute autre cible que 127.0.0.1
 npm run supabase:cible vérifie que la cible distante est bien le projet du carnet
 npm run supabase:pousser  pousse les migrations — **seul chemin autorisé**, voir ci-dessous
 ```
