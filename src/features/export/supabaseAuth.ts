@@ -9,7 +9,8 @@ export interface EmailAuthEnvironment {
 }
 
 export type EmailAuthConfiguration =
-  { auth: EmailCodeAuthPort; error?: never } | { auth?: never; error: string }
+  | { auth: EmailCodeAuthPort; client: SupabaseClient; error?: never }
+  | { auth?: never; client?: never; error: string }
 
 type ClientFactory = (
   url: string,
@@ -32,6 +33,8 @@ function frenchAuthError(
       return new Error('un code vient déjà d’être envoyé, attends un instant')
     case 'email_address_invalid':
       return new Error('cette adresse e-mail n’est pas valide')
+    case 'otp_disabled':
+      return new Error('aucun compte de sauvegarde n’est ouvert pour cette adresse')
     case 'otp_expired':
       return new Error('ce code a expiré, demande un nouveau code')
     case 'invalid_credentials':
@@ -111,7 +114,7 @@ export function configureEmailCodeAuth(
       detectSessionInUrl: false,
     },
   })
-  return { auth: supabaseEmailCodeAuth(client) }
+  return { auth: supabaseEmailCodeAuth(client), client }
 }
 
 /** Configuration Vite lue uniquement quand la page Sauvegarde charge ce module. */

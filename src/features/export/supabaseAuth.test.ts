@@ -49,6 +49,7 @@ describe('adaptateur de connexion Supabase', () => {
     )
 
     expect(configuration.auth).toBeDefined()
+    expect(configuration.client).toBe(client)
     expect(factory).toHaveBeenCalledWith(CARNET_SUPABASE_URL, 'publique', {
       auth: {
         persistSession: true,
@@ -76,6 +77,18 @@ describe('adaptateur de connexion Supabase', () => {
       token: '123456',
       type: 'email',
     })
+  })
+
+  it('explique qu’une adresse sans compte n’est pas une panne réseau', async () => {
+    const { auth, client } = clientAuth()
+    auth.signInWithOtp.mockResolvedValueOnce({
+      data: {},
+      error: { code: 'otp_disabled', status: 422 },
+    } as never)
+
+    await expect(supabaseEmailCodeAuth(client).sendCode('inconnue@example.ch')).rejects.toThrow(
+      'aucun compte de sauvegarde n’est ouvert pour cette adresse',
+    )
   })
 
   it('traduit les refus et ne prétend pas qu’une session existe', async () => {
