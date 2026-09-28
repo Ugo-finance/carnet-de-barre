@@ -81,8 +81,15 @@ describe('navigation depuis le point d’entrée réel', () => {
 
   it('atteint les réglages, la sauvegarde et l’export', async () => {
     // Sans ces écrans, une séance faite ne peut pas sortir du téléphone : ni sauvegarde,
-    // ni transmission pour l'événement Outlook.
-    render(<App />)
+    // ni transmission pour l'événement Outlook. La configuration est injectée pour que
+    // ce test d'assemblage reste identique sur CI et sur Vercel.
+    render(
+      <App
+        loadBackupAuth={async () => ({
+          error: 'La connexion à la sauvegarde n’est pas configurée sur cette installation.',
+        })}
+      />,
+    )
     await screen.findByRole('heading', { name: /Séance [ABC]/ })
 
     fireEvent.click(screen.getByRole('button', { name: 'Réglages' }))
