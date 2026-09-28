@@ -60,7 +60,7 @@ export function supabaseEmailCodeAuth(client: SupabaseClient): EmailCodeAuthPort
     async sendCode(email) {
       const { error } = await client.auth.signInWithOtp({
         email,
-        options: { shouldCreateUser: true },
+        options: { shouldCreateUser: false },
       })
       if (error) throw frenchAuthError(error, 'le service de connexion ne répond pas')
     },

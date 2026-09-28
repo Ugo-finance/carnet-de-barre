@@ -65,7 +65,7 @@ describe('adaptateur de connexion Supabase', () => {
     await port.sendCode('ugo@example.ch')
     expect(auth.signInWithOtp).toHaveBeenCalledWith({
       email: 'ugo@example.ch',
-      options: { shouldCreateUser: true },
+      options: { shouldCreateUser: false },
     })
 
     await expect(port.verifyCode('ugo@example.ch', '123456')).resolves.toEqual({
