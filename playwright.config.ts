@@ -33,6 +33,12 @@ export default defineConfig({
   },
   webServer: {
     command: `npm run build && npm run preview -- --host 127.0.0.1 --port ${port}`,
+    env: {
+      // Une configuration syntaxiquement valable pour rendre le formulaire, mais une clé
+      // volontairement factice. Le parcours CB-85 bloque aussi toute requête distante.
+      VITE_SUPABASE_URL: 'https://rtxdtiysrdgzsomatwon.supabase.co',
+      VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_playwright_sans_acces',
+    },
     url: baseURL,
     reuseExistingServer: false,
     timeout: 120_000,

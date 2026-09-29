@@ -122,6 +122,7 @@ async function openSettingsPage(page: Page, target: 'export' | 'import'): Promis
   }
   await navigation.getByRole('button', { name: 'Réglages' }).click()
   await page.getByRole('button', { name: 'Suivant : Matériel' }).click()
+  await page.getByRole('button', { name: 'Suivant : Sauvegarde' }).click()
   await page.getByRole('button', { name: 'Suivant : Export' }).click()
   if (target === 'import') {
     await page.getByRole('button', { name: 'Suivant : Import' }).click()

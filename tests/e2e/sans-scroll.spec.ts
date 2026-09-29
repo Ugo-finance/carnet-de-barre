@@ -72,7 +72,7 @@ async function markRemainingSetsSkipped(page: Page): Promise<void> {
 
 test.use({ viewport: { width: 393, height: 759 } })
 
-test('les quatre pages de réglages tiennent au-dessus de la navigation', async ({ page }) => {
+test('les cinq pages de réglages tiennent au-dessus de la navigation', async ({ page }) => {
   await page.goto('/')
   const navigation = page.getByRole('navigation', { name: 'Navigation principale' })
   await navigation.getByRole('button', { name: 'Réglages' }).click()
@@ -80,6 +80,10 @@ test('les quatre pages de réglages tiennent au-dessus de la navigation', async 
   const toHardware = page.getByRole('button', { name: 'Suivant : Matériel' })
   await expectPageToFit(page, toHardware)
   await toHardware.click()
+
+  const toBackup = page.getByRole('button', { name: 'Suivant : Sauvegarde' })
+  await expectPageToFit(page, toBackup)
+  await toBackup.click()
 
   const toExport = page.getByRole('button', { name: 'Suivant : Export' })
   await expectPageToFit(page, toExport)

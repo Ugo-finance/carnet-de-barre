@@ -12,6 +12,7 @@ import { useHauteurVisible } from './app/clavier'
 import { BottomNav, type AppTab } from './components/BottomNav'
 import { SessionHome } from './features/session/SessionHome'
 import { SettingsPanel } from './features/export/SettingsPanel'
+import type { EmailAuthConfiguration } from './features/export/supabaseAuth'
 import { ProgressionPanel } from './features/history/ProgressionPanel'
 import { HistoryPanel } from './features/history/HistoryPanel'
 import { UpdatePrompt } from './pwa/UpdatePrompt'
@@ -122,7 +123,11 @@ function HistoriqueTab() {
   return <HistoryPanel seances={seances} store={store} />
 }
 
-export default function App() {
+export default function App({
+  loadBackupAuth,
+}: {
+  loadBackupAuth?: () => Promise<EmailAuthConfiguration>
+} = {}) {
   const [onglet, setOnglet] = useState<AppTab>('session')
   const [generationSeance, setGenerationSeance] = useState(0)
   const [sessionActive, setSessionActive] = useState(false)
@@ -204,6 +209,7 @@ export default function App() {
         {onglet === 'settings' ? (
           <SettingsPanel
             store={store}
+            loadBackupAuth={loadBackupAuth}
             onPreferencesChange={() => setGenerationSeance((n) => n + 1)}
           />
         ) : null}

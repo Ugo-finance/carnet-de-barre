@@ -79,16 +79,28 @@ describe('navigation depuis le point d’entrée réel', () => {
     await waitFor(() => expect(within(liste).getByText('Squat')).toBeInTheDocument())
   })
 
-  it('atteint les réglages et l’export', async () => {
-    // Sans cet écran, une séance faite ne peut pas sortir du téléphone : ni sauvegarde,
-    // ni transmission pour l'événement Outlook.
-    render(<App />)
+  it('atteint les réglages, la sauvegarde et l’export', async () => {
+    // Sans ces écrans, une séance faite ne peut pas sortir du téléphone : ni sauvegarde,
+    // ni transmission pour l'événement Outlook. La configuration est injectée pour que
+    // ce test d'assemblage reste identique sur CI et sur Vercel.
+    render(
+      <App
+        loadBackupAuth={async () => ({
+          error: 'La connexion à la sauvegarde n’est pas configurée sur cette installation.',
+        })}
+      />,
+    )
     await screen.findByRole('heading', { name: /Séance [ABC]/ })
 
     fireEvent.click(screen.getByRole('button', { name: 'Réglages' }))
 
     expect(await screen.findByRole('heading', { name: 'Réglages' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Suivant : Matériel' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Suivant : Sauvegarde' }))
+    expect(screen.getByRole('heading', { name: 'Sauvegarde' })).toBeInTheDocument()
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'La connexion à la sauvegarde n’est pas configurée',
+    )
     fireEvent.click(screen.getByRole('button', { name: 'Suivant : Export' }))
     expect(await screen.findByRole('button', { name: /Copier mes séances/ })).toBeInTheDocument()
   })

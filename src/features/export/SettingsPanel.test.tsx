@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { PREFERENCES_PAR_DEFAUT, type Preferences } from '../../domain/preferences'
+import type { EmailCodeAuthPort } from './EmailCodeLogin'
 import type { SettingsPort } from './SettingsPanel'
 import { SettingsPanel } from './SettingsPanel'
 
@@ -15,6 +16,15 @@ function settingsStore(initial: Preferences = PREFERENCES_PAR_DEFAUT): SettingsP
     exportAll: vi.fn(),
     previewImport: vi.fn(),
     importReplace: vi.fn(),
+  }
+}
+
+function backupAuth(): EmailCodeAuthPort {
+  return {
+    getSession: vi.fn(async () => null),
+    sendCode: vi.fn(async () => undefined),
+    verifyCode: vi.fn(async (email) => ({ email })),
+    signOut: vi.fn(async () => undefined),
   }
 }
 
@@ -51,8 +61,8 @@ describe('réglages', () => {
     expect(sound).toHaveAttribute('aria-checked', 'true')
   })
 
-  it('présente le matériel en lecture seule et garde l’échange de données atteignable', async () => {
-    render(<SettingsPanel store={settingsStore()} />)
+  it('présente le matériel, la sauvegarde et garde l’échange manuel atteignable', async () => {
+    render(<SettingsPanel store={settingsStore()} backupAuth={backupAuth()} />)
     await screen.findByRole('switch', { name: 'Vibration' })
     fireEvent.click(screen.getByRole('button', { name: 'Suivant : Matériel' }))
 
@@ -62,6 +72,11 @@ describe('réglages', () => {
     expect(within(hardware).getByText('2 kg')).toBeInTheDocument()
     expect(within(hardware).getByText('2,5 kg')).toBeInTheDocument()
     expect(within(hardware).getByText(/la charge de presse saisie exclut le chariot/)).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: 'Suivant : Sauvegarde' }))
+    expect(screen.getByRole('heading', { name: 'Sauvegarde' })).toBeInTheDocument()
+    expect(screen.getByText(/dates, exercices, charges, répétitions, RPE/)).toBeVisible()
+    expect(screen.getByText(/le brouillon actif/)).toBeVisible()
+    expect(await screen.findByLabelText('Adresse e-mail')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Suivant : Export' }))
     expect(screen.getByRole('button', { name: 'Copier mes séances' })).toBeInTheDocument()
     expect(screen.queryByText(/Dernière sauvegarde/)).not.toBeInTheDocument()
@@ -73,16 +88,38 @@ describe('réglages', () => {
     render(<SettingsPanel store={settingsStore()} />)
     await screen.findByRole('switch', { name: 'Vibration' })
 
-    expect(screen.getByLabelText('Page 1 sur 4')).toBeInTheDocument()
+    expect(screen.getByLabelText('Page 1 sur 5')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Suivant : Matériel' }))
-    expect(screen.getByLabelText('Page 2 sur 4')).toBeInTheDocument()
+    expect(screen.getByLabelText('Page 2 sur 5')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Suivant : Sauvegarde' }))
+    expect(screen.getByLabelText('Page 3 sur 5')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Suivant : Export' }))
-    expect(screen.getByLabelText('Page 3 sur 4')).toBeInTheDocument()
+    expect(screen.getByLabelText('Page 4 sur 5')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Suivant : Import' }))
-    expect(screen.getByLabelText('Page 4 sur 4')).toBeInTheDocument()
+    expect(screen.getByLabelText('Page 5 sur 5')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Précédent' }))
     fireEvent.click(screen.getByRole('button', { name: 'Précédent' }))
     fireEvent.click(screen.getByRole('button', { name: 'Précédent' }))
     fireEvent.click(screen.getByRole('button', { name: 'Précédent' }))
     expect(await screen.findByRole('switch', { name: 'Vibration' })).toBeInTheDocument()
+  })
+
+  it('explique explicitement une installation sans configuration distante', async () => {
+    render(
+      <SettingsPanel
+        store={settingsStore()}
+        loadBackupAuth={vi.fn(async () => ({
+          error: 'La connexion à la sauvegarde n’est pas configurée sur cette installation.',
+        }))}
+      />,
+    )
+    await screen.findByRole('switch', { name: 'Vibration' })
+    fireEvent.click(screen.getByRole('button', { name: 'Suivant : Matériel' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Suivant : Sauvegarde' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'La connexion à la sauvegarde n’est pas configurée',
+    )
+    expect(screen.getByRole('button', { name: 'Suivant : Export' })).toBeInTheDocument()
   })
 })
