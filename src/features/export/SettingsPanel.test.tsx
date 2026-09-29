@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { PREFERENCES_PAR_DEFAUT, type Preferences } from '../../domain/preferences'
-import type { EmailCodeAuthPort } from './EmailCodeLogin'
+import type { PasswordAuthPort } from './PasswordLogin'
 import type { SettingsPort } from './SettingsPanel'
 import { SettingsPanel } from './SettingsPanel'
 
@@ -19,11 +19,10 @@ function settingsStore(initial: Preferences = PREFERENCES_PAR_DEFAUT): SettingsP
   }
 }
 
-function backupAuth(): EmailCodeAuthPort {
+function backupAuth(): PasswordAuthPort {
   return {
     getSession: vi.fn(async () => null),
-    sendCode: vi.fn(async () => undefined),
-    verifyCode: vi.fn(async (email) => ({ email })),
+    signIn: vi.fn(async (email) => ({ email })),
     signOut: vi.fn(async () => undefined),
   }
 }

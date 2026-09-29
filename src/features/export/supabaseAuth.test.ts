@@ -1,12 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { describe, expect, it, vi } from 'vitest'
-import { CARNET_SUPABASE_URL, configureEmailCodeAuth, supabaseEmailCodeAuth } from './supabaseAuth'
+import { CARNET_SUPABASE_URL, configureEmailAuth, supabasePasswordAuth } from './supabaseAuth'
 
 function clientAuth() {
   const auth = {
     getSession: vi.fn(async () => ({ data: { session: null }, error: null })),
-    signInWithOtp: vi.fn(async () => ({ data: {}, error: null })),
-    verifyOtp: vi.fn(async () => ({
+    signInWithPassword: vi.fn(async () => ({
       data: { session: { user: { email: 'ugo@example.ch' } } },
       error: null,
     })),
@@ -19,11 +18,11 @@ describe('adaptateur de connexion Supabase', () => {
   it('refuse une configuration absente ou dirigée vers un autre projet', () => {
     const factory = vi.fn()
 
-    expect(configureEmailCodeAuth({}, factory)).toEqual({
+    expect(configureEmailAuth({}, factory)).toEqual({
       error: 'La connexion à la sauvegarde n’est pas configurée sur cette installation.',
     })
     expect(
-      configureEmailCodeAuth(
+      configureEmailAuth(
         {
           VITE_SUPABASE_URL: 'https://portail-paie.supabase.co',
           VITE_SUPABASE_PUBLISHABLE_KEY: 'publique',
@@ -36,11 +35,11 @@ describe('adaptateur de connexion Supabase', () => {
     expect(factory).not.toHaveBeenCalled()
   })
 
-  it('crée une session persistante sans jamais importer un lien magique', () => {
+  it('crée une session persistante sans jamais lire de lien dans l’URL', () => {
     const { client } = clientAuth()
     const factory = vi.fn(() => client)
 
-    const configuration = configureEmailCodeAuth(
+    const configuration = configureEmailAuth(
       {
         VITE_SUPABASE_URL: CARNET_SUPABASE_URL,
         VITE_SUPABASE_PUBLISHABLE_KEY: 'publique',
@@ -59,52 +58,47 @@ describe('adaptateur de connexion Supabase', () => {
     })
   })
 
-  it('envoie puis vérifie le code e-mail avec le SDK', async () => {
+  it('se connecte par mot de passe avec le SDK', async () => {
     const { auth, client } = clientAuth()
-    const port = supabaseEmailCodeAuth(client)
 
-    await port.sendCode('ugo@example.ch')
-    expect(auth.signInWithOtp).toHaveBeenCalledWith({
-      email: 'ugo@example.ch',
-      options: { shouldCreateUser: false },
-    })
-
-    await expect(port.verifyCode('ugo@example.ch', '123456')).resolves.toEqual({
+    await expect(supabasePasswordAuth(client).signIn('ugo@example.ch', 'barre')).resolves.toEqual({
       email: 'ugo@example.ch',
     })
-    expect(auth.verifyOtp).toHaveBeenCalledWith({
+    expect(auth.signInWithPassword).toHaveBeenCalledWith({
       email: 'ugo@example.ch',
-      token: '123456',
-      type: 'email',
+      password: 'barre',
     })
   })
 
-  it('explique qu’une adresse sans compte n’est pas une panne réseau', async () => {
+  it('ne dit pas lequel de l’adresse ou du mot de passe est faux', async () => {
     const { auth, client } = clientAuth()
-    auth.signInWithOtp.mockResolvedValueOnce({
-      data: {},
-      error: { code: 'otp_disabled', status: 422 },
+    auth.signInWithPassword.mockResolvedValueOnce({
+      data: { session: null },
+      error: { code: 'invalid_credentials', status: 400 },
     } as never)
 
-    await expect(supabaseEmailCodeAuth(client).sendCode('inconnue@example.ch')).rejects.toThrow(
-      'aucun compte de sauvegarde n’est ouvert pour cette adresse',
+    await expect(supabasePasswordAuth(client).signIn('inconnue@example.ch', 'x')).rejects.toThrow(
+      'adresse ou mot de passe incorrect',
     )
   })
 
   it('traduit les refus et ne prétend pas qu’une session existe', async () => {
     const { auth, client } = clientAuth()
-    auth.signInWithOtp.mockResolvedValueOnce({
-      data: {},
-      error: { code: 'over_email_send_rate_limit', status: 429 },
-    } as never)
-    auth.verifyOtp.mockResolvedValueOnce({
-      data: { session: null },
-      error: { code: 'otp_expired' },
-    } as never)
-    const port = supabaseEmailCodeAuth(client)
+    auth.signInWithPassword
+      .mockResolvedValueOnce({
+        data: { session: null },
+        error: { code: 'over_request_rate_limit', status: 429 },
+      } as never)
+      .mockResolvedValueOnce({
+        data: { session: null },
+        error: { code: 'email_not_confirmed', status: 400 },
+      } as never)
+      .mockResolvedValueOnce({ data: { session: null }, error: null } as never)
+    const port = supabasePasswordAuth(client)
 
-    await expect(port.sendCode('ugo@example.ch')).rejects.toThrow(/déjà.*envoyé/)
-    await expect(port.verifyCode('ugo@example.ch', '123456')).rejects.toThrow(/expiré/)
+    await expect(port.signIn('ugo@example.ch', 'barre')).rejects.toThrow(/trop de tentatives/)
+    await expect(port.signIn('ugo@example.ch', 'barre')).rejects.toThrow(/pas encore confirmé/)
+    await expect(port.signIn('ugo@example.ch', 'barre')).rejects.toThrow(/sans ouvrir de session/)
   })
 
   it('relit la session locale et se déconnecte seulement de cet appareil', async () => {
@@ -113,7 +107,7 @@ describe('adaptateur de connexion Supabase', () => {
       data: { session: { user: { email: 'ugo@example.ch' } } },
       error: null,
     } as never)
-    const port = supabaseEmailCodeAuth(client)
+    const port = supabasePasswordAuth(client)
 
     await expect(port.getSession()).resolves.toEqual({ email: 'ugo@example.ch' })
     await port.signOut()

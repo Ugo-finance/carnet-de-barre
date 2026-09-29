@@ -1,9 +1,9 @@
 /**
- * L'écran de connexion dans la taille qui a déjà cassé une action en salle — CB-85.
+ * L'écran de connexion dans la taille qui a déjà cassé une action en salle — CB-85, CB-87.
  *
  * La configuration de Playwright contient une clé factice et ce fichier bloque toute
- * requête au domaine Supabase. Le parcours ne peut donc ni envoyer un e-mail ni créer un
- * compte distant : il éprouve uniquement le vrai assemblage et la place sous le pouce.
+ * requête au domaine Supabase. Le parcours ne peut donc ni ouvrir une session ni toucher
+ * au compte distant : il éprouve uniquement le vrai assemblage et la place sous le pouce.
  */
 
 import { expect, test } from '@playwright/test'
@@ -26,16 +26,19 @@ test('le formulaire et sa commande tiennent dans la vue Safari', async ({ page }
   await expect(page.getByText(/pas le brouillon actif/)).toBeVisible()
 
   const email = page.getByLabel('Adresse e-mail')
-  const envoyer = page.getByRole('button', { name: 'Recevoir un code par e-mail' })
+  const motDePasse = page.getByLabel('Mot de passe')
+  const connecter = page.getByRole('button', { name: 'Se connecter' })
   await expect(email).toBeVisible()
-  await expect(envoyer).toBeVisible()
-  await expect(envoyer).toBeDisabled()
+  await expect(motDePasse).toBeVisible()
+  await expect(motDePasse).toHaveAttribute('type', 'password')
+  await expect(connecter).toBeDisabled()
 
   await email.fill('ugo@example.ch')
-  await expect(envoyer).toBeEnabled()
+  await motDePasse.fill('barre')
+  await expect(connecter).toBeEnabled()
 
-  const boite = await envoyer.boundingBox()
-  expect(boite, 'la commande d’envoi n’a aucune boîte').not.toBeNull()
+  const boite = await connecter.boundingBox()
+  expect(boite, 'la commande de connexion n’a aucune boîte').not.toBeNull()
   expect(Math.round(boite!.y), 'la commande sort par le haut').toBeGreaterThanOrEqual(0)
   expect(
     Math.round(boite!.y + boite!.height),
@@ -45,17 +48,20 @@ test('le formulaire et sa commande tiennent dans la vue Safari', async ({ page }
 
 test('le clavier peut faire défiler ensemble le champ et sa commande', async ({ page }) => {
   const email = page.getByLabel('Adresse e-mail')
-  const envoyer = page.getByRole('button', { name: 'Recevoir un code par e-mail' })
+  const motDePasse = page.getByLabel('Mot de passe')
+  const connecter = page.getByRole('button', { name: 'Se connecter' })
   await email.fill('ugo@example.ch')
-  await email.focus()
+  await motDePasse.fill('barre')
+  await motDePasse.focus()
 
-  // Hauteur visible approximative au-dessus du clavier numérique iOS. Pour cet écran
-  // hors séance, la page doit rester défilable : on ne simule pas la vue fixe du focus.
+  // Hauteur visible approximative au-dessus du clavier iOS. Pour cet écran hors séance,
+  // la page doit rester défilable : on ne simule pas la vue fixe du focus.
   await page.setViewportSize({ width: SAFARI.width, height: 400 })
-  await envoyer.scrollIntoViewIfNeeded()
+  await connecter.scrollIntoViewIfNeeded()
 
-  const boite = await envoyer.boundingBox()
+  const boite = await connecter.boundingBox()
   expect(boite, 'la commande ne peut pas être amenée au-dessus du clavier').not.toBeNull()
   expect(Math.round(boite!.y + boite!.height)).toBeLessThanOrEqual(400)
   await expect(email).toHaveValue('ugo@example.ch')
+  await expect(motDePasse).toHaveValue('barre')
 })
