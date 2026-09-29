@@ -70,25 +70,24 @@ non plus dans `auth.users` en SQL : cette écriture contourne l'API Auth et ses 
 bord.
 
 Le chemin pris en charge est l'API d'administration Auth (`auth.admin.updateUserById`,
-équivalent HTTP ci-dessous), lancée **une fois par Ugo, depuis son propre terminal** :
+équivalent HTTP `PUT /auth/v1/admin/users/<UID>`), lancée **une fois par Ugo, depuis son
+propre terminal**, par `scripts/changer-mot-de-passe.sh` :
 
 1. Tableau de bord → **Authentication → Users** : copier l'`UID` du compte.
-2. Tableau de bord → **Project Settings → API Keys** : copier une clé **secrète**.
-3. Dans un terminal, sans l'enregistrer dans un fichier ni dans l'historique :
+2. Tableau de bord → **Project Settings → API Keys** : copier une clé **secrète**
+   `sb_secret_…`.
+3. Depuis ce dépôt : `bash scripts/changer-mot-de-passe.sh`. Le script demande l'UID,
+   la clé puis deux fois le nouveau mot de passe, saisies masquées. Seul « Mot de passe
+   changé. » confirme le changement. Sans réponse du serveur, relancer le script avec le
+   même mot de passe : l'appel peut être rejoué sans effet de bord.
 
-   ```sh
-   read -rs CLE && read -rs MDP && curl -sS -X PUT \
-     "https://rtxdtiysrdgzsomatwon.supabase.co/auth/v1/admin/users/<UID>" \
-     -H "apikey: $CLE" -H "Content-Type: application/json" \
-     -d "{\"password\": \"$MDP\"}" -o /dev/null -w "%{http_code}\n"; unset CLE MDP
-   ```
-
-   `200` confirme le changement. Les nouvelles clés `sb_secret_…` vont dans l'en-tête
-   `apikey` seulement, jamais en `Authorization: Bearer`, réservé aux jetons JWT. Le mot
-   de passe ne doit contenir ni `"` ni `\`, qui casseraient le JSON. La clé secrète ne
-   quitte pas ce terminal : ni agent, ni Git, ni Vercel, ni variable `VITE_*`. Si le
-   tableau de bord propose un jour de définir le mot de passe d'un utilisateur, préférer
-   ce bouton.
+Aucun des deux secrets ne passe par les arguments d'un processus, qu'un `ps` ou
+`/proc/<pid>/cmdline` montreraient pendant la requête : `curl` les lit dans sa
+configuration, sur son entrée standard. Ni l'environnement, ni un fichier, ni
+l'historique ne les voient. La clé `sb_secret_…` contourne toutes les politiques RLS :
+elle ne va jamais chez un agent, dans Git, dans Vercel ou dans une variable `VITE_*`.
+Si le tableau de bord propose un jour de définir le mot de passe d'un utilisateur,
+préférer ce bouton.
 
 ## Après une période sans utilisation
 
