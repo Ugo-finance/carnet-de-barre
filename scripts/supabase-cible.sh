@@ -28,7 +28,7 @@ nom="$(node -p "require('${RACINE}/package.json').name" 2>/dev/null || echo inco
 [[ "${nom}" == "carnet-de-barre" ]] || refus "ce dépôt s'appelle « ${nom} », pas carnet-de-barre."
 
 fichier_ref="${RACINE}/supabase/.temp/project-ref"
-[[ -f "${fichier_ref}" ]] || refus "aucun projet lié. Lance : npx supabase link --project-ref ${ATTENDUE}"
+[[ -f "${fichier_ref}" ]] || refus "aucun projet lié. Lance : npx --no-install supabase link --project-ref ${ATTENDUE}"
 liee="$(tr -d '[:space:]' < "${fichier_ref}")"
 [[ "${liee}" == "${ATTENDUE}" ]] || refus "le projet lié est « ${liee} », pas celui du carnet (${ATTENDUE})."
 
