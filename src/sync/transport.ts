@@ -16,8 +16,8 @@
  *
  * ## Ce que ce fichier ne fait pas
  *
- * Il **n'obtient pas de session**. La connexion par code e-mail est un écran (CB-75a,
- * Codex) ; le transport reçoit un client déjà connecté. Sans session, le serveur refuse
+ * Il **n'obtient pas de session**. La connexion par mot de passe est un écran (CB-85,
+ * CB-87) ; le transport reçoit un client déjà connecté. Sans session, le serveur refuse
  * explicitement, et ce refus remonte tel quel.
  */
 

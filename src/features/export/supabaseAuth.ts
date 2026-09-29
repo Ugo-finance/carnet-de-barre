@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import type { EmailCodeAuthPort, EmailSession } from './EmailCodeLogin'
+import type { EmailSession, PasswordAuthPort } from './PasswordLogin'
 
 export const CARNET_SUPABASE_URL = 'https://rtxdtiysrdgzsomatwon.supabase.co'
 
@@ -9,7 +9,7 @@ export interface EmailAuthEnvironment {
 }
 
 export type EmailAuthConfiguration =
-  | { auth: EmailCodeAuthPort; client: SupabaseClient; error?: never }
+  | { auth: PasswordAuthPort; client: SupabaseClient; error?: never }
   | { auth?: never; client?: never; error: string }
 
 type ClientFactory = (
@@ -24,21 +24,24 @@ type ClientFactory = (
   },
 ) => SupabaseClient
 
+/**
+ * Supabase répond `invalid_credentials` aussi bien pour une adresse sans compte que pour
+ * un mauvais mot de passe, volontairement : le message ne doit pas trahir qu'un compte
+ * existe. On garde cette ambiguïté plutôt que d'en deviner une moitié.
+ */
 function frenchAuthError(
   error: { code?: string; status?: number } | null,
   fallback: string,
 ): Error {
   switch (error?.code) {
-    case 'over_email_send_rate_limit':
-      return new Error('un code vient déjà d’être envoyé, attends un instant')
+    case 'invalid_credentials':
+      return new Error('adresse ou mot de passe incorrect')
     case 'email_address_invalid':
       return new Error('cette adresse e-mail n’est pas valide')
-    case 'otp_disabled':
-      return new Error('aucun compte de sauvegarde n’est ouvert pour cette adresse')
-    case 'otp_expired':
-      return new Error('ce code a expiré, demande un nouveau code')
-    case 'invalid_credentials':
-      return new Error('ce code est incorrect ou expiré')
+    case 'email_not_confirmed':
+      return new Error('ce compte n’est pas encore confirmé dans Supabase')
+    case 'user_banned':
+      return new Error('ce compte de sauvegarde est suspendu')
   }
   if (error?.status === 429) {
     return new Error('trop de tentatives, attends un instant')
@@ -52,7 +55,7 @@ function sessionEmail(email: string | undefined): EmailSession {
 }
 
 /** Adapte le SDK au petit port compris par l'écran. */
-export function supabaseEmailCodeAuth(client: SupabaseClient): EmailCodeAuthPort {
+export function supabasePasswordAuth(client: SupabaseClient): PasswordAuthPort {
   return {
     async getSession() {
       const { data, error } = await client.auth.getSession()
@@ -60,22 +63,10 @@ export function supabaseEmailCodeAuth(client: SupabaseClient): EmailCodeAuthPort
       return data.session ? sessionEmail(data.session.user.email) : null
     },
 
-    async sendCode(email) {
-      const { error } = await client.auth.signInWithOtp({
-        email,
-        options: { shouldCreateUser: false },
-      })
+    async signIn(email, password) {
+      const { data, error } = await client.auth.signInWithPassword({ email, password })
       if (error) throw frenchAuthError(error, 'le service de connexion ne répond pas')
-    },
-
-    async verifyCode(email, code) {
-      const { data, error } = await client.auth.verifyOtp({
-        email,
-        token: code,
-        type: 'email',
-      })
-      if (error) throw frenchAuthError(error, 'le code ne peut pas être vérifié')
-      if (!data.session) throw new Error('le code a été accepté sans ouvrir de session')
+      if (!data.session) throw new Error('la connexion a été acceptée sans ouvrir de session')
       return sessionEmail(data.session.user.email)
     },
 
@@ -90,11 +81,10 @@ export function supabaseEmailCodeAuth(client: SupabaseClient): EmailCodeAuthPort
  * Construit le client persistant de la PWA, ou un refus visible.
  *
  * L'URL est contrôlée avant même de créer le client : une variable Vercel copiée depuis
- * Portail Paie ne doit pas pouvoir y inscrire un compte par erreur. Le lien magique est
- * ignoré volontairement ; le code est saisi dans le contexte de la PWA installée, là où
- * sa session doit rester.
+ * Portail Paie ne doit pas pouvoir y ouvrir une session par erreur. Aucun lien n'est lu
+ * dans l'URL : la session naît dans la PWA installée, là où elle doit rester.
  */
-export function configureEmailCodeAuth(
+export function configureEmailAuth(
   environment: EmailAuthEnvironment,
   factory: ClientFactory = (url, key, options) => createClient(url, key, options),
 ): EmailAuthConfiguration {
@@ -114,12 +104,12 @@ export function configureEmailCodeAuth(
       detectSessionInUrl: false,
     },
   })
-  return { auth: supabaseEmailCodeAuth(client), client }
+  return { auth: supabasePasswordAuth(client), client }
 }
 
 /** Configuration Vite lue uniquement quand la page Sauvegarde charge ce module. */
-export function configureEmailCodeAuthFromVite(): EmailAuthConfiguration {
-  return configureEmailCodeAuth({
+export function configureEmailAuthFromVite(): EmailAuthConfiguration {
+  return configureEmailAuth({
     VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL,
     VITE_SUPABASE_PUBLISHABLE_KEY: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
   })

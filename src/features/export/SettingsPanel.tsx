@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Preferences } from '../../domain/preferences'
-import { EmailCodeLogin, type EmailCodeAuthPort } from './EmailCodeLogin'
+import { PasswordLogin, type PasswordAuthPort } from './PasswordLogin'
 import { ExportPanel, type ExchangePort } from './ExportPanel'
 import type { EmailAuthConfiguration } from './supabaseAuth'
 
@@ -47,10 +47,10 @@ function messageFor(error: unknown): string {
 
 async function loadConfiguredEmailAuth(): Promise<EmailAuthConfiguration> {
   const module = await import('./supabaseAuth')
-  return module.configureEmailCodeAuthFromVite()
+  return module.configureEmailAuthFromVite()
 }
 
-function LazyEmailCodeLogin({
+function LazyPasswordLogin({
   load = loadConfiguredEmailAuth,
 }: {
   load?: () => Promise<EmailAuthConfiguration>
@@ -79,7 +79,7 @@ function LazyEmailCodeLogin({
       </p>
     )
   }
-  if (configuration.auth) return <EmailCodeLogin auth={configuration.auth} />
+  if (configuration.auth) return <PasswordLogin auth={configuration.auth} />
   return (
     <p className="text-sm text-bad" role="alert">
       {configuration.error}
@@ -95,7 +95,7 @@ export function SettingsPanel({
   onPreferencesChange,
 }: {
   store: SettingsPort
-  backupAuth?: EmailCodeAuthPort
+  backupAuth?: PasswordAuthPort
   backupAuthError?: string
   loadBackupAuth?: () => Promise<EmailAuthConfiguration>
   onPreferencesChange?: () => void
@@ -228,7 +228,7 @@ export function SettingsPanel({
           <h2 className="text-lg font-bold">Sauvegarde</h2>
           <p className="mt-2 text-sm leading-5 text-muted">
             Sauvegarde sur Supabase : dates, exercices, charges, répétitions, RPE et notes de
-            séance. Une adresse e-mail sert à la connexion.
+            séance. Une adresse e-mail et un mot de passe servent à la connexion.
           </p>
           <p className="mt-2 text-xs leading-4 text-muted">
             Les séries de la séance en cours restent sur ce téléphone. La sauvegarde couvre le
@@ -237,13 +237,13 @@ export function SettingsPanel({
           </p>
           <div className="mt-4 border-t border-line pt-4">
             {backupAuth ? (
-              <EmailCodeLogin auth={backupAuth} />
+              <PasswordLogin auth={backupAuth} />
             ) : backupAuthError ? (
               <p className="text-sm text-bad" role="alert">
                 {backupAuthError}
               </p>
             ) : (
-              <LazyEmailCodeLogin load={loadBackupAuth} />
+              <LazyPasswordLogin load={loadBackupAuth} />
             )}
           </div>
         </section>
