@@ -65,14 +65,30 @@ ne crée pas une seconde instance Supabase concurrente.
 ## Mot de passe oublié
 
 Sans SMTP, Supabase ne peut pas envoyer de lien de réinitialisation. Ne pas supprimer
-puis recréer le compte : le carnet distant est rattaché à son identifiant. Ugo change le
-mot de passe lui-même dans **SQL Editor** du projet exact :
+puis recréer le compte : le carnet distant est rattaché à son identifiant. Ne pas écrire
+non plus dans `auth.users` en SQL : cette écriture contourne l'API Auth et ses effets de
+bord.
 
-```sql
-update auth.users
-set encrypted_password = extensions.crypt('<nouveau mot de passe>', extensions.gen_salt('bf'))
-where email = '<son adresse>';
-```
+Le chemin pris en charge est l'API d'administration Auth (`auth.admin.updateUserById`,
+équivalent HTTP ci-dessous), lancée **une fois par Ugo, depuis son propre terminal** :
+
+1. Tableau de bord → **Authentication → Users** : copier l'`UID` du compte.
+2. Tableau de bord → **Project Settings → API Keys** : copier une clé **secrète**.
+3. Dans un terminal, sans l'enregistrer dans un fichier ni dans l'historique :
+
+   ```sh
+   read -rs CLE && read -rs MDP && curl -sS -X PUT \
+     "https://rtxdtiysrdgzsomatwon.supabase.co/auth/v1/admin/users/<UID>" \
+     -H "apikey: $CLE" -H "Content-Type: application/json" \
+     -d "{\"password\": \"$MDP\"}" -o /dev/null -w "%{http_code}\n"; unset CLE MDP
+   ```
+
+   `200` confirme le changement. Les nouvelles clés `sb_secret_…` vont dans l'en-tête
+   `apikey` seulement, jamais en `Authorization: Bearer`, réservé aux jetons JWT. Le mot
+   de passe ne doit contenir ni `"` ni `\`, qui casseraient le JSON. La clé secrète ne
+   quitte pas ce terminal : ni agent, ni Git, ni Vercel, ni variable `VITE_*`. Si le
+   tableau de bord propose un jour de définir le mot de passe d'un utilisateur, préférer
+   ce bouton.
 
 ## Après une période sans utilisation
 

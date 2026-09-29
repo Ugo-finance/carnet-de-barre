@@ -272,6 +272,9 @@ proposée et non après.
   e-mail **ouvre Safari**, dont la session est séparée de celle de l'app installée — le même
   cloisonnement qu'au § 1. Il faut donc une recette de connexion **dans la PWA installée**, et
   prévoir la saisie d'un code à usage unique si le lien ne conserve pas le contexte.
+  **Remplacé le 29.09.2026 (CB-87)** : arbitrage d'Ugo pour une connexion adresse + mot de
+  passe dans la PWA, sans e-mail — le code à usage unique exigeait un SMTP personnel sur
+  l'offre gratuite. Voir `23-mise-en-service-connexion.md`.
 - **Renouvellement et échec de session** : une session expirée ne doit ni vider la file d'attente,
   ni faire croire que la sauvegarde est à jour. Se reconnecter reprend la file là où elle en est.
 
