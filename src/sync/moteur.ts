@@ -29,7 +29,7 @@ import { synchroniser as synchroniserParDefaut, type Transport } from './transpo
 
 /** Ce qu'une sauvegarde disparue puis renvoyée laisse à dire. */
 export interface Reconstitution {
-  revision: number
+  /** La dernière révision confirmée avant la disparition. */
   revisionDisparue: number
 }
 
@@ -45,8 +45,18 @@ export type EtatMoteur =
   /** Le protocole attend un geste d'Ugo : restauration proposée, conflit ou recul. */
   | { etat: 'decision'; action: ActionSauvegarde }
 
+/**
+ * L'annonce durable d'une reconstitution. Le magasin l'écrit dans la transaction qui
+ * constate la disparition : le moteur ne la tient pas en mémoire, où une réponse perdue
+ * ou un rechargement l'effaceraient.
+ */
+export interface AnnonceReconstitution {
+  reconstitutionNonLue(): Promise<Reconstitution | null>
+  oublierReconstitution(): Promise<void>
+}
+
 export interface DependancesMoteur {
-  port: SauvegardePort
+  port: SauvegardePort & AnnonceReconstitution
   appareil: () => Promise<string>
   /** Le transport d'une session ouverte, ou `null` quand personne n'est connecté. */
   transport: () => Promise<Transport | null>
@@ -65,7 +75,7 @@ export interface MoteurSauvegarde {
   /** « Garde le mien » devant un conflit ou un recul, à la révision montrée à Ugo. */
   resoudreConflit(revision: number): Promise<void>
   /** Ugo a lu que la sauvegarde avait été reconstituée. */
-  oublierReconstitution(): void
+  oublierReconstitution(): Promise<void>
 }
 
 /**
@@ -82,7 +92,6 @@ export function creerMoteur(dependances: DependancesMoteur): MoteurSauvegarde {
   const synchroniser = dependances.synchroniser ?? synchroniserParDefaut
   const abonnes = new Set<(etat: EtatMoteur) => void>()
   let courant: EtatMoteur = { etat: 'deconnecte' }
-  let reconstitution: Reconstitution | undefined
   let passage: Promise<void> | null = null
   let retenu = false
 
@@ -97,9 +106,10 @@ export function creerMoteur(dependances: DependancesMoteur): MoteurSauvegarde {
     }
   }
 
-  function aJour(revision: number | null): EtatMoteur {
-    return reconstitution
-      ? { etat: 'a-jour', revision, reconstitution }
+  async function aJour(revision: number | null): Promise<EtatMoteur> {
+    const annonce = await dependances.port.reconstitutionNonLue()
+    return annonce
+      ? { etat: 'a-jour', revision, reconstitution: annonce }
       : { etat: 'a-jour', revision }
   }
 
@@ -125,12 +135,10 @@ export function creerMoteur(dependances: DependancesMoteur): MoteurSauvegarde {
         switch (issue.issue) {
           case 'a-jour': {
             const { revisionAcquittee } = await dependances.port.etatSauvegarde()
-            publier(aJour(revisionAcquittee))
+            publier(await aJour(revisionAcquittee))
             return
           }
           case 'reconstituee':
-            reconstitution = { revision: issue.revision, revisionDisparue: issue.revisionDisparue }
-            continue
           case 'envoye':
           case 'a-relire':
             // Un envoi confirmé peut en laisser un autre derrière lui ; un refus de
@@ -193,9 +201,9 @@ export function creerMoteur(dependances: DependancesMoteur): MoteurSauvegarde {
       moteur.demander()
     },
 
-    oublierReconstitution() {
-      reconstitution = undefined
-      if (courant.etat === 'a-jour') publier(aJour(courant.revision))
+    async oublierReconstitution() {
+      await dependances.port.oublierReconstitution()
+      if (courant.etat === 'a-jour') publier(await aJour(courant.revision))
     },
   }
   return moteur

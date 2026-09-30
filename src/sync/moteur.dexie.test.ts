@@ -178,6 +178,8 @@ describe('le moteur de sauvegarde', () => {
       preparerEnvoi: store.preparerEnvoi.bind(store),
       acquitterEnvoi: store.acquitterEnvoi.bind(store),
       resoudreConflit: store.resoudreConflit.bind(store),
+      reconstitutionNonLue: store.reconstitutionNonLue.bind(store),
+      oublierReconstitution: store.oublierReconstitution.bind(store),
       async etatSauvegarde() {
         if (piege && serveur.ecritures === 1) {
           piege = false
@@ -239,7 +241,7 @@ describe('le moteur de sauvegarde', () => {
     serveur.vider()
     moteur.demander()
     await moteur.inactif()
-    const annonce = { revision: 1, revisionDisparue: 1 }
+    const annonce = { revisionDisparue: 1 }
     expect(moteur.etat()).toEqual({ etat: 'a-jour', revision: 1, reconstitution: annonce })
 
     // Une séance de plus ne l'efface pas : Ugo ne l'a pas encore vue.
@@ -248,8 +250,61 @@ describe('le moteur de sauvegarde', () => {
     await moteur.inactif()
     expect(moteur.etat()).toEqual({ etat: 'a-jour', revision: 2, reconstitution: annonce })
 
-    moteur.oublierReconstitution()
+    await moteur.oublierReconstitution()
     expect(moteur.etat()).toEqual({ etat: 'a-jour', revision: 2 })
+    // Et l'oubli est durable : un autre démarrage ne la ressort pas.
+    const { moteur: apres } = moteurSur(store, serveur)
+    apres.demander()
+    await apres.inactif()
+    expect(apres.etat()).toEqual({ etat: 'a-jour', revision: 2 })
+  })
+
+  it('annonce la reconstitution même quand la réponse de l’envoi s’est perdue', async () => {
+    // P2 du robot Codex sur #87 : le serveur applique la reconstitution, la réponse se
+    // perd, et le passage suivant ne voit qu'un `envoye` reconnu. L'annonce ne doit pas
+    // dépendre de la réponse qui l'a portée.
+    const store = await magasinPret()
+    await store.adjustTarget('squat', { w: 80 })
+    const serveur = new FauxServeur()
+    const { moteur } = moteurSur(store, serveur)
+    moteur.demander()
+    await moteur.inactif()
+
+    serveur.vider()
+    serveur.perdreLaReponse = true
+    moteur.demander()
+    await moteur.inactif()
+    expect(moteur.etat().etat).toBe('en-attente')
+
+    moteur.demander()
+    await moteur.inactif()
+    expect(moteur.etat()).toEqual({
+      etat: 'a-jour',
+      revision: 1,
+      reconstitution: { revisionDisparue: 1 },
+    })
+  })
+
+  it('annonce encore la reconstitution après un redémarrage de l’app', async () => {
+    const store = await magasinPret()
+    await store.adjustTarget('squat', { w: 80 })
+    const serveur = new FauxServeur()
+    const { moteur } = moteurSur(store, serveur)
+    moteur.demander()
+    await moteur.inactif()
+    serveur.vider()
+    moteur.demander()
+    await moteur.inactif()
+
+    // Un nouveau moteur, comme après une fermeture de l'app : rien en mémoire.
+    const { moteur: redemarre } = moteurSur(store, serveur)
+    redemarre.demander()
+    await redemarre.inactif()
+    expect(redemarre.etat()).toEqual({
+      etat: 'a-jour',
+      revision: 1,
+      reconstitution: { revisionDisparue: 1 },
+    })
   })
 
   it('s’arrête et le dit quand le distant ne se stabilise pas', async () => {

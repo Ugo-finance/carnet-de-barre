@@ -115,6 +115,15 @@ const PREFERENCES_KEY = 'preferences'
 const APPAREIL_KEY = 'appareil'
 
 /**
+ * « Ta sauvegarde distante avait disparu » : l'annonce qu'Ugo doit lire — CB-79e.
+ *
+ * Écrite dans la transaction qui constate la disparition, et effacée seulement quand Ugo
+ * l'a lue. Ni une réponse perdue, ni un rechargement de l'app ne doivent pouvoir la
+ * taire : la sauvegarde serait réparée, et Ugo ne saurait jamais qu'elle avait manqué.
+ */
+const RECONSTITUTION_KEY = 'sauvegarde-reconstitution'
+
+/**
  * La part du contrat implémentée à ce stade : lecture de l'historique et cycle de vie
  * complet d'une séance, de l'ouverture du brouillon à sa finalisation. L'édition de
  * l'historique et l'échange JSON arrivent avec CB-33 et CB-40.
@@ -579,6 +588,7 @@ export class DexieStore implements DraftStore, SauvegardePort {
         let reconstitution: EnvoiPrepare['reconstitution']
         if (action.type === 'sauvegarde-disparue') {
           reconstitution = { revisionDisparue: action.revision }
+          await this.database.meta.put({ key: RECONSTITUTION_KEY, value: reconstitution })
           ligne = { etat: constaterDisparition(ligne.etat), instantane: null }
           action = prochaineAction(ligne.etat, distant, appareil)
         }
@@ -652,6 +662,20 @@ export class DexieStore implements DraftStore, SauvegardePort {
       })
       return etat
     })
+  }
+
+  /** L'annonce d'une reconstitution qu'Ugo n'a pas encore lue, s'il y en a une. */
+  async reconstitutionNonLue(): Promise<{ revisionDisparue: number } | null> {
+    const stocke = await this.database.meta.get(RECONSTITUTION_KEY)
+    const valeur = stocke?.value as { revisionDisparue?: unknown } | undefined
+    return typeof valeur?.revisionDisparue === 'number'
+      ? { revisionDisparue: valeur.revisionDisparue }
+      : null
+  }
+
+  /** Ugo a lu l'annonce. */
+  async oublierReconstitution(): Promise<void> {
+    await this.database.meta.delete(RECONSTITUTION_KEY)
   }
 
   async updateSeance(id: string, patch: Partial<Omit<Seance, 'id'>>): Promise<Seance> {
