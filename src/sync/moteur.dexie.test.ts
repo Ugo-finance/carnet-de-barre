@@ -251,12 +251,69 @@ describe('le moteur de sauvegarde', () => {
     expect(moteur.etat()).toEqual({ etat: 'a-jour', revision: 2, reconstitution: annonce })
 
     await moteur.oublierReconstitution()
+    await moteur.inactif()
     expect(moteur.etat()).toEqual({ etat: 'a-jour', revision: 2 })
     // Et l'oubli est durable : un autre démarrage ne la ressort pas.
     const { moteur: apres } = moteurSur(store, serveur)
     apres.demander()
     await apres.inactif()
     expect(apres.etat()).toEqual({ etat: 'a-jour', revision: 2 })
+  })
+
+  it('n’efface jamais une décision en marquant l’annonce comme lue', async () => {
+    // P1 de Codex sur #87 : l'oubli relisait l'annonce, et un passage publiait un conflit
+    // pendant cette lecture. La lecture revenue republiait l'ancien « à jour » par-dessus :
+    // l'écran disait « à jour » alors que le protocole attendait le geste d'Ugo.
+    const store = await magasinPret()
+    await store.adjustTarget('squat', { w: 80 })
+    const serveur = new FauxServeur()
+    let retenir = false
+    let liberer = () => {}
+    let lectureRetenue = () => {}
+    const retenue = new Promise<void>((r) => (lectureRetenue = r))
+    const port = {
+      preparerEnvoi: store.preparerEnvoi.bind(store),
+      acquitterEnvoi: store.acquitterEnvoi.bind(store),
+      resoudreConflit: store.resoudreConflit.bind(store),
+      etatSauvegarde: store.etatSauvegarde.bind(store),
+      oublierReconstitution: store.oublierReconstitution.bind(store),
+      async reconstitutionNonLue() {
+        if (retenir) {
+          retenir = false
+          lectureRetenue()
+          await new Promise<void>((r) => (liberer = r))
+        }
+        return store.reconstitutionNonLue()
+      },
+    }
+    const moteur = creerMoteur({
+      port,
+      appareil: async () => APPAREIL,
+      transport: async () => serveur,
+    })
+    moteur.demander()
+    await moteur.inactif()
+    serveur.vider()
+    moteur.demander()
+    await moteur.inactif()
+    expect(moteur.etat()).toMatchObject({ etat: 'a-jour', reconstitution: { revisionDisparue: 1 } })
+
+    // Un autre appareil écrit, et une séance est enregistrée ici : le prochain passage
+    // doit s'arrêter sur un conflit.
+    serveur.ecritureTierce()
+    await store.adjustTarget('squat', { w: 85 })
+
+    retenir = true
+    const oubli = moteur.oublierReconstitution()
+    await Promise.race([retenue, new Promise((r) => setTimeout(r, 50))])
+    moteur.demander()
+    await moteur.inactif()
+    liberer()
+    await oubli
+    await moteur.inactif()
+
+    expect(moteur.etat().etat).toBe('decision')
+    expect(await store.reconstitutionNonLue()).toBeNull()
   })
 
   it('annonce la reconstitution même quand la réponse de l’envoi s’est perdue', async () => {

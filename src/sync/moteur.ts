@@ -203,7 +203,11 @@ export function creerMoteur(dependances: DependancesMoteur): MoteurSauvegarde {
 
     async oublierReconstitution() {
       await dependances.port.oublierReconstitution()
-      if (courant.etat === 'a-jour') publier(await aJour(courant.revision))
+      // L'état se republie par un passage, jamais d'ici — P1 de Codex sur #87. Publier
+      // depuis l'oubli, c'était décider sur un état lu avant un `await` : un passage qui
+      // publiait un conflit entre-temps était recouvert par l'ancien « à jour ». Un
+      // passage ne se croise avec aucun autre, et il relit l'annonce après son effacement.
+      moteur.demander()
     },
   }
   return moteur
