@@ -13,6 +13,7 @@ import { BottomNav, type AppTab } from './components/BottomNav'
 import { SessionHome } from './features/session/SessionHome'
 import { SettingsPanel } from './features/export/SettingsPanel'
 import type { EmailAuthConfiguration } from './features/export/supabaseAuth'
+import { configurationPartagee } from './sync/demarrage'
 import { ProgressionPanel } from './features/history/ProgressionPanel'
 import { HistoryPanel } from './features/history/HistoryPanel'
 import { UpdatePrompt } from './pwa/UpdatePrompt'
@@ -124,7 +125,8 @@ function HistoriqueTab() {
 }
 
 export default function App({
-  loadBackupAuth,
+  // Le même client que le moteur de sauvegarde : c'est lui qui porte la session. CB-79e.
+  loadBackupAuth = configurationPartagee,
 }: {
   loadBackupAuth?: () => Promise<EmailAuthConfiguration>
 } = {}) {
