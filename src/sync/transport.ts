@@ -152,6 +152,14 @@ interface LigneCarnet {
 export function transportSupabase(client: SupabaseClient): Transport {
   return {
     async lire() {
+      // Sans session, les règles de ligne ne laissent rien voir : la lecture rendrait
+      // « aucun carnet » au lieu d'une erreur. Le protocole y lirait une sauvegarde
+      // disparue, oublierait tout ce qui était acquitté, et repartirait de zéro au
+      // retour de la connexion — CB-79e. Une session absente est une panne, pas un vide.
+      const { data: courante } = await client.auth.getSession()
+      if (!courante.session) {
+        throw new Error('Aucune session ouverte : le carnet distant ne peut pas être lu.')
+      }
       const { data, error } = await client
         .from('carnet')
         .select('revision, derniere_operation')

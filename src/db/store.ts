@@ -22,6 +22,7 @@ import type {
   TargetAdjustment,
   Targets,
 } from '../domain/types.ts'
+import Dexie from 'dexie'
 import type { ExportFile } from '../domain/schema.ts'
 import type {
   CarnetStore,
@@ -104,6 +105,25 @@ const ADJUSTMENTS_KEY = 'target-adjustments'
 const PREFERENCES_KEY = 'preferences'
 
 /**
+ * L'identité de cet appareil auprès du serveur — CB-79e.
+ *
+ * Elle entre dans l'identifiant de chaque opération (`appareil:génération`). Elle doit
+ * donc **survivre au redémarrage** : un envoi en vol repris après une fermeture de l'app
+ * doit porter la même identité qu'au premier essai, sinon le serveur ne reconnaît pas
+ * son propre commit et le prend pour l'écriture d'un autre appareil.
+ */
+const APPAREIL_KEY = 'appareil'
+
+/**
+ * « Ta sauvegarde distante avait disparu » : l'annonce qu'Ugo doit lire — CB-79e.
+ *
+ * Écrite dans la transaction qui constate la disparition, et effacée seulement quand Ugo
+ * l'a lue. Ni une réponse perdue, ni un rechargement de l'app ne doivent pouvoir la
+ * taire : la sauvegarde serait réparée, et Ugo ne saurait jamais qu'elle avait manqué.
+ */
+const RECONSTITUTION_KEY = 'sauvegarde-reconstitution'
+
+/**
  * La part du contrat implémentée à ce stade : lecture de l'historique et cycle de vie
  * complet d'une séance, de l'ouverture du brouillon à sa finalisation. L'édition de
  * l'historique et l'échange JSON arrivent avec CB-33 et CB-40.
@@ -130,8 +150,35 @@ export type DraftStore = Pick<
 export class DexieStore implements DraftStore, SauvegardePort {
   private readonly database: CarnetDatabase
 
+  private readonly abonnesMutation = new Set<() => void>()
+
   constructor(database: CarnetDatabase = defaultDb) {
     this.database = database
+  }
+
+  /**
+   * Être prévenu qu'une mutation du carnet est **enregistrée** — CB-79e.
+   *
+   * L'appel a lieu au commit de la transaction qui l'a notée, jamais avant : un moteur
+   * qui lirait la génération pendant que la transaction peut encore échouer enverrait un
+   * carnet qui n'existe pas. Une transaction annulée ne prévient personne.
+   */
+  surMutationCarnet(abonne: () => void): () => void {
+    this.abonnesMutation.add(abonne)
+    return () => {
+      this.abonnesMutation.delete(abonne)
+    }
+  }
+
+  /** L'identité persistante de cet appareil, créée au premier appel. */
+  async identifiantAppareil(): Promise<string> {
+    return this.database.transaction('rw', this.database.meta, async () => {
+      const stocke = await this.database.meta.get(APPAREIL_KEY)
+      if (typeof stocke?.value === 'string' && stocke.value.length > 0) return stocke.value
+      const cree = crypto.randomUUID()
+      await this.database.meta.put({ key: APPAREIL_KEY, value: cree })
+      return cree
+    })
   }
 
   /** À appeler une fois au démarrage, avant toute lecture. */
@@ -492,9 +539,16 @@ export class DexieStore implements DraftStore, SauvegardePort {
    * sans que rien ne le signale.
    */
   private async noterMutationCarnet(): Promise<void> {
+    const transaction = Dexie.currentTransaction
+    if (!transaction) {
+      throw new StoreError('storage-unavailable', 'Mutation du carnet notée hors transaction.')
+    }
     const stocke = await this.database.meta.get(SAUVEGARDE_KEY)
     const ligne = noterMutation(lireSauvegarde(stocke?.value))
     await this.database.meta.put({ key: SAUVEGARDE_KEY, value: ligne })
+    transaction.on('complete', () => {
+      for (const abonne of this.abonnesMutation) abonne()
+    })
   }
 
   /** L'état du protocole tel qu'il est enregistré. */
@@ -534,6 +588,7 @@ export class DexieStore implements DraftStore, SauvegardePort {
         let reconstitution: EnvoiPrepare['reconstitution']
         if (action.type === 'sauvegarde-disparue') {
           reconstitution = { revisionDisparue: action.revision }
+          await this.database.meta.put({ key: RECONSTITUTION_KEY, value: reconstitution })
           ligne = { etat: constaterDisparition(ligne.etat), instantane: null }
           action = prochaineAction(ligne.etat, distant, appareil)
         }
@@ -607,6 +662,20 @@ export class DexieStore implements DraftStore, SauvegardePort {
       })
       return etat
     })
+  }
+
+  /** L'annonce d'une reconstitution qu'Ugo n'a pas encore lue, s'il y en a une. */
+  async reconstitutionNonLue(): Promise<{ revisionDisparue: number } | null> {
+    const stocke = await this.database.meta.get(RECONSTITUTION_KEY)
+    const valeur = stocke?.value as { revisionDisparue?: unknown } | undefined
+    return typeof valeur?.revisionDisparue === 'number'
+      ? { revisionDisparue: valeur.revisionDisparue }
+      : null
+  }
+
+  /** Ugo a lu l'annonce. */
+  async oublierReconstitution(): Promise<void> {
+    await this.database.meta.delete(RECONSTITUTION_KEY)
   }
 
   async updateSeance(id: string, patch: Partial<Omit<Seance, 'id'>>): Promise<Seance> {
