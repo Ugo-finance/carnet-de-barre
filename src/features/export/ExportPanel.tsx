@@ -142,9 +142,9 @@ export function ExportPanel({
           <div>
             <h2 className="text-xl font-bold">Exporter</h2>
             <p className="mt-1 text-sm text-muted">
-              Après chaque séance, copie tes données et colle-les dans ta conversation Claude. C’est
-              Garde aussi ce fichier hors de l’appareil : il reste utile même si la sauvegarde
-              automatique est en attente ou indisponible.
+              Après chaque séance, copie tes données et colle-les dans ta conversation Claude. Garde
+              aussi ce fichier hors du téléphone : il reste utile même si la sauvegarde automatique
+              est en attente ou indisponible.
             </p>
           </div>
           <button
