@@ -26,8 +26,13 @@ async function magasinPret(): Promise<DexieStore> {
   return store
 }
 
+/** L'horloge des tests : chaque appel avance d'une minute, pour des dates distinctes. */
+let minute = 0
+const horloge = () => new Date(Date.UTC(2026, 9, 2, 8, minute++))
+
 function moteurSur(store: DexieStore, transport: Transport | null) {
   return creerMoteur({
+    maintenant: horloge,
     port: store,
     appareil: async () => APPAREIL,
     transport: async () => transport,
@@ -106,6 +111,19 @@ describe('restaurer la sauvegarde distante', () => {
     expect(etat.envoiEnVol).toBeNull()
     expect(moteur.etat()).toMatchObject({ etat: 'a-jour', revision: 2 })
     expect(serveur.ecritures).toBe(ecritures)
+  })
+
+  it('date la restauration : le téléphone porte ce que porte le serveur', async () => {
+    const { store, moteur } = await autreAppareilAEcrit()
+    const avant = await store.derniereReussite()
+
+    await moteur.restaurer((await moteur.comparer())!.jeton)
+    await moteur.inactif()
+
+    const apres = await store.derniereReussite()
+    expect(apres).not.toBeNull()
+    expect(apres! > (avant ?? '')).toBe(true)
+    expect(moteur.etat()).toMatchObject({ etat: 'a-jour', derniereReussite: apres })
   })
 
   it('sort d’un conflit en abandonnant les saisies locales non envoyées', async () => {

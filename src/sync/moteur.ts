@@ -342,6 +342,9 @@ export function creerMoteur(dependances: DependancesMoteur): MoteurSauvegarde {
         jeton.identite,
         jeton.revision,
       )
+      // Le téléphone porte maintenant exactement ce que porte le serveur à cette révision :
+      // c'est une sauvegarde confirmée, et l'écran peut la dater.
+      await noterReussite()
       // Le passage suivant relit le distant : s'il a bougé depuis la comparaison, il le
       // dit, au lieu de laisser l'écran affirmer « à jour » sur une révision dépassée.
       moteur.demander()
