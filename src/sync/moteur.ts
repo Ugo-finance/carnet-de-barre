@@ -38,12 +38,24 @@ export type EtatMoteur =
   | { etat: 'deconnecte' }
   /** Un passage est en cours. */
   | { etat: 'en-cours' }
-  /** Tout ce qui est enregistré ici est confirmé en face, à cette révision. */
-  | { etat: 'a-jour'; revision: number | null; reconstitution?: Reconstitution }
-  /** Le dernier passage a échoué ; rien n'est acquitté, le prochain déclencheur reprend. */
-  | { etat: 'en-attente'; erreur: string }
+  /**
+   * Tout ce qui est enregistré ici est confirmé en face, à cette révision.
+   * `derniereReussite` est l'instant de cette confirmation ; absente quand rien n'a
+   * jamais été confirmé (`revision: null`).
+   */
+  | {
+      etat: 'a-jour'
+      revision: number | null
+      derniereReussite?: string
+      reconstitution?: Reconstitution
+    }
+  /**
+   * Le dernier passage a échoué ; rien n'est acquitté, le prochain déclencheur reprend.
+   * `derniereReussite` dit depuis quand le distant n'a plus été confirmé.
+   */
+  | { etat: 'en-attente'; erreur: string; derniereReussite?: string }
   /** Le protocole attend un geste d'Ugo : restauration proposée, conflit ou recul. */
-  | { etat: 'decision'; action: ActionSauvegarde }
+  | { etat: 'decision'; action: ActionSauvegarde; derniereReussite?: string }
 
 /**
  * L'annonce durable d'une reconstitution. Le magasin l'écrit dans la transaction qui
@@ -55,13 +67,27 @@ export interface AnnonceReconstitution {
   oublierReconstitution(): Promise<void>
 }
 
+/**
+ * La date de la dernière confirmation, durable — CB-79f.
+ *
+ * Elle se lit surtout quand ça ne va pas : « en attente depuis hier 18 h » dit à Ugo
+ * combien de séances ne sont pas encore à l'abri. Elle doit donc survivre à un
+ * redémarrage hors ligne, où aucun passage ne peut la recalculer.
+ */
+export interface JournalReussite {
+  derniereReussite(): Promise<string | null>
+  noterReussite(quand: string): Promise<void>
+}
+
 export interface DependancesMoteur {
-  port: SauvegardePort & AnnonceReconstitution
+  port: SauvegardePort & AnnonceReconstitution & JournalReussite
   appareil: () => Promise<string>
   /** Le transport d'une session ouverte, ou `null` quand personne n'est connecté. */
   transport: () => Promise<Transport | null>
   /** Remplaçable pour les tests d'orchestration. */
   synchroniser?: typeof synchroniserParDefaut
+  /** L'horloge, remplaçable pour les tests. */
+  maintenant?: () => Date
 }
 
 export interface MoteurSauvegarde {
@@ -90,6 +116,7 @@ function messageDe(cause: unknown): string {
 
 export function creerMoteur(dependances: DependancesMoteur): MoteurSauvegarde {
   const synchroniser = dependances.synchroniser ?? synchroniserParDefaut
+  const maintenant = dependances.maintenant ?? (() => new Date())
   const abonnes = new Set<(etat: EtatMoteur) => void>()
   let courant: EtatMoteur = { etat: 'deconnecte' }
   let passage: Promise<void> | null = null
@@ -106,11 +133,42 @@ export function creerMoteur(dependances: DependancesMoteur): MoteurSauvegarde {
     }
   }
 
+  /**
+   * L'état « à jour », et la réussite qu'il constate.
+   *
+   * Une révision `null` n'est pas une réussite : rien n'a jamais été confirmé en face, le
+   * carnet est encore celui du dossier de départ. L'écriture de la date est best effort :
+   * la sauvegarde a réussi, une date non retenue ne doit pas la faire passer pour un échec.
+   */
   async function aJour(revision: number | null): Promise<EtatMoteur> {
     const annonce = await dependances.port.reconstitutionNonLue()
-    return annonce
-      ? { etat: 'a-jour', revision, reconstitution: annonce }
-      : { etat: 'a-jour', revision }
+    const base = {
+      etat: 'a-jour' as const,
+      revision,
+      ...(annonce ? { reconstitution: annonce } : {}),
+    }
+    if (revision === null) return base
+    const quand = maintenant().toISOString()
+    try {
+      await dependances.port.noterReussite(quand)
+    } catch {
+      // Voir plus haut : la réussite est réelle, seule sa trace manque.
+    }
+    return { ...base, derniereReussite: quand }
+  }
+
+  /** La dernière réussite connue, pour dire depuis quand ça ne va plus. */
+  async function depuis(): Promise<{ derniereReussite?: string }> {
+    try {
+      const quand = await dependances.port.derniereReussite()
+      return quand ? { derniereReussite: quand } : {}
+    } catch {
+      return {}
+    }
+  }
+
+  async function enAttente(erreur: string): Promise<void> {
+    publier({ etat: 'en-attente', erreur, ...(await depuis()) })
   }
 
   async function unPassage(): Promise<void> {
@@ -124,7 +182,7 @@ export function creerMoteur(dependances: DependancesMoteur): MoteurSauvegarde {
       }
       appareil = await dependances.appareil()
     } catch (cause) {
-      publier({ etat: 'en-attente', erreur: messageDe(cause) })
+      await enAttente(messageDe(cause))
       return
     }
 
@@ -145,18 +203,17 @@ export function creerMoteur(dependances: DependancesMoteur): MoteurSauvegarde {
             // révision appelle une relecture. Le cycle suivant le dira.
             continue
           case 'decision':
-            publier({ etat: 'decision', action: issue.action })
+            publier({ etat: 'decision', action: issue.action, ...(await depuis()) })
             return
         }
       } catch (cause) {
-        publier({ etat: 'en-attente', erreur: messageDe(cause) })
+        await enAttente(messageDe(cause))
         return
       }
     }
-    publier({
-      etat: 'en-attente',
-      erreur: 'La sauvegarde distante change sans se stabiliser. Nouvel essai au prochain passage.',
-    })
+    await enAttente(
+      'La sauvegarde distante change sans se stabiliser. Nouvel essai au prochain passage.',
+    )
   }
 
   async function tourner(): Promise<void> {
