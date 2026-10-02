@@ -134,11 +134,26 @@ export function creerMoteur(dependances: DependancesMoteur): MoteurSauvegarde {
   }
 
   /**
+   * Retenir l'instant d'une confirmation distante, et le rendre.
+   *
+   * Best effort : la sauvegarde a réussi, une date non retenue ne doit pas la faire
+   * passer pour un échec.
+   */
+  async function noterReussite(): Promise<string> {
+    const quand = maintenant().toISOString()
+    try {
+      await dependances.port.noterReussite(quand)
+    } catch {
+      // La réussite est réelle, seule sa trace manque.
+    }
+    return quand
+  }
+
+  /**
    * L'état « à jour », et la réussite qu'il constate.
    *
    * Une révision `null` n'est pas une réussite : rien n'a jamais été confirmé en face, le
-   * carnet est encore celui du dossier de départ. L'écriture de la date est best effort :
-   * la sauvegarde a réussi, une date non retenue ne doit pas la faire passer pour un échec.
+   * carnet est encore celui du dossier de départ.
    */
   async function aJour(revision: number | null): Promise<EtatMoteur> {
     const annonce = await dependances.port.reconstitutionNonLue()
@@ -148,13 +163,7 @@ export function creerMoteur(dependances: DependancesMoteur): MoteurSauvegarde {
       ...(annonce ? { reconstitution: annonce } : {}),
     }
     if (revision === null) return base
-    const quand = maintenant().toISOString()
-    try {
-      await dependances.port.noterReussite(quand)
-    } catch {
-      // Voir plus haut : la réussite est réelle, seule sa trace manque.
-    }
-    return { ...base, derniereReussite: quand }
+    return { ...base, derniereReussite: await noterReussite() }
   }
 
   /** La dernière réussite connue, pour dire depuis quand ça ne va plus. */
@@ -198,9 +207,14 @@ export function creerMoteur(dependances: DependancesMoteur): MoteurSauvegarde {
           }
           case 'reconstituee':
           case 'envoye':
+            // Une génération vient d'être confirmée : elle est datée tout de suite. Si le
+            // cycle suivant échoue, « en attente depuis » doit partir de cet envoi-ci, et
+            // non du précédent — P2 du robot Codex sur #89.
+            // Un envoi confirmé peut aussi en laisser un autre derrière lui : on continue.
+            await noterReussite()
+            continue
           case 'a-relire':
-            // Un envoi confirmé peut en laisser un autre derrière lui ; un refus de
-            // révision appelle une relecture. Le cycle suivant le dira.
+            // Le distant a bougé entre la lecture et l'écriture : le cycle suivant relit.
             continue
           case 'decision':
             publier({ etat: 'decision', action: issue.action, ...(await depuis()) })

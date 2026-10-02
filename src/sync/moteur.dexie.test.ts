@@ -473,6 +473,32 @@ describe('la date de la dernière réussite', () => {
     })
   })
 
+  it('date un envoi confirmé même si la vérification qui suit échoue', async () => {
+    // P2 du robot Codex sur #89 : la génération g est acquittée, puis la relecture du
+    // cycle suivant tombe. La réussite de g est réelle ; elle doit être datée.
+    const store = await magasinPret()
+    await store.adjustTarget('squat', { w: 80 })
+    const serveur = new FauxServeur()
+    const ecrireReel = serveur.ecrire.bind(serveur)
+    serveur.ecrire = async (e) => {
+      const resultat = await ecrireReel(e)
+      serveur.horsLigne = true
+      return resultat
+    }
+    const { moteur } = moteurSur(store, serveur)
+
+    moteur.demander()
+    await moteur.inactif()
+
+    expect(serveur.ecritures).toBe(1)
+    expect(moteur.etat()).toEqual({
+      etat: 'en-attente',
+      erreur: 'réseau coupé',
+      derniereReussite: HEURE,
+    })
+    expect(await store.derniereReussite()).toBe(HEURE)
+  })
+
   it('ne date rien quand rien n’a jamais été confirmé', async () => {
     // Un carnet resté au dossier de départ est « à jour » sans avoir rien envoyé : ce
     // n'est pas une sauvegarde, et l'écran ne doit pas en afficher la date.
