@@ -177,3 +177,46 @@ describe('un cycle complet, du magasin au serveur', () => {
     })
   })
 })
+
+describe('la restauration, contre la vraie API', () => {
+  it('relit le carnet envoyé, que l’aperçu accepte et qu’un second appareil restaure', async () => {
+    // Le carnet distant doit revenir sous une forme que `previewImport` valide sans
+    // retouche : c'est ce qui garantit qu'une version inconnue ou un contenu altéré
+    // n'atteindrait jamais la confirmation, et que le bon carnet atteint le téléphone.
+    const client = await compteConnecte()
+    const transport = transportSupabase(client)
+    expect(await transport.lireCarnet()).toBeNull()
+
+    const iphone = new DexieStore(new CarnetDatabase(`integration-${crypto.randomUUID()}`))
+    await iphone.ready()
+    await iphone.adjustTarget('squat', { w: 87.5 })
+    await synchroniser(iphone, transport, 'iphone-15-pro')
+
+    const distant = await transport.lireCarnet()
+    expect(distant?.revision).toBe(1)
+
+    const neuf = new DexieStore(new CarnetDatabase(`integration-${crypto.randomUUID()}`))
+    await neuf.ready()
+    const apercu = await neuf.previewImport(distant!.fichier)
+    expect(apercu.seanceCount).toBe((await iphone.listSeances()).length)
+    expect(apercu.targets.squat.w).toBe(87.5)
+
+    await neuf.restaurerDistant(distant!.fichier, apercu.identite, distant!.revision)
+    expect((await neuf.getTargets()).squat.w).toBe(87.5)
+    expect(await neuf.listSeances()).toEqual(await iphone.listSeances())
+    // Rien à renvoyer : le téléphone restauré porte exactement la révision 1.
+    expect(await synchroniser(neuf, transport, 'ipad')).toEqual({ issue: 'a-jour' })
+  })
+
+  it('ne lit pas le carnet d’un autre compte', async () => {
+    const ugo = transportSupabase(await compteConnecte())
+    await ugo.ecrire({
+      operation: 'iphone:1',
+      revisionAttendue: 0,
+      appareil: 'iphone',
+      carnet: CARNET,
+    })
+
+    expect(await transportSupabase(await compteConnecte()).lireCarnet()).toBeNull()
+  })
+})

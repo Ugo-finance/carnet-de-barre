@@ -46,10 +46,24 @@ export interface EcritureDistante {
   carnet: CarnetComparable
 }
 
+/**
+ * Le carnet distant complet, pour la comparaison avant restauration — CB-79g.
+ *
+ * `fichier` a la forme d'un export : c'est `previewImport` qui le valide, exactement
+ * comme un fichier collé. Une version inconnue ou un contenu incohérent n'atteint donc
+ * jamais la confirmation, par le même contrôle que l'import manuel.
+ */
+export interface CarnetDistant {
+  revision: number
+  fichier: { schemaVersion: number; targets: unknown; seances: unknown[] }
+}
+
 /** Le serveur, vu du protocole. */
 export interface Transport {
   lire(): Promise<LectureDistante>
   ecrire(ecriture: EcritureDistante): Promise<ResultatEcriture>
+  /** Le contenu du carnet distant, ou `null` s'il n'y en a pas. */
+  lireCarnet(): Promise<CarnetDistant | null>
 }
 
 /** Ce qu'un cycle a produit, pour que l'écran dise la vérité. */
@@ -167,6 +181,51 @@ export function transportSupabase(client: SupabaseClient): Transport {
       if (error) throw new Error(`Lecture du carnet distant impossible : ${error.message}`)
       if (!data) return { etat: 'absente' }
       return { etat: 'lue', revision: data.revision, operation: data.derniere_operation }
+    },
+
+    async lireCarnet() {
+      const { data: courante } = await client.auth.getSession()
+      if (!courante.session) {
+        throw new Error('Aucune session ouverte : le carnet distant ne peut pas être lu.')
+      }
+      // Trois tables, trois lectures : rien ne les rend atomiques côté client. La
+      // révision est donc relue après coup, et une écriture intercalée fait refuser la
+      // lecture entière plutôt que de comparer des séances d'une révision avec les
+      // cibles d'une autre.
+      const enTete = async () => {
+        const { data, error } = await client
+          .from('carnet')
+          .select('revision, schema_version')
+          .maybeSingle<{ revision: number; schema_version: number | null }>()
+        if (error) throw new Error(`Lecture du carnet distant impossible : ${error.message}`)
+        return data
+      }
+      const avant = await enTete()
+      if (!avant) return null
+      const [seances, cibles] = await Promise.all([
+        client.from('seance').select('contenu').order('id'),
+        client.from('cibles').select('contenu').maybeSingle<{ contenu: unknown }>(),
+      ])
+      if (seances.error)
+        throw new Error(`Lecture des séances distantes impossible : ${seances.error.message}`)
+      if (cibles.error)
+        throw new Error(`Lecture des cibles distantes impossible : ${cibles.error.message}`)
+      const apres = await enTete()
+      if (!apres || apres.revision !== avant.revision) {
+        throw new Error(
+          'La sauvegarde distante a changé pendant la lecture. Réessaie la comparaison.',
+        )
+      }
+      if (!cibles.data) throw new Error('La sauvegarde distante est incomplète : aucune cible.')
+      return {
+        revision: avant.revision,
+        fichier: {
+          // Une version absente devient 0 : `previewImport` la refusera, et c'est voulu.
+          schemaVersion: avant.schema_version ?? 0,
+          targets: cibles.data.contenu,
+          seances: (seances.data as { contenu: unknown }[]).map((ligne) => ligne.contenu),
+        },
+      }
     },
 
     async ecrire({ operation, revisionAttendue, appareil, carnet }) {
