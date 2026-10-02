@@ -499,6 +499,67 @@ describe('la date de la dernière réussite', () => {
     expect(await store.derniereReussite()).toBe(HEURE)
   })
 
+  it('ne date pas une simple vérification : seul un envoi confirmé avance la date', async () => {
+    // P2 de Codex sur #89 : le lendemain, l'app rouvre, relit le distant, rien ne part.
+    // La date affichée comme « dernière sauvegarde réussie » ne doit pas devenir celle
+    // de ce passage : aucune séance n'a été mise à l'abri ce jour-là.
+    const store = await magasinPret()
+    await store.adjustTarget('squat', { w: 80 })
+    const serveur = new FauxServeur()
+    const temps = horlogeReglable('2026-10-01T16:00:00.000Z')
+    const moteur = creerMoteur({
+      maintenant: temps.lire,
+      port: store,
+      appareil: async () => APPAREIL,
+      transport: async () => serveur,
+    })
+    moteur.demander()
+    await moteur.inactif()
+
+    temps.regler('2026-10-02T08:00:00.000Z')
+    moteur.demander()
+    await moteur.inactif()
+
+    expect(serveur.ecritures).toBe(1)
+    expect(moteur.etat()).toEqual({
+      etat: 'a-jour',
+      revision: 1,
+      derniereReussite: '2026-10-01T16:00:00.000Z',
+    })
+    expect(await store.derniereReussite()).toBe('2026-10-01T16:00:00.000Z')
+  })
+
+  it('garde la réussite du jour quand le stockage refuse de la remplacer', async () => {
+    const store = await magasinPret()
+    await store.adjustTarget('squat', { w: 80 })
+    const serveur = new FauxServeur()
+    const temps = horlogeReglable('2026-10-01T16:00:00.000Z')
+    let refuser = false
+    const port = Object.assign(Object.create(store) as DexieStore, {
+      async noterReussite(quand: string) {
+        if (refuser) throw new Error('stockage plein')
+        return store.noterReussite(quand)
+      },
+    })
+    const moteur = creerMoteur({
+      maintenant: temps.lire,
+      port,
+      appareil: async () => APPAREIL,
+      transport: async () => serveur,
+    })
+    moteur.demander()
+    await moteur.inactif()
+
+    temps.regler('2026-10-02T18:00:00.000Z')
+    refuser = true
+    await store.adjustTarget('squat', { w: 82.5 })
+    moteur.demander()
+    await moteur.inactif()
+
+    expect(serveur.ecritures).toBe(2)
+    expect(moteur.etat()).toMatchObject({ derniereReussite: '2026-10-02T18:00:00.000Z' })
+  })
+
   it('ne date rien quand rien n’a jamais été confirmé', async () => {
     // Un carnet resté au dossier de départ est « à jour » sans avoir rien envoyé : ce
     // n'est pas une sauvegarde, et l'écran ne doit pas en afficher la date.

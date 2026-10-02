@@ -120,6 +120,8 @@ export function creerMoteur(dependances: DependancesMoteur): MoteurSauvegarde {
   const abonnes = new Set<(etat: EtatMoteur) => void>()
   let courant: EtatMoteur = { etat: 'deconnecte' }
   let passage: Promise<void> | null = null
+  /** La dernière réussite de cette session, si le stockage a refusé de la retenir. */
+  let reussiteDeSession: string | undefined
   let retenu = false
 
   function publier(suivant: EtatMoteur): void {
@@ -141,6 +143,7 @@ export function creerMoteur(dependances: DependancesMoteur): MoteurSauvegarde {
    */
   async function noterReussite(): Promise<string> {
     const quand = maintenant().toISOString()
+    reussiteDeSession = quand
     try {
       await dependances.port.noterReussite(quand)
     } catch {
@@ -150,30 +153,37 @@ export function creerMoteur(dependances: DependancesMoteur): MoteurSauvegarde {
   }
 
   /**
-   * L'état « à jour », et la réussite qu'il constate.
+   * L'état « à jour », avec la date du **dernier envoi confirmé**.
    *
-   * Une révision `null` n'est pas une réussite : rien n'a jamais été confirmé en face, le
-   * carnet est encore celui du dossier de départ.
+   * « À jour » se constate souvent sans rien envoyer : l'app rouvre, relit le distant,
+   * rien n'a bougé. Ce constat n'est pas une sauvegarde, et ne date rien — P2 de Codex
+   * sur #89. Seuls `envoye` et `reconstituee` notent une réussite.
+   *
+   * Une révision `null` — rien jamais confirmé, carnet du dossier de départ — n'a pas de
+   * date par construction : seul un envoi confirmé en écrit une.
    */
   async function aJour(revision: number | null): Promise<EtatMoteur> {
     const annonce = await dependances.port.reconstitutionNonLue()
-    const base = {
-      etat: 'a-jour' as const,
+    return {
+      etat: 'a-jour',
       revision,
+      ...(await depuis()),
       ...(annonce ? { reconstitution: annonce } : {}),
     }
-    if (revision === null) return base
-    return { ...base, derniereReussite: await noterReussite() }
   }
 
   /** La dernière réussite connue, pour dire depuis quand ça ne va plus. */
   async function depuis(): Promise<{ derniereReussite?: string }> {
+    let quand: string | null = null
     try {
-      const quand = await dependances.port.derniereReussite()
-      return quand ? { derniereReussite: quand } : {}
+      quand = await dependances.port.derniereReussite()
     } catch {
-      return {}
+      // Lecture impossible : la réussite de cette session, s'il y en a eu une, suffit.
     }
+    // La plus récente des deux : si la trace d'aujourd'hui a été refusée, celle d'hier
+    // ne doit pas la remplacer. Les dates ISO se comparent comme des chaînes.
+    const plusRecente = [quand, reussiteDeSession].filter(Boolean).toSorted().pop()
+    return plusRecente ? { derniereReussite: plusRecente } : {}
   }
 
   async function enAttente(erreur: string): Promise<void> {
