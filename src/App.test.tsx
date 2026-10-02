@@ -15,6 +15,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { store } from './db/store'
+import { moteurSauvegarde } from './sync/demarrage'
 
 /**
  * Mardi — donc **séance A**, celle qui contient le squat.
@@ -83,11 +84,17 @@ describe('navigation depuis le point d’entrée réel', () => {
     // Sans ces écrans, une séance faite ne peut pas sortir du téléphone : ni sauvegarde,
     // ni transmission pour l'événement Outlook. La configuration est injectée pour que
     // ce test d'assemblage reste identique sur CI et sur Vercel.
+    const pendingState = { etat: 'en-attente' as const, erreur: 'réseau indisponible' }
     render(
       <App
         loadBackupAuth={async () => ({
           error: 'La connexion à la sauvegarde n’est pas configurée sur cette installation.',
         })}
+        backupMotor={{
+          ...moteurSauvegarde,
+          etat: () => pendingState,
+          abonner: () => () => {},
+        }}
       />,
     )
     await screen.findByRole('heading', { name: /Séance [ABC]/ })
@@ -98,6 +105,8 @@ describe('navigation depuis le point d’entrée réel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Suivant : Matériel' }))
     fireEvent.click(screen.getByRole('button', { name: 'Suivant : Sauvegarde' }))
     expect(screen.getByRole('heading', { name: 'Sauvegarde' })).toBeInTheDocument()
+    expect(screen.getByText(/Sauvegarde en attente : réseau indisponible/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Réessayer la sauvegarde' })).toBeInTheDocument()
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'La connexion à la sauvegarde n’est pas configurée',
     )

@@ -3,6 +3,8 @@ import type { Preferences } from '../../domain/preferences'
 import { PasswordLogin, type PasswordAuthPort } from './PasswordLogin'
 import { ExportPanel, type ExchangePort } from './ExportPanel'
 import type { EmailAuthConfiguration } from './supabaseAuth'
+import type { MoteurSauvegarde } from '../../sync/moteur'
+import { BackupStatus } from './BackupStatus'
 
 export interface SettingsPort extends ExchangePort {
   getPreferences(): Promise<Preferences>
@@ -92,12 +94,14 @@ export function SettingsPanel({
   backupAuth,
   backupAuthError,
   loadBackupAuth,
+  backupMotor,
   onPreferencesChange,
 }: {
   store: SettingsPort
   backupAuth?: PasswordAuthPort
   backupAuthError?: string
   loadBackupAuth?: () => Promise<EmailAuthConfiguration>
+  backupMotor?: MoteurSauvegarde
   onPreferencesChange?: () => void
 }) {
   const [preferences, setPreferences] = useState<Preferences>()
@@ -235,6 +239,7 @@ export function SettingsPanel({
             carnet finalisé, pas le brouillon actif. Si le stockage du téléphone est effacé pendant
             une séance, ce brouillon ne peut pas être récupéré.
           </p>
+          {backupMotor ? <BackupStatus moteur={backupMotor} /> : null}
           <div className="mt-4 border-t border-line pt-4">
             {backupAuth ? (
               <PasswordLogin auth={backupAuth} />

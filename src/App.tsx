@@ -13,7 +13,8 @@ import { BottomNav, type AppTab } from './components/BottomNav'
 import { SessionHome } from './features/session/SessionHome'
 import { SettingsPanel } from './features/export/SettingsPanel'
 import type { EmailAuthConfiguration } from './features/export/supabaseAuth'
-import { configurationPartagee } from './sync/demarrage'
+import { configurationPartagee, moteurSauvegarde } from './sync/demarrage'
+import type { MoteurSauvegarde } from './sync/moteur'
 import { ProgressionPanel } from './features/history/ProgressionPanel'
 import { HistoryPanel } from './features/history/HistoryPanel'
 import { UpdatePrompt } from './pwa/UpdatePrompt'
@@ -127,8 +128,10 @@ function HistoriqueTab() {
 export default function App({
   // Le même client que le moteur de sauvegarde : c'est lui qui porte la session. CB-79e.
   loadBackupAuth = configurationPartagee,
+  backupMotor = moteurSauvegarde,
 }: {
   loadBackupAuth?: () => Promise<EmailAuthConfiguration>
+  backupMotor?: MoteurSauvegarde
 } = {}) {
   const [onglet, setOnglet] = useState<AppTab>('session')
   const [generationSeance, setGenerationSeance] = useState(0)
@@ -212,6 +215,7 @@ export default function App({
           <SettingsPanel
             store={store}
             loadBackupAuth={loadBackupAuth}
+            backupMotor={backupMotor}
             onPreferencesChange={() => setGenerationSeance((n) => n + 1)}
           />
         ) : null}
