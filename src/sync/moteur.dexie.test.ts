@@ -17,6 +17,9 @@ import { creerMoteur, type EtatMoteur } from './moteur.ts'
 import { transportSupabase, type Transport } from './transport.ts'
 
 const APPAREIL = 'iphone-15-pro'
+/** L'horloge figée des tests : la date de réussite doit être exactement celle-ci. */
+const HEURE = '2026-10-02T09:30:00.000Z'
+const horloge = () => new Date(HEURE)
 
 let compteur = 0
 async function magasinPret(): Promise<DexieStore> {
@@ -28,6 +31,7 @@ async function magasinPret(): Promise<DexieStore> {
 
 function moteurSur(store: DexieStore, transport: Transport | null) {
   const moteur = creerMoteur({
+    maintenant: horloge,
     port: store,
     appareil: async () => APPAREIL,
     transport: async () => transport,
@@ -81,6 +85,7 @@ describe('le moteur de sauvegarde', () => {
     await store.adjustTarget('squat', { w: 80 })
     let transport: Transport | null = new FauxServeur()
     const moteur = creerMoteur({
+      maintenant: horloge,
       port: store,
       appareil: async () => APPAREIL,
       transport: async () => transport,
@@ -105,7 +110,7 @@ describe('le moteur de sauvegarde', () => {
     moteur.demander()
     await moteur.inactif()
 
-    expect(moteur.etat()).toEqual({ etat: 'a-jour', revision: 1 })
+    expect(moteur.etat()).toEqual({ etat: 'a-jour', revision: 1, derniereReussite: HEURE })
     expect(etats.map((e) => e.etat)).toEqual(['en-cours', 'a-jour'])
     expect(serveur.carnet?.targets.squat.w).toBe(80)
     expect(serveur.ecritures).toBe(1)
@@ -126,7 +131,7 @@ describe('le moteur de sauvegarde', () => {
     serveur.horsLigne = false
     moteur.demander()
     await moteur.inactif()
-    expect(moteur.etat()).toEqual({ etat: 'a-jour', revision: 1 })
+    expect(moteur.etat()).toEqual({ etat: 'a-jour', revision: 1, derniereReussite: HEURE })
     expect(serveur.ecritures).toBe(1)
   })
 
@@ -143,7 +148,7 @@ describe('le moteur de sauvegarde', () => {
 
     moteur.demander()
     await moteur.inactif()
-    expect(moteur.etat()).toEqual({ etat: 'a-jour', revision: 1 })
+    expect(moteur.etat()).toEqual({ etat: 'a-jour', revision: 1, derniereReussite: HEURE })
     // Le commit perdu a été reconnu, pas rejoué comme une seconde écriture.
     expect(serveur.ecritures).toBe(1)
   })
@@ -162,7 +167,7 @@ describe('le moteur de sauvegarde', () => {
     await moteur.inactif()
 
     expect(serveur.maxEnVol).toBe(1)
-    expect(moteur.etat()).toEqual({ etat: 'a-jour', revision: 1 })
+    expect(moteur.etat()).toEqual({ etat: 'a-jour', revision: 1, derniereReussite: HEURE })
   })
 
   it('rejoue une demande reçue pendant un passage qui se croyait fini', async () => {
@@ -180,6 +185,8 @@ describe('le moteur de sauvegarde', () => {
       resoudreConflit: store.resoudreConflit.bind(store),
       reconstitutionNonLue: store.reconstitutionNonLue.bind(store),
       oublierReconstitution: store.oublierReconstitution.bind(store),
+      derniereReussite: store.derniereReussite.bind(store),
+      noterReussite: store.noterReussite.bind(store),
       async etatSauvegarde() {
         if (piege && serveur.ecritures === 1) {
           piege = false
@@ -190,6 +197,7 @@ describe('le moteur de sauvegarde', () => {
       },
     }
     const moteur = creerMoteur({
+      maintenant: horloge,
       port,
       appareil: async () => APPAREIL,
       transport: async () => serveur,
@@ -202,7 +210,7 @@ describe('le moteur de sauvegarde', () => {
     expect(serveur.carnet?.targets.squat.w).toBe(82.5)
     const etat = await store.etatSauvegarde()
     expect(etat.generationAcquittee).toBe(etat.generationLocale)
-    expect(moteur.etat()).toEqual({ etat: 'a-jour', revision: 2 })
+    expect(moteur.etat()).toEqual({ etat: 'a-jour', revision: 2, derniereReussite: HEURE })
   })
 
   it('s’arrête sur un conflit, puis envoie le carnet local quand Ugo le garde', async () => {
@@ -226,7 +234,7 @@ describe('le moteur de sauvegarde', () => {
 
     await moteur.resoudreConflit(2)
     await moteur.inactif()
-    expect(moteur.etat()).toEqual({ etat: 'a-jour', revision: 3 })
+    expect(moteur.etat()).toEqual({ etat: 'a-jour', revision: 3, derniereReussite: HEURE })
     expect(serveur.carnet?.targets.squat.w).toBe(85)
   })
 
@@ -242,22 +250,32 @@ describe('le moteur de sauvegarde', () => {
     moteur.demander()
     await moteur.inactif()
     const annonce = { revisionDisparue: 1 }
-    expect(moteur.etat()).toEqual({ etat: 'a-jour', revision: 1, reconstitution: annonce })
+    expect(moteur.etat()).toEqual({
+      etat: 'a-jour',
+      revision: 1,
+      derniereReussite: HEURE,
+      reconstitution: annonce,
+    })
 
     // Une séance de plus ne l'efface pas : Ugo ne l'a pas encore vue.
     await store.adjustTarget('squat', { w: 82.5 })
     moteur.demander()
     await moteur.inactif()
-    expect(moteur.etat()).toEqual({ etat: 'a-jour', revision: 2, reconstitution: annonce })
+    expect(moteur.etat()).toEqual({
+      etat: 'a-jour',
+      revision: 2,
+      derniereReussite: HEURE,
+      reconstitution: annonce,
+    })
 
     await moteur.oublierReconstitution()
     await moteur.inactif()
-    expect(moteur.etat()).toEqual({ etat: 'a-jour', revision: 2 })
+    expect(moteur.etat()).toEqual({ etat: 'a-jour', revision: 2, derniereReussite: HEURE })
     // Et l'oubli est durable : un autre démarrage ne la ressort pas.
     const { moteur: apres } = moteurSur(store, serveur)
     apres.demander()
     await apres.inactif()
-    expect(apres.etat()).toEqual({ etat: 'a-jour', revision: 2 })
+    expect(apres.etat()).toEqual({ etat: 'a-jour', revision: 2, derniereReussite: HEURE })
   })
 
   it('n’efface jamais une décision en marquant l’annonce comme lue', async () => {
@@ -277,6 +295,8 @@ describe('le moteur de sauvegarde', () => {
       resoudreConflit: store.resoudreConflit.bind(store),
       etatSauvegarde: store.etatSauvegarde.bind(store),
       oublierReconstitution: store.oublierReconstitution.bind(store),
+      derniereReussite: store.derniereReussite.bind(store),
+      noterReussite: store.noterReussite.bind(store),
       async reconstitutionNonLue() {
         if (retenir) {
           retenir = false
@@ -287,6 +307,7 @@ describe('le moteur de sauvegarde', () => {
       },
     }
     const moteur = creerMoteur({
+      maintenant: horloge,
       port,
       appareil: async () => APPAREIL,
       transport: async () => serveur,
@@ -338,6 +359,7 @@ describe('le moteur de sauvegarde', () => {
     expect(moteur.etat()).toEqual({
       etat: 'a-jour',
       revision: 1,
+      derniereReussite: HEURE,
       reconstitution: { revisionDisparue: 1 },
     })
   })
@@ -360,6 +382,7 @@ describe('le moteur de sauvegarde', () => {
     expect(redemarre.etat()).toEqual({
       etat: 'a-jour',
       revision: 1,
+      derniereReussite: HEURE,
       reconstitution: { revisionDisparue: 1 },
     })
   })
@@ -368,6 +391,7 @@ describe('le moteur de sauvegarde', () => {
     const store = await magasinPret()
     const synchroniser = vi.fn(async () => ({ issue: 'a-relire' as const }))
     const moteur = creerMoteur({
+      maintenant: horloge,
       port: store,
       appareil: async () => APPAREIL,
       transport: async () => new FauxServeur(),
@@ -392,12 +416,196 @@ describe('le moteur de sauvegarde', () => {
 
     moteur.demander()
     await moteur.inactif()
-    expect(moteur.etat()).toEqual({ etat: 'a-jour', revision: 1 })
+    expect(moteur.etat()).toEqual({ etat: 'a-jour', revision: 1, derniereReussite: HEURE })
 
     await store.adjustTarget('squat', { w: 82.5 })
     moteur.demander()
     await moteur.inactif()
     expect(serveur.carnet?.targets.squat.w).toBe(82.5)
+  })
+})
+
+describe('la date de la dernière réussite', () => {
+  function horlogeReglable(depart: string) {
+    let actuelle = depart
+    return { lire: () => new Date(actuelle), regler: (iso: string) => (actuelle = iso) }
+  }
+
+  it('dit depuis quand rien n’est confirmé, même après un redémarrage hors ligne', async () => {
+    const store = await magasinPret()
+    await store.adjustTarget('squat', { w: 80 })
+    const serveur = new FauxServeur()
+    const temps = horlogeReglable('2026-10-01T16:00:00.000Z')
+    const moteur = creerMoteur({
+      maintenant: temps.lire,
+      port: store,
+      appareil: async () => APPAREIL,
+      transport: async () => serveur,
+    })
+    moteur.demander()
+    await moteur.inactif()
+    expect(moteur.etat()).toMatchObject({ derniereReussite: '2026-10-01T16:00:00.000Z' })
+
+    // Le lendemain, en salle, sans réseau : la date est celle d'hier, pas celle de l'échec.
+    temps.regler('2026-10-02T18:00:00.000Z')
+    serveur.horsLigne = true
+    await store.adjustTarget('squat', { w: 82.5 })
+    moteur.demander()
+    await moteur.inactif()
+    expect(moteur.etat()).toEqual({
+      etat: 'en-attente',
+      erreur: 'réseau coupé',
+      derniereReussite: '2026-10-01T16:00:00.000Z',
+    })
+
+    // Fermée puis rouverte, toujours hors ligne : rien en mémoire, la date est là.
+    const rouvert = creerMoteur({
+      maintenant: temps.lire,
+      port: store,
+      appareil: async () => APPAREIL,
+      transport: async () => serveur,
+    })
+    rouvert.demander()
+    await rouvert.inactif()
+    expect(rouvert.etat()).toMatchObject({
+      etat: 'en-attente',
+      derniereReussite: '2026-10-01T16:00:00.000Z',
+    })
+  })
+
+  it('date un envoi confirmé même si la vérification qui suit échoue', async () => {
+    // P2 du robot Codex sur #89 : la génération g est acquittée, puis la relecture du
+    // cycle suivant tombe. La réussite de g est réelle ; elle doit être datée.
+    const store = await magasinPret()
+    await store.adjustTarget('squat', { w: 80 })
+    const serveur = new FauxServeur()
+    const ecrireReel = serveur.ecrire.bind(serveur)
+    serveur.ecrire = async (e) => {
+      const resultat = await ecrireReel(e)
+      serveur.horsLigne = true
+      return resultat
+    }
+    const { moteur } = moteurSur(store, serveur)
+
+    moteur.demander()
+    await moteur.inactif()
+
+    expect(serveur.ecritures).toBe(1)
+    expect(moteur.etat()).toEqual({
+      etat: 'en-attente',
+      erreur: 'réseau coupé',
+      derniereReussite: HEURE,
+    })
+    expect(await store.derniereReussite()).toBe(HEURE)
+  })
+
+  it('ne date pas une simple vérification : seul un envoi confirmé avance la date', async () => {
+    // P2 de Codex sur #89 : le lendemain, l'app rouvre, relit le distant, rien ne part.
+    // La date affichée comme « dernière sauvegarde réussie » ne doit pas devenir celle
+    // de ce passage : aucune séance n'a été mise à l'abri ce jour-là.
+    const store = await magasinPret()
+    await store.adjustTarget('squat', { w: 80 })
+    const serveur = new FauxServeur()
+    const temps = horlogeReglable('2026-10-01T16:00:00.000Z')
+    const moteur = creerMoteur({
+      maintenant: temps.lire,
+      port: store,
+      appareil: async () => APPAREIL,
+      transport: async () => serveur,
+    })
+    moteur.demander()
+    await moteur.inactif()
+
+    temps.regler('2026-10-02T08:00:00.000Z')
+    moteur.demander()
+    await moteur.inactif()
+
+    expect(serveur.ecritures).toBe(1)
+    expect(moteur.etat()).toEqual({
+      etat: 'a-jour',
+      revision: 1,
+      derniereReussite: '2026-10-01T16:00:00.000Z',
+    })
+    expect(await store.derniereReussite()).toBe('2026-10-01T16:00:00.000Z')
+  })
+
+  it('garde la réussite du jour quand le stockage refuse de la remplacer', async () => {
+    const store = await magasinPret()
+    await store.adjustTarget('squat', { w: 80 })
+    const serveur = new FauxServeur()
+    const temps = horlogeReglable('2026-10-01T16:00:00.000Z')
+    let refuser = false
+    const port = Object.assign(Object.create(store) as DexieStore, {
+      async noterReussite(quand: string) {
+        if (refuser) throw new Error('stockage plein')
+        return store.noterReussite(quand)
+      },
+    })
+    const moteur = creerMoteur({
+      maintenant: temps.lire,
+      port,
+      appareil: async () => APPAREIL,
+      transport: async () => serveur,
+    })
+    moteur.demander()
+    await moteur.inactif()
+
+    temps.regler('2026-10-02T18:00:00.000Z')
+    refuser = true
+    await store.adjustTarget('squat', { w: 82.5 })
+    moteur.demander()
+    await moteur.inactif()
+
+    expect(serveur.ecritures).toBe(2)
+    expect(moteur.etat()).toMatchObject({ derniereReussite: '2026-10-02T18:00:00.000Z' })
+  })
+
+  it('ne date rien quand rien n’a jamais été confirmé', async () => {
+    // Un carnet resté au dossier de départ est « à jour » sans avoir rien envoyé : ce
+    // n'est pas une sauvegarde, et l'écran ne doit pas en afficher la date.
+    const store = await magasinPret()
+    const { moteur } = moteurSur(store, new FauxServeur())
+    moteur.demander()
+    await moteur.inactif()
+
+    expect(moteur.etat()).toEqual({ etat: 'a-jour', revision: null })
+    expect(await store.derniereReussite()).toBeNull()
+  })
+
+  it('accompagne une décision de la dernière réussite', async () => {
+    const store = await magasinPret()
+    await store.adjustTarget('squat', { w: 80 })
+    const serveur = new FauxServeur()
+    const { moteur } = moteurSur(store, serveur)
+    moteur.demander()
+    await moteur.inactif()
+
+    serveur.ecritureTierce()
+    await store.adjustTarget('squat', { w: 85 })
+    moteur.demander()
+    await moteur.inactif()
+
+    expect(moteur.etat()).toMatchObject({ etat: 'decision', derniereReussite: HEURE })
+  })
+
+  it('reste à jour quand la date ne peut pas être retenue', async () => {
+    const store = await magasinPret()
+    await store.adjustTarget('squat', { w: 80 })
+    const port = Object.assign(Object.create(store) as DexieStore, {
+      noterReussite: async () => {
+        throw new Error('stockage plein')
+      },
+    })
+    const moteur = creerMoteur({
+      maintenant: horloge,
+      port,
+      appareil: async () => APPAREIL,
+      transport: async () => new FauxServeur(),
+    })
+    moteur.demander()
+    await moteur.inactif()
+
+    expect(moteur.etat()).toEqual({ etat: 'a-jour', revision: 1, derniereReussite: HEURE })
   })
 })
 

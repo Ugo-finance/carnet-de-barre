@@ -123,6 +123,9 @@ const APPAREIL_KEY = 'appareil'
  */
 const RECONSTITUTION_KEY = 'sauvegarde-reconstitution'
 
+/** L'instant de la dernière confirmation distante — CB-79f. */
+const REUSSITE_KEY = 'sauvegarde-derniere-reussite'
+
 /**
  * La part du contrat implémentée à ce stade : lecture de l'historique et cycle de vie
  * complet d'une séance, de l'ouverture du brouillon à sa finalisation. L'édition de
@@ -671,6 +674,16 @@ export class DexieStore implements DraftStore, SauvegardePort {
     return typeof valeur?.revisionDisparue === 'number'
       ? { revisionDisparue: valeur.revisionDisparue }
       : null
+  }
+
+  /** L'instant de la dernière sauvegarde confirmée en face, ou `null` s'il n'y en a jamais eu. */
+  async derniereReussite(): Promise<string | null> {
+    const stocke = await this.database.meta.get(REUSSITE_KEY)
+    return typeof stocke?.value === 'string' ? stocke.value : null
+  }
+
+  async noterReussite(quand: string): Promise<void> {
+    await this.database.meta.put({ key: REUSSITE_KEY, value: quand })
   }
 
   /** Ugo a lu l'annonce. */

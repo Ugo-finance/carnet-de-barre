@@ -38,12 +38,24 @@ export type EtatMoteur =
   | { etat: 'deconnecte' }
   /** Un passage est en cours. */
   | { etat: 'en-cours' }
-  /** Tout ce qui est enregistré ici est confirmé en face, à cette révision. */
-  | { etat: 'a-jour'; revision: number | null; reconstitution?: Reconstitution }
-  /** Le dernier passage a échoué ; rien n'est acquitté, le prochain déclencheur reprend. */
-  | { etat: 'en-attente'; erreur: string }
+  /**
+   * Tout ce qui est enregistré ici est confirmé en face, à cette révision.
+   * `derniereReussite` est l'instant de cette confirmation ; absente quand rien n'a
+   * jamais été confirmé (`revision: null`).
+   */
+  | {
+      etat: 'a-jour'
+      revision: number | null
+      derniereReussite?: string
+      reconstitution?: Reconstitution
+    }
+  /**
+   * Le dernier passage a échoué ; rien n'est acquitté, le prochain déclencheur reprend.
+   * `derniereReussite` dit depuis quand le distant n'a plus été confirmé.
+   */
+  | { etat: 'en-attente'; erreur: string; derniereReussite?: string }
   /** Le protocole attend un geste d'Ugo : restauration proposée, conflit ou recul. */
-  | { etat: 'decision'; action: ActionSauvegarde }
+  | { etat: 'decision'; action: ActionSauvegarde; derniereReussite?: string }
 
 /**
  * L'annonce durable d'une reconstitution. Le magasin l'écrit dans la transaction qui
@@ -55,13 +67,27 @@ export interface AnnonceReconstitution {
   oublierReconstitution(): Promise<void>
 }
 
+/**
+ * La date de la dernière confirmation, durable — CB-79f.
+ *
+ * Elle se lit surtout quand ça ne va pas : « en attente depuis hier 18 h » dit à Ugo
+ * combien de séances ne sont pas encore à l'abri. Elle doit donc survivre à un
+ * redémarrage hors ligne, où aucun passage ne peut la recalculer.
+ */
+export interface JournalReussite {
+  derniereReussite(): Promise<string | null>
+  noterReussite(quand: string): Promise<void>
+}
+
 export interface DependancesMoteur {
-  port: SauvegardePort & AnnonceReconstitution
+  port: SauvegardePort & AnnonceReconstitution & JournalReussite
   appareil: () => Promise<string>
   /** Le transport d'une session ouverte, ou `null` quand personne n'est connecté. */
   transport: () => Promise<Transport | null>
   /** Remplaçable pour les tests d'orchestration. */
   synchroniser?: typeof synchroniserParDefaut
+  /** L'horloge, remplaçable pour les tests. */
+  maintenant?: () => Date
 }
 
 export interface MoteurSauvegarde {
@@ -90,9 +116,12 @@ function messageDe(cause: unknown): string {
 
 export function creerMoteur(dependances: DependancesMoteur): MoteurSauvegarde {
   const synchroniser = dependances.synchroniser ?? synchroniserParDefaut
+  const maintenant = dependances.maintenant ?? (() => new Date())
   const abonnes = new Set<(etat: EtatMoteur) => void>()
   let courant: EtatMoteur = { etat: 'deconnecte' }
   let passage: Promise<void> | null = null
+  /** La dernière réussite de cette session, si le stockage a refusé de la retenir. */
+  let reussiteDeSession: string | undefined
   let retenu = false
 
   function publier(suivant: EtatMoteur): void {
@@ -106,11 +135,59 @@ export function creerMoteur(dependances: DependancesMoteur): MoteurSauvegarde {
     }
   }
 
+  /**
+   * Retenir l'instant d'une confirmation distante, et le rendre.
+   *
+   * Best effort : la sauvegarde a réussi, une date non retenue ne doit pas la faire
+   * passer pour un échec.
+   */
+  async function noterReussite(): Promise<string> {
+    const quand = maintenant().toISOString()
+    reussiteDeSession = quand
+    try {
+      await dependances.port.noterReussite(quand)
+    } catch {
+      // La réussite est réelle, seule sa trace manque.
+    }
+    return quand
+  }
+
+  /**
+   * L'état « à jour », avec la date du **dernier envoi confirmé**.
+   *
+   * « À jour » se constate souvent sans rien envoyer : l'app rouvre, relit le distant,
+   * rien n'a bougé. Ce constat n'est pas une sauvegarde, et ne date rien — P2 de Codex
+   * sur #89. Seuls `envoye` et `reconstituee` notent une réussite.
+   *
+   * Une révision `null` — rien jamais confirmé, carnet du dossier de départ — n'a pas de
+   * date par construction : seul un envoi confirmé en écrit une.
+   */
   async function aJour(revision: number | null): Promise<EtatMoteur> {
     const annonce = await dependances.port.reconstitutionNonLue()
-    return annonce
-      ? { etat: 'a-jour', revision, reconstitution: annonce }
-      : { etat: 'a-jour', revision }
+    return {
+      etat: 'a-jour',
+      revision,
+      ...(await depuis()),
+      ...(annonce ? { reconstitution: annonce } : {}),
+    }
+  }
+
+  /** La dernière réussite connue, pour dire depuis quand ça ne va plus. */
+  async function depuis(): Promise<{ derniereReussite?: string }> {
+    let quand: string | null = null
+    try {
+      quand = await dependances.port.derniereReussite()
+    } catch {
+      // Lecture impossible : la réussite de cette session, s'il y en a eu une, suffit.
+    }
+    // La plus récente des deux : si la trace d'aujourd'hui a été refusée, celle d'hier
+    // ne doit pas la remplacer. Les dates ISO se comparent comme des chaînes.
+    const plusRecente = [quand, reussiteDeSession].filter(Boolean).toSorted().pop()
+    return plusRecente ? { derniereReussite: plusRecente } : {}
+  }
+
+  async function enAttente(erreur: string): Promise<void> {
+    publier({ etat: 'en-attente', erreur, ...(await depuis()) })
   }
 
   async function unPassage(): Promise<void> {
@@ -124,7 +201,7 @@ export function creerMoteur(dependances: DependancesMoteur): MoteurSauvegarde {
       }
       appareil = await dependances.appareil()
     } catch (cause) {
-      publier({ etat: 'en-attente', erreur: messageDe(cause) })
+      await enAttente(messageDe(cause))
       return
     }
 
@@ -140,23 +217,27 @@ export function creerMoteur(dependances: DependancesMoteur): MoteurSauvegarde {
           }
           case 'reconstituee':
           case 'envoye':
+            // Une génération vient d'être confirmée : elle est datée tout de suite. Si le
+            // cycle suivant échoue, « en attente depuis » doit partir de cet envoi-ci, et
+            // non du précédent — P2 du robot Codex sur #89.
+            // Un envoi confirmé peut aussi en laisser un autre derrière lui : on continue.
+            await noterReussite()
+            continue
           case 'a-relire':
-            // Un envoi confirmé peut en laisser un autre derrière lui ; un refus de
-            // révision appelle une relecture. Le cycle suivant le dira.
+            // Le distant a bougé entre la lecture et l'écriture : le cycle suivant relit.
             continue
           case 'decision':
-            publier({ etat: 'decision', action: issue.action })
+            publier({ etat: 'decision', action: issue.action, ...(await depuis()) })
             return
         }
       } catch (cause) {
-        publier({ etat: 'en-attente', erreur: messageDe(cause) })
+        await enAttente(messageDe(cause))
         return
       }
     }
-    publier({
-      etat: 'en-attente',
-      erreur: 'La sauvegarde distante change sans se stabiliser. Nouvel essai au prochain passage.',
-    })
+    await enAttente(
+      'La sauvegarde distante change sans se stabiliser. Nouvel essai au prochain passage.',
+    )
   }
 
   async function tourner(): Promise<void> {
