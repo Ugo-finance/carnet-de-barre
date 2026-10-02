@@ -9,7 +9,13 @@
 
 import type { CarnetComparable } from '../db/exchange.ts'
 import type { LectureDistante } from '../domain/sauvegarde.ts'
-import type { EcritureDistante, ResultatEcriture, Transport } from '../sync/transport.ts'
+import { SCHEMA_VERSION } from '../domain/schema.ts'
+import type {
+  CarnetDistant,
+  EcritureDistante,
+  ResultatEcriture,
+  Transport,
+} from '../sync/transport.ts'
 
 export class FauxServeur implements Transport {
   revision: number | null = null
@@ -27,6 +33,19 @@ export class FauxServeur implements Transport {
     if (this.horsLigne) throw new Error('réseau coupé')
     if (this.revision === null) return { etat: 'absente' }
     return { etat: 'lue', revision: this.revision, operation: this.derniere }
+  }
+
+  async lireCarnet(): Promise<CarnetDistant | null> {
+    if (this.horsLigne) throw new Error('réseau coupé')
+    if (this.revision === null || !this.carnet) return null
+    return {
+      revision: this.revision,
+      fichier: {
+        schemaVersion: SCHEMA_VERSION,
+        targets: structuredClone(this.carnet.targets),
+        seances: structuredClone(this.carnet.seances),
+      },
+    }
   }
 
   async ecrire(e: EcritureDistante): Promise<ResultatEcriture> {
@@ -59,9 +78,10 @@ export class FauxServeur implements Transport {
     this.carnet = null
   }
 
-  /** Un autre appareil écrit. */
-  ecritureTierce(): void {
+  /** Un autre appareil écrit, éventuellement un autre carnet. */
+  ecritureTierce(carnet?: CarnetComparable): void {
     this.revision = (this.revision ?? 0) + 1
     this.derniere = 'macbook:1'
+    if (carnet) this.carnet = structuredClone(carnet)
   }
 }

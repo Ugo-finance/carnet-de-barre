@@ -67,6 +67,7 @@ import {
 } from './sauvegarde.ts'
 import {
   acquitter,
+  adopterDistant,
   constaterDisparition,
   envoyer,
   garderLeMien,
@@ -801,6 +802,41 @@ export class DexieStore implements DraftStore, SauvegardePort {
     input: unknown,
     identite: IdentiteComparaison,
   ): Promise<{ seanceCount: number; targets: Targets }> {
+    return this.remplacerCarnet(input, identite, async () => {})
+  }
+
+  /**
+   * Remplace le carnet local par la sauvegarde distante comparée — CB-79g.
+   *
+   * Le **même** chemin que `importReplace`, contrôles compris : brouillon actif refusé,
+   * fichier et carnet local identiques à ceux de l'aperçu, le tout dans la transaction
+   * d'écriture. Une seule différence, dans cette même transaction : l'état de
+   * sauvegarde adopte la révision restaurée. Sans elle, le carnet restauré passerait
+   * pour une saisie locale non envoyée, et repartirait vers le serveur qui le porte déjà.
+   */
+  async restaurerDistant(
+    input: unknown,
+    identite: IdentiteComparaison,
+    revision: number,
+  ): Promise<{ seanceCount: number; targets: Targets }> {
+    return this.remplacerCarnet(input, identite, async () => {
+      const stocke = await this.database.meta.get(SAUVEGARDE_KEY)
+      const ligne = lireSauvegarde(stocke?.value)
+      await this.database.meta.put({
+        key: SAUVEGARDE_KEY,
+        value: {
+          etat: adopterDistant(ligne.etat, revision),
+          instantane: null,
+        } satisfies LigneSauvegarde,
+      })
+    })
+  }
+
+  private async remplacerCarnet(
+    input: unknown,
+    identite: IdentiteComparaison,
+    apresRemplacement: () => Promise<void>,
+  ): Promise<{ seanceCount: number; targets: Targets }> {
     const candidate = validateImport(input)
 
     // Le fichier confirmé n'est pas forcément celui qui a été comparé : rien n'empêche
@@ -855,6 +891,7 @@ export class DexieStore implements DraftStore, SauvegardePort {
         })
         // Un import remplace tout le carnet : c'est la plus grosse mutation qui soit.
         await this.noterMutationCarnet()
+        await apresRemplacement()
         return { seanceCount: candidate.seances.length, targets: candidate.targets }
       },
     )

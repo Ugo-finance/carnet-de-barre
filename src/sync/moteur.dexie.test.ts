@@ -187,6 +187,8 @@ describe('le moteur de sauvegarde', () => {
       oublierReconstitution: store.oublierReconstitution.bind(store),
       derniereReussite: store.derniereReussite.bind(store),
       noterReussite: store.noterReussite.bind(store),
+      previewImport: store.previewImport.bind(store),
+      restaurerDistant: store.restaurerDistant.bind(store),
       async etatSauvegarde() {
         if (piege && serveur.ecritures === 1) {
           piege = false
@@ -297,6 +299,8 @@ describe('le moteur de sauvegarde', () => {
       oublierReconstitution: store.oublierReconstitution.bind(store),
       derniereReussite: store.derniereReussite.bind(store),
       noterReussite: store.noterReussite.bind(store),
+      previewImport: store.previewImport.bind(store),
+      restaurerDistant: store.restaurerDistant.bind(store),
       async reconstitutionNonLue() {
         if (retenir) {
           retenir = false

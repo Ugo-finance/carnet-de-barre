@@ -399,6 +399,29 @@ export function garderLeMien(etat: EtatSauvegarde, revision: number): EtatSauveg
 }
 
 /**
+ * « Restaure la sauvegarde » : Ugo a choisi le carnet distant de la révision `revision`
+ * — CB-79g.
+ *
+ * Le carnet local vient d'être remplacé par ce distant-là, dans la même transaction.
+ * Tout ce qui est local est donc, par construction, ce que porte le serveur à cette
+ * révision : la borne acquittée rejoint la génération courante, et l'envoi en vol est
+ * oublié. Le garder ferait renvoyer, sous l'identité d'une génération remplacée, un
+ * carnet qu'Ugo vient précisément d'abandonner.
+ *
+ * Si le distant a bougé depuis la lecture qui a servi à la comparaison, rien n'est
+ * écrasé pour autant : le passage suivant lit une révision plus récente que la borne,
+ * et propose de nouveau une restauration.
+ */
+export function adopterDistant(etat: EtatSauvegarde, revision: number): EtatSauvegarde {
+  return {
+    ...etat,
+    generationAcquittee: etat.generationLocale,
+    revisionAcquittee: revision,
+    envoiEnVol: null,
+  }
+}
+
+/**
  * Prendre acte d'un envoi confirmé.
  *
  * **La règle qui fait tout le fichier** : acquitter la génération `g` ne doit jamais

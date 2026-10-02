@@ -17,7 +17,7 @@
 
 import { store } from '../db/store.ts'
 import type { EmailAuthConfiguration } from '../features/export/supabaseAuth.ts'
-import { creerMoteur, type MoteurSauvegarde } from './moteur.ts'
+import { creerMoteur, type MoteurSauvegarde, type Verrou } from './moteur.ts'
 import { transportSupabase } from './transport.ts'
 
 let configuration: Promise<EmailAuthConfiguration> | undefined
@@ -38,7 +38,22 @@ export function configurationPartagee(): Promise<EmailAuthConfiguration> {
   return configuration
 }
 
+/**
+ * Le verrou partagé par toutes les fenêtres de l'app — P1 du robot Codex sur #90.
+ *
+ * Deux onglets sur le même carnet partagent IndexedDB, et donc l'état de sauvegarde :
+ * leurs passages et restaurations doivent s'exclure. `navigator.locks` le fait entre
+ * fenêtres de la même origine (Safari 15.4 et suivants). Sans lui, le moteur retombe
+ * sur son verrou propre, qui ne sérialise que cette fenêtre.
+ */
+const verrouDesFenetres: Verrou | undefined =
+  typeof navigator !== 'undefined' && navigator.locks
+    ? <T>(travail: () => Promise<T>) =>
+        navigator.locks.request('carnet-de-barre:sauvegarde', travail) as Promise<T>
+    : undefined
+
 export const moteurSauvegarde: MoteurSauvegarde = creerMoteur({
+  ...(verrouDesFenetres ? { verrou: verrouDesFenetres } : {}),
   port: store,
   appareil: () => store.identifiantAppareil(),
   async transport() {
