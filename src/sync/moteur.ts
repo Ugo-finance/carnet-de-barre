@@ -23,7 +23,12 @@
  * un vrai magasin et un faux serveur, sans réseau.
  */
 
-import type { IdentiteComparaison, ImportPreview, SauvegardePort } from '../db/contracts.ts'
+import {
+  StoreError,
+  type IdentiteComparaison,
+  type ImportPreview,
+  type SauvegardePort,
+} from '../db/contracts.ts'
 import type { Targets } from '../domain/types.ts'
 import type { ActionSauvegarde } from '../domain/sauvegarde.ts'
 import { synchroniser as synchroniserParDefaut, type Transport } from './transport.ts'
@@ -115,6 +120,28 @@ export interface JetonRestauration {
   readonly revision: number
 }
 
+/**
+ * Exclusion mutuelle des opérations qui touchent au distant — CB-79g.
+ *
+ * Un passage et une restauration ne doivent jamais se croiser, **même entre deux
+ * fenêtres** : P1 du robot Codex sur #90. Une fenêtre envoyait l'ancien carnet pendant que
+ * l'autre restaurait ; l'envoi arrivé après réécrivait le serveur avec le carnet abandonné.
+ * Le magasin sérialise ses transactions, mais pas les requêtes réseau qui les séparent.
+ *
+ * L'app passe un verrou du navigateur (`navigator.locks`), partagé par toutes les
+ * fenêtres de l'origine. À défaut, le verrou local sérialise au moins cette fenêtre-ci.
+ */
+export type Verrou = <T>(travail: () => Promise<T>) => Promise<T>
+
+export function creerVerrouLocal(): Verrou {
+  let file: Promise<unknown> = Promise.resolve()
+  return <T>(travail: () => Promise<T>) => {
+    const tour = file.then(travail, travail)
+    file = tour.catch(() => undefined)
+    return tour
+  }
+}
+
 export interface DependancesMoteur {
   port: SauvegardePort & AnnonceReconstitution & JournalReussite & RestaurationDistante
   appareil: () => Promise<string>
@@ -124,6 +151,8 @@ export interface DependancesMoteur {
   synchroniser?: typeof synchroniserParDefaut
   /** L'horloge, remplaçable pour les tests. */
   maintenant?: () => Date
+  /** Voir `Verrou`. Par défaut, un verrou propre à ce moteur. */
+  verrou?: Verrou
 }
 
 export interface MoteurSauvegarde {
@@ -163,6 +192,7 @@ function messageDe(cause: unknown): string {
 export function creerMoteur(dependances: DependancesMoteur): MoteurSauvegarde {
   const synchroniser = dependances.synchroniser ?? synchroniserParDefaut
   const maintenant = dependances.maintenant ?? (() => new Date())
+  const verrou = dependances.verrou ?? creerVerrouLocal()
   const abonnes = new Set<(etat: EtatMoteur) => void>()
   let courant: EtatMoteur = { etat: 'deconnecte' }
   let passage: Promise<void> | null = null
@@ -290,7 +320,7 @@ export function creerMoteur(dependances: DependancesMoteur): MoteurSauvegarde {
     try {
       do {
         retenu = false
-        await unPassage()
+        await verrou(unPassage)
       } while (retenu)
     } finally {
       // Sans quoi un seul passage interrompu bloquerait le moteur pour toute la session :
@@ -337,18 +367,36 @@ export function creerMoteur(dependances: DependancesMoteur): MoteurSauvegarde {
     },
 
     async restaurer(jeton) {
-      const resultat = await dependances.port.restaurerDistant(
-        jeton.fichier,
-        jeton.identite,
-        jeton.revision,
-      )
-      // Le téléphone porte maintenant exactement ce que porte le serveur à cette révision :
-      // c'est une sauvegarde confirmée, et l'écran peut la dater.
-      await noterReussite()
-      // Le passage suivant relit le distant : s'il a bougé depuis la comparaison, il le
-      // dit, au lieu de laisser l'écran affirmer « à jour » sur une révision dépassée.
-      moteur.demander()
-      return resultat
+      // Réussie ou refusée, la restauration se termine par un passage : refusée parce que
+      // le distant a bougé, l'écran doit apprendre ce qu'il porte désormais.
+      try {
+        return await verrou(async () => {
+          // Sous le verrou, plus aucune fenêtre n'écrit : relire ici dit si le distant est
+          // encore celui qui a été comparé. S'il a bougé — un envoi d'une autre fenêtre
+          // vient d'arriver, un autre appareil a écrit — restaurer reviendrait à poser sur
+          // le téléphone un carnet que le serveur ne porte plus.
+          const transport = await dependances.transport()
+          if (!transport) throw new Error('Connecte-toi pour restaurer la sauvegarde.')
+          const distant = await transport.lire()
+          if (distant.etat !== 'lue' || distant.revision !== jeton.revision) {
+            throw new StoreError(
+              'stale-preview',
+              'La sauvegarde a changé depuis la comparaison. Refais la comparaison avant de restaurer.',
+            )
+          }
+          const remplace = await dependances.port.restaurerDistant(
+            jeton.fichier,
+            jeton.identite,
+            jeton.revision,
+          )
+          // Le téléphone porte maintenant exactement ce que porte le serveur à cette
+          // révision : c'est une sauvegarde confirmée, et l'écran peut la dater.
+          await noterReussite()
+          return remplace
+        })
+      } finally {
+        moteur.demander()
+      }
     },
 
     async resoudreConflit(revision) {

@@ -13,7 +13,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { CarnetDatabase } from '../db/database.ts'
 import { DexieStore } from '../db/store.ts'
 import { FauxServeur } from '../test/faux-serveur.ts'
-import { creerMoteur } from './moteur.ts'
+import { creerMoteur, creerVerrouLocal } from './moteur.ts'
 import { transportSupabase, type Transport } from './transport.ts'
 
 const APPAREIL = 'iphone-15-pro'
@@ -200,21 +200,90 @@ describe('restaurer la sauvegarde distante', () => {
     expect((await store.getTargets()).squat.w).toBe(80)
   })
 
-  it('repropose quand le distant a encore bougé après la comparaison', async () => {
+  it('refuse quand le distant a encore bougé après la comparaison, sans rien écrire', async () => {
     // La restauration porte sur la révision montrée. Si un autre appareil réécrit entre
-    // l'aperçu et la confirmation, l'état ne doit pas dire « à jour » sur une révision
-    // dépassée : le passage suivant le voit et propose de nouveau.
-    const { serveur, moteur } = await autreAppareilAEcrit()
+    // l'aperçu et la confirmation, poser l'ancien distant sur le téléphone serait poser un
+    // carnet que le serveur ne porte plus : refaire la comparaison est la seule issue.
+    const { store, serveur, moteur } = await autreAppareilAEcrit()
     const comparaison = (await moteur.comparer())!
     serveur.ecritureTierce()
 
-    await moteur.restaurer(comparaison.jeton)
+    await expect(moteur.restaurer(comparaison.jeton)).rejects.toMatchObject({
+      code: 'stale-preview',
+    })
+    expect((await store.getTargets()).squat.w).toBe(80)
     await moteur.inactif()
-
     expect(moteur.etat()).toMatchObject({
       etat: 'decision',
       action: { type: 'proposer-restauration', revision: 3 },
     })
+  })
+
+  it('refuse sans session au moment de confirmer', async () => {
+    const { store, serveur } = await autreAppareilAEcrit()
+    let connecte = true
+    const moteur = creerMoteur({
+      maintenant: horloge,
+      port: store,
+      appareil: async () => APPAREIL,
+      transport: async () => (connecte ? serveur : null),
+    })
+    const comparaison = (await moteur.comparer())!
+    connecte = false
+
+    await expect(moteur.restaurer(comparaison.jeton)).rejects.toThrow(/Connecte-toi/)
+    expect((await store.getTargets()).squat.w).toBe(80)
+  })
+})
+
+describe('restaurer pendant qu’un envoi est en vol', () => {
+  it('ne laisse jamais le serveur porter un autre carnet que le téléphone', async () => {
+    // P1 du robot Codex sur #90. Deux fenêtres affichent le même conflit. Dans l'une,
+    // « garder le mien » fait partir l'ancien carnet ; dans l'autre, Ugo confirme la
+    // restauration pendant que cet envoi est en vol. L'envoi arrivé après réécrivait le
+    // serveur avec le carnet abandonné, et rien ne le signalait.
+    const { store, serveur, moteur: fenetreA } = await autreAppareilAEcrit()
+    const verrou = creerVerrouLocal()
+    const fenetreB = creerMoteur({
+      maintenant: horloge,
+      verrou,
+      port: store,
+      appareil: async () => APPAREIL,
+      transport: async () => serveur,
+    })
+    const a = creerMoteur({
+      maintenant: horloge,
+      verrou,
+      port: store,
+      appareil: async () => APPAREIL,
+      transport: async () => serveur,
+    })
+    void fenetreA
+    await store.adjustTarget('bench', { w: 70 })
+    a.demander()
+    await a.inactif()
+    expect(a.etat()).toMatchObject({ etat: 'decision', action: { type: 'conflit', revision: 2 } })
+    const comparaison = (await fenetreB.comparer())!
+
+    // L'écriture de la fenêtre A reste en vol jusqu'à ce qu'on la lâche.
+    let lacher = () => {}
+    const ecrireReel = serveur.ecrire.bind(serveur)
+    serveur.ecrire = async (e) => {
+      await new Promise<void>((r) => (lacher = r))
+      return ecrireReel(e)
+    }
+    await a.resoudreConflit(2)
+    await new Promise((r) => setTimeout(r, 20))
+    const restauration = fenetreB.restaurer(comparaison.jeton).catch((cause: unknown) => cause)
+    await new Promise((r) => setTimeout(r, 20))
+    lacher()
+    await a.inactif()
+    await restauration
+    await fenetreB.inactif()
+
+    // Quel que soit le geste retenu, téléphone et serveur portent le même carnet.
+    expect(serveur.carnet?.targets).toEqual(await store.getTargets())
+    expect(serveur.carnet?.seances).toHaveLength((await store.listSeances()).length)
   })
 })
 
